@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Desktop application window and native import/export dialogs.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
+}
