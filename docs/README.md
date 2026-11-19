@@ -17,6 +17,7 @@
 - [总体设计](design.md)
 - [资料摄取与格式适配](ingestion.md)
 - [OpenCode 后端集成](opencode-backend.md)
+- [User Story Map](user-stories.md)
 - [课堂方法结合方案](classroom-methods.md)
 - [知识模型与数据结构](data-model.md)
 - [检索、RAG 与评价方案](evaluation.md)
