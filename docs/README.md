@@ -15,6 +15,7 @@
 ## 文档
 
 - [总体设计](design.md)
+- [技术架构](technical-architecture.md)
 - [资料摄取与格式适配](ingestion.md)
 - [OpenCode 后端集成](opencode-backend.md)
 - [User Story Map](user-stories.md)
