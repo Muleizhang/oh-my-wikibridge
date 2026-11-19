@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, ChevronDown, CircleAlert, FolderOpen, LockKeyhole, Plus, RefreshCw, Upload } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { call, desktop, errorText } from './api';
-import type { BackendStatus, Corpus, Fact, ImportResult, Source } from './types';
+import type { BackendStatus, Corpus, Fact, ImportResult, Review, Source } from './types';
 
 const labels: Record<Source['status'], string> = { processing: '处理中', failed: '失败', draft: '待发布', published: '已发布', archived: '已归档' };
 const fileName = (path: string) => path.split(/[/\\]/).at(-1) ?? path;
@@ -17,7 +17,7 @@ export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
   const [newName, setNewName] = useState('');
   const [description, setDescription] = useState('');
   const [sources, setSources] = useState<Source[]>([]);
-  const [review, setReview] = useState<Fact[]>();
+  const [review, setReview] = useState<{ summary: Review; facts: Fact[] }>();
   const [status, setStatus] = useState<BackendStatus>();
   const [models, setModels] = useState<string[]>([]);
   const [path, setPath] = useState('');
@@ -151,10 +151,19 @@ export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
         <div className="review">
           <div className="section-heading"><div><h3>发布前整体审核</h3><p>{currentDrafts.length} 个文件 · {currentDrafts.reduce((total, file) => total + file.unitCount, 0)} 个内容单元</p></div>
             <button className="button subtle" disabled={busy || !currentDrafts.length} type="button" onClick={() => void act(async () => {
-              setReview(await call<Fact[]>('graph_library', { corpusIds: [activeCorpus], evidenceIds: [], reviewToken: token }));
+              const [summary, facts] = await Promise.all([
+                call<Review>('review_corpus', { token, corpusId: activeCorpus }),
+                call<Fact[]>('graph_library', { corpusIds: [activeCorpus], evidenceIds: [], reviewToken: token }),
+              ]);
+              setReview({ summary, facts });
             })}>查看抽取样例</button>
           </div>
-          {review && <div className="review-samples">{review.length ? review.slice(0, 8).map((fact, index) =>
+          {review && <div className="review-samples">
+            <p>{review.summary.factCount} 条带出处的关系 · {review.summary.ocrCount} 个 OCR 单元 · 置信度低于 75% 的单元 {review.summary.lowConfidenceCount} 个</p>
+            {review.summary.evidence.map(source =>
+              <button type="button" key={source.id} onClick={() => onEvidence(source.id)}>{source.sourceName} · {source.locator}</button>
+            )}
+            {review.facts.length ? review.facts.slice(0, 8).map((fact, index) =>
             <button type="button" key={index} onClick={() => onEvidence(fact.evidenceId)}>{fact.subject} <span>{fact.relation}</span> {fact.object}</button>
           ) : <p>草稿中没有匹配当前规则的三元组。发布后仍可检索原文。</p>}</div>}
           <div className="publish-row">

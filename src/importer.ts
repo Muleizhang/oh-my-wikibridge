@@ -18,7 +18,7 @@ export async function completeImport(result: ImportResult, token: string, langua
   const recognize = async (input: File | HTMLCanvasElement) => {
     if (!worker) {
       progress(`${source.name} · 正在载入 OCR 语言模型`);
-      worker = await createWorker(languages.split('+'), 1, { workerPath, workerBlobURL: false });
+      worker = await createWorker(languages, 1, { workerPath, workerBlobURL: false });
     }
     const { data } = await worker.recognize(input);
     return { text: data.text.trim(), confidence: Math.min(1, Math.max(0, data.confidence / 100)) };

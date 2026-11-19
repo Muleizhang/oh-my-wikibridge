@@ -143,6 +143,17 @@ fn evidence(state: State<AppState>, token: Option<String>, id: String) -> Result
         .store
         .evidence(&id, admin_if_present(&state, token.as_deref())?)
 }
+
+#[tauri::command]
+async fn review_corpus(
+    state: State<'_, AppState>,
+    token: String,
+    corpus_id: String,
+) -> Result<store::Review> {
+    state.require_admin(&token)?;
+    let store = state.store.clone();
+    worker(move || store.review(&corpus_id)).await
+}
 #[tauri::command]
 async fn search_library(
     state: State<'_, AppState>,
@@ -276,6 +287,7 @@ pub fn run() {
             read_source_range,
             publish_corpus,
             evidence,
+            review_corpus,
             search_library,
             graph_library,
             analyze_library,
@@ -289,3 +301,6 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("failed to run WikiBridge");
 }
+
+#[cfg(test)]
+mod tests;

@@ -84,6 +84,15 @@ pub struct Evidence {
     pub confidence: Option<f32>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Review {
+    pub evidence: Vec<Evidence>,
+    pub fact_count: u32,
+    pub ocr_count: u32,
+    pub low_confidence_count: u32,
+}
+
 pub const EVIDENCE_SELECT: &str = "
 SELECT c.id,s.id,s.corpus_id,k.name,s.name,s.extension,s.bytes,s.hash,
        u.kind,u.ordinal,u.locator,c.text,u.method,u.confidence
@@ -543,5 +552,34 @@ impl Store {
         let conn = self.connect()?;
         sql(conn.query_row(&format!("{EVIDENCE_SELECT} WHERE c.id=?1 AND (s.status='published' OR (?2 AND s.status<>'processing'))"),
             params![id, admin], map_evidence).optional())?.ok_or_else(|| "证据未发布或已随文件版本归档。".into())
+    }
+
+    pub fn review(&self, corpus: &str) -> Result<Review> {
+        let conn = self.connect()?;
+        let mut statement = sql(conn.prepare(&format!(
+            "{EVIDENCE_SELECT} WHERE s.status='draft' AND s.corpus_id=?1
+             AND c.seq=(SELECT MIN(sample.seq) FROM chunks sample JOIN units unit ON unit.id=sample.unit_id WHERE unit.source_id=s.id)
+             ORDER BY s.rowid LIMIT 30"
+        )))?;
+        let rows = sql(statement.query_map([corpus], map_evidence))?;
+        let evidence = sql(rows.collect())?;
+        let fact_count = sql(conn.query_row(
+            "SELECT COUNT(*) FROM facts f JOIN chunks c ON c.id=f.chunk_id JOIN units u ON u.id=c.unit_id
+             JOIN sources s ON s.id=u.source_id WHERE s.status='draft' AND s.corpus_id=?1",
+            [corpus], |row| row.get(0),
+        ))?;
+        let (ocr_count, low_confidence_count) = sql(conn.query_row(
+            "SELECT COUNT(*),COUNT(CASE WHEN u.confidence<0.75 THEN 1 END)
+             FROM units u JOIN sources s ON s.id=u.source_id
+             WHERE s.status='draft' AND s.corpus_id=?1 AND u.method='ocr'",
+            [corpus],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ))?;
+        Ok(Review {
+            evidence,
+            fact_count,
+            ocr_count,
+            low_confidence_count,
+        })
     }
 }

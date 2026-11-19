@@ -12,6 +12,7 @@ export type Evidence = {
   locator: string; text: string; method: string; confidence: number | null;
 };
 export type Fact = { subject: string; relation: string; object: string; evidenceId: string };
+export type Review = { evidence: Evidence[]; factCount: number; ocrCount: number; lowConfidenceCount: number };
 export type Hit = { evidence: Evidence; score: number };
 export type Trace = { tool: string; detail: string; evidenceIds: string[] };
 export type SearchResult = { hits: Hit[]; trace: Trace[] };
