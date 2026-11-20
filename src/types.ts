@@ -1,7 +1,7 @@
 export type Corpus = { id: string; name: string; description: string; revision: number; documentCount: number };
 export type Source = {
   id: string; name: string; extension: string; bytes: number; sha256: string;
-  status: 'processing' | 'failed' | 'draft' | 'published' | 'archived';
+  status: 'queued' | 'processing' | 'failed' | 'draft' | 'published' | 'archived';
   error: string | null; unitCount: number; createdAt: string;
 };
 export type ImportResult = { source: Source; needsExtraction: boolean; duplicate: boolean };

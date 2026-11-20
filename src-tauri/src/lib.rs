@@ -84,6 +84,16 @@ async fn retry_import(
     worker(move || store.retry(&source_id)).await
 }
 #[tauri::command]
+async fn start_ocr(
+    state: State<'_, AppState>,
+    token: String,
+    source_id: String,
+) -> Result<Import> {
+    state.require_admin(&token)?;
+    let store = state.store.clone();
+    worker(move || store.start_ocr(&source_id)).await
+}
+#[tauri::command]
 async fn submit_units(
     state: State<'_, AppState>,
     token: String,
@@ -281,6 +291,7 @@ pub fn run() {
             list_sources,
             begin_import,
             retry_import,
+            start_ocr,
             submit_units,
             finish_import,
             fail_import,

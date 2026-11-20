@@ -138,7 +138,9 @@ fn incomplete_ocr_can_retry_and_is_not_public() {
     let imported = store.begin_import(&corpus, &path).unwrap();
     let id = imported.source.id;
     assert!(imported.needs_extraction);
+    assert_eq!(imported.source.status, "queued");
     assert_eq!(store.read_range(&id, 0, 4, true).unwrap(), b"stub");
+    store.start_ocr(&id).unwrap();
     let page = Unit {
         kind: "page".into(),
         ordinal: 12,

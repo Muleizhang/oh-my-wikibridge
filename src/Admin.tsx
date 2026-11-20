@@ -4,7 +4,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { call, desktop, errorText } from './api';
 import type { BackendStatus, Corpus, Fact, ImportResult, Review, Source } from './types';
 
-const labels: Record<Source['status'], string> = { processing: '处理中', failed: '失败', draft: '待发布', published: '已发布', archived: '已归档' };
+const labels: Record<Source['status'], string> = { queued: '待 OCR', processing: '处理中', failed: '失败', draft: '待发布', published: '已发布', archived: '已归档' };
+const ocrExtensions = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff']);
 const fileName = (path: string) => path.split(/[/\\]/).at(-1) ?? path;
 
 export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
@@ -24,6 +25,7 @@ export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
   const [model, setModel] = useState('homo/gpt-6.1-terra');
   const [allowRemote, setAllowRemote] = useState(false);
   const [language, setLanguage] = useState('chi_sim+eng');
+  const [ocrQuality, setOcrQuality] = useState<'fast' | 'quality'>('fast');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,7 +67,7 @@ export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
   }
   async function addFiles() {
     if (!token) return;
-    const { completeImport, importExtensions } = await import('./importer');
+    const { importExtensions } = await import('./importer');
     const picked = await open({ title: '导入资料', multiple: true, filters: [{ name: '知识库资料', extensions: importExtensions }] });
     if (!picked) return;
     const names = Array.isArray(picked) ? picked : [picked];
@@ -77,9 +79,7 @@ export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
         setNotice(`正在导入 ${fileName(path)}`);
         const result = await call<ImportResult>('begin_import', { token, corpusId: activeCorpus, path });
         if (result.duplicate) { duplicates++; continue; }
-        if (result.source.status === 'failed') throw new Error(result.source.error ?? '解析失败');
-        await completeImport(result, token, language, setNotice);
-        drafts++;
+        if (!result.needsExtraction) drafts++;
       } catch (error) {
         failures.push(`${fileName(path)}：${errorText(error)}`);
       }
@@ -131,6 +131,9 @@ export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
           <label className="select wrap"><select aria-label="OCR 语言" value={language} disabled={busy} onChange={event => setLanguage(event.target.value)}>
             <option value="chi_sim+eng">简体中文 + 英语</option><option value="chi_tra+eng">繁体中文 + 英语</option><option value="eng">英语</option>
           </select><ChevronDown size={15} /></label>
+          <label className="select wrap"><select aria-label="OCR 质量" value={ocrQuality} disabled={busy} onChange={event => setOcrQuality(event.target.value as 'fast' | 'quality')}>
+            <option value="fast">OCR 快速</option><option value="quality">OCR 高质量</option>
+          </select><ChevronDown size={15} /></label>
           <button type="button" className="button primary" disabled={busy} onClick={() => void act(addFiles)}><Upload size={16} /> 导入资料</button>
         </div>
         <div className="file-list">
@@ -138,10 +141,20 @@ export function Admin({ token, corpora, refresh, onLogin, onEvidence }: {
           {sources.map(file => <div className="file-row" key={file.id}>
             <div className="extension">{file.extension.toUpperCase()}</div><div className="file-title"><strong>{file.name}</strong><small>{file.unitCount} 个内容单元 · {file.sha256.slice(0, 8)}{file.error && ` · ${file.error}`}</small></div>
             <span className={`status-pill ${file.status}`}>{labels[file.status]}</span>
+            {ocrExtensions.has(file.extension) && (file.status === 'queued' || file.status === 'draft' || file.status === 'failed') && <button className="button subtle ocr-button" disabled={busy} type="button" onClick={() => void act(async () => {
+              const { completeImport } = await import('./importer');
+              const startPage = file.status === 'draft' ? file.unitCount + 1 : 1;
+              const result = await call<ImportResult>('start_ocr', { token, sourceId: file.id });
+              const endPage = file.status === 'queued' && file.extension === 'pdf' ? 3 : undefined;
+              try {
+                await completeImport(result, token, language, setNotice, { startPage, endPage, quality: ocrQuality });
+              } finally { await reloadSources(); }
+              setNotice(file.status === 'queued' ? '快速 OCR 完成，可检查样例后继续。' : 'OCR 批次完成。');
+            })}>{file.status === 'queued' ? '快速 OCR' : '继续 OCR'}</button>}
             {(file.status === 'failed' || file.status === 'processing') && <button className="icon-button" title="重新处理" disabled={busy} type="button" onClick={() => void act(async () => {
               const { completeImport } = await import('./importer');
-              const result = await call<ImportResult>('retry_import', { token, sourceId: file.id });
-              try { await completeImport(result, token, language, setNotice); }
+              const result = await call<ImportResult>(ocrExtensions.has(file.extension) ? 'start_ocr' : 'retry_import', { token, sourceId: file.id });
+              try { if (result.needsExtraction) await completeImport(result, token, language, setNotice, { startPage: Math.max(1, file.unitCount + 1), quality: ocrQuality }); }
               finally { await reloadSources(); }
               if (result.source.status === 'failed') throw new Error(result.source.error ?? '解析失败');
               setNotice('文件重新处理完成。');

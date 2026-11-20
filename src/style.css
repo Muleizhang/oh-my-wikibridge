@@ -143,9 +143,10 @@ input[type="checkbox"] { accent-color: var(--green); }
 .file-title { min-width: 0; flex: 1; display: grid; gap: 3px; }
 .file-title strong, .file-title small { display: block; overflow-wrap: anywhere; font-size: 12px; }
 .file-title small { font-size: 11px; color: var(--muted); }
-.status-pill.draft, .status-pill.processing { background: #f4ecd8; color: #755526; }
+.status-pill.queued, .status-pill.draft, .status-pill.processing { background: #f4ecd8; color: #755526; }
 .status-pill.failed { background: #f8e4dd; color: #903c30; }
 .status-pill.archived { background: #edf0eb; color: #5a6b62; }
+.ocr-button { padding: 4px 7px; min-height: 28px; }
 .review { padding-top: 12px; }
 .review-samples { display: grid; gap: 6px; margin-bottom: 12px; }
 .review-samples button, .graph-list button { background: #f6f8f3; border: 1px solid #e6eee4; border-radius: 7px; padding: 7px 9px; text-align: left; font-size: 12px; overflow-wrap: anywhere; }

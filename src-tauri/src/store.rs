@@ -398,13 +398,46 @@ impl Store {
         sql(transaction.execute("DELETE FROM units WHERE source_id=?1", [id]))?;
         let source = Self::source(&transaction, id)?;
         sql(transaction.commit())?;
+        if ingest::needs_browser(&source.extension) {
+            return Ok(Import {
+                source,
+                needs_extraction: true,
+                duplicate: false,
+            });
+        }
+        self.process_source(source)
+    }
+
+    pub fn start_ocr(&self, id: &str) -> Result<Import> {
+        let mut conn = self.connect()?;
+        let transaction = sql(conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate))?;
+        let changed = sql(transaction.execute(
+            "UPDATE sources SET status='processing',error=NULL WHERE id=?1 AND status IN ('queued','draft','failed')",
+            [id],
+        ))?;
+        if changed != 1 {
+            return Err("当前文件不在可启动 OCR 的状态。".into());
+        }
+        let source = Self::source(&transaction, id)?;
+        sql(transaction.commit())?;
+        if ingest::needs_browser(&source.extension) {
+            return Ok(Import {
+                source,
+                needs_extraction: true,
+                duplicate: false,
+            });
+        }
         self.process_source(source)
     }
 
     fn process_source(&self, source: Source) -> Result<Import> {
         if ingest::needs_browser(&source.extension) {
+            sql(self.connect()?.execute(
+                "UPDATE sources SET status='queued',error=NULL WHERE id=?1 AND status='processing'",
+                [&source.id],
+            ))?;
             return Ok(Import {
-                source,
+                source: Self::source(&self.connect()?, &source.id)?,
                 needs_extraction: true,
                 duplicate: false,
             });

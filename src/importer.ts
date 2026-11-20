@@ -1,4 +1,4 @@
-import { createWorker, type Worker } from 'tesseract.js';
+import { createWorker, PSM, type Worker } from 'tesseract.js';
 import workerPath from 'tesseract.js/dist/worker.min.js?url';
 import { call, errorText, readMedia } from './api';
 import type { ImportResult, Unit } from './types';
@@ -10,7 +10,19 @@ export const importExtensions = [
   'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff',
 ];
 
-export async function completeImport(result: ImportResult, token: string, languages: string, progress: (message: string) => void) {
+export type OcrOptions = {
+  startPage?: number;
+  endPage?: number;
+  quality?: 'fast' | 'quality';
+};
+
+export async function completeImport(
+  result: ImportResult,
+  token: string,
+  languages: string,
+  progress: (message: string) => void,
+  options: OcrOptions = {},
+) {
   if (result.duplicate || !result.needsExtraction) return;
   const { source } = result;
   const sourceId = source.id;
@@ -19,6 +31,10 @@ export async function completeImport(result: ImportResult, token: string, langua
     if (!worker) {
       progress(`${source.name} · 正在载入 OCR 语言模型`);
       worker = await createWorker(languages, 1, { workerPath, workerBlobURL: false });
+      await worker.setParameters({
+        tessedit_pageseg_mode: options.quality === 'quality' ? PSM.SINGLE_BLOCK : PSM.AUTO,
+        preserve_interword_spaces: '1',
+      });
     }
     const { data } = await worker.recognize(input);
     return { text: data.text.trim(), confidence: Math.min(1, Math.max(0, data.confidence / 100)) };
@@ -29,7 +45,9 @@ export async function completeImport(result: ImportResult, token: string, langua
       const canvas = document.createElement('canvas');
       try {
         let pending: Unit[] = [];
-        for (let ordinal = 1; ordinal <= pdf.numPages; ordinal++) {
+        const startPage = Math.max(1, options.startPage ?? 1);
+        const endPage = Math.min(pdf.numPages, options.endPage ?? pdf.numPages);
+        for (let ordinal = startPage; ordinal <= endPage; ordinal++) {
           progress(`${source.name} · 第 ${ordinal} / ${pdf.numPages} 页`);
           const page = await pdf.getPage(ordinal);
           const content = await page.getTextContent();
@@ -40,7 +58,7 @@ export async function completeImport(result: ImportResult, token: string, langua
           if (visibleCharacters >= 25 && visibleCharacters / characters > 0.55) {
             pending.push({ ordinal, kind: 'page', locator, text, method: 'native' });
           } else {
-            await (await renderPage(pdf, ordinal, 1550, canvas)).promise;
+            await (await renderPage(pdf, ordinal, options.quality === 'quality' ? 1550 : 1050, canvas)).promise;
             const ocr = await recognize(canvas);
             pending.push({ ordinal, kind: 'page', locator, method: 'ocr', ...ocr });
           }

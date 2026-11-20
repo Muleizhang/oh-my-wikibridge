@@ -82,6 +82,7 @@ derivedFrom
 
 ```text
 draft       自动处理完成，等待 admin 整体审核
+queued      已导入原始文件，等待 admin 启动 OCR
 published   已向 user 开放
 archived    历史版本，保留用于追溯
 ```
