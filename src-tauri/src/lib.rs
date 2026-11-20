@@ -6,7 +6,12 @@ mod store;
 use ingest::Unit;
 use std::{io::Write, path::PathBuf};
 use store::{Corpus, Evidence, Import, Result, Source, State as AppState};
-use tauri::{Manager, State, ipc::Response};
+use tauri::{
+    Emitter, Manager, State, WindowEvent,
+    ipc::Response,
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
+};
 
 async fn worker<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
     tauri::async_runtime::spawn_blocking(f)
@@ -280,7 +285,40 @@ pub fn run() {
         .setup(|app| {
             let path = app.path().app_data_dir()?;
             app.manage(AppState::new(path).map_err(std::io::Error::other)?);
+            let show = MenuItem::with_id(app, "show", "显示 WikiBridge", true, None::<&str>)?;
+            let admin = MenuItem::with_id(app, "admin", "打开管理员工作区", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "退出 WikiBridge", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &admin, &quit])?;
+            if let Some(icon) = app.default_window_icon().cloned() {
+                TrayIconBuilder::new()
+                    .icon(icon)
+                    .icon_as_template(true)
+                    .tooltip("WikiBridge")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "show" => show_main_window(app),
+                        "admin" => {
+                            show_main_window(app);
+                            let _ = app.emit("wikibridge://open-admin", ());
+                        }
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
+                            show_main_window(tray.app_handle());
+                        }
+                    })
+                    .build(app)?;
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             admin_exists,
@@ -311,6 +349,13 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to run WikiBridge");
+}
+
+fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 #[cfg(test)]

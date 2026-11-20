@@ -1,5 +1,6 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { listen } from '@tauri-apps/api/event';
 import ReactMarkdown from 'react-markdown';
 import {
   ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3, BookOpen, ChevronDown, CircleHelp,
@@ -95,6 +96,16 @@ function App() {
     if (activeToken) setAdminCorpora(await call<Corpus[]>('list_corpora', { token: activeToken }));
   }, [token]);
   useEffect(() => { void refresh().catch(error => setError(errorText(error))); }, [refresh]);
+  useEffect(() => {
+    if (!desktop) return;
+    let unlisten: (() => void) | undefined;
+    void listen('wikibridge://open-admin', () => {
+      setPage('admin');
+      setScopeOpen(false);
+      setEvidence(undefined);
+    }).then(stop => { unlisten = stop; });
+    return () => { unlisten?.(); };
+  }, []);
 
   function navigate(target: Page) {
     setPage(target);

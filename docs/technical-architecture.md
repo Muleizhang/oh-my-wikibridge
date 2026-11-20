@@ -173,6 +173,7 @@ sidecar 需要为 Windows、macOS arm64 和 macOS x64 分别打包。它只提�
 - 支持 Windows x64、macOS arm64 和 macOS x64
 - 使用 GitHub Actions 构建不同平台的 Tauri 安装包
 - 在每个平台执行启动、文件导入、索引和 OpenCode 健康检查
+- 关闭主窗口后保持后台驻留，通过系统托盘重新显示或退出
 
 ## 9. 开发和构建模式
 

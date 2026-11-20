@@ -8,6 +8,7 @@ WikiBridge 是一个本地优先的多模态知识工程工作台。首版使用
 - Tauri 桌面模式，管理员可以创建语料库并导入文件
 - 文本、Markdown、HTML、CSV、JSON、XML、DOCX、PPTX、XLSX、ODT、ODP、EPUB 等格式的原生抽取
 - PDF 和图片的浏览器端 OCR，支持快速样例、页面续处理和简体中文与英语语言包
+- 关闭窗口后驻留系统托盘，可从托盘重新打开或退出
 - 草稿知识库、发布版本和只读 user 模式
 - SQLite、FTS5、TF-IDF、Word2Vec、共现矩阵、SVD 投影和 RDF/SPARQL 关系查询
 - OpenCode `homo/gpt-6.1-terra` 默认模型适配，以及带来源编号的回答
