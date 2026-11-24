@@ -11,6 +11,7 @@ import { Admin } from './Admin';
 import { call, desktop, errorText } from './api';
 import { EvidencePanel } from './EvidencePanel';
 import { AnalyticsView, GraphView } from './Explore';
+import { ReliableGraph } from './ReliableGraph';
 import type { Answer, Corpus, Evidence, Hit, SearchResult, Source, Trace } from './types';
 import './style.css';
 
@@ -18,6 +19,7 @@ const pages = [
   { id: 'research', title: '知识检索', icon: ScanSearch },
   { id: 'library', title: '资料目录', icon: BookOpen },
   { id: 'graph', title: '关系图谱', icon: Network },
+  { id: 'localgraph', title: '本地语料图谱', icon: GitFork },
   { id: 'analytics', title: '语料分析', icon: BarChart3 },
   { id: 'admin', title: '管理员工作区', icon: LockKeyhole },
 ] as const;
@@ -28,6 +30,7 @@ const descriptions: Record<Page, string> = {
   research: '检索资料、查看来源，并提出需要证据支持的问题。',
   library: '按语料库浏览已发布的资料。',
   graph: '沿实体关系查找出处。',
+  localgraph: '查看器物属性、事件、来源陈述与复核依据。',
   analytics: '用课堂方法观察语料中的词汇与关联。',
   admin: '导入多格式文件、审核资料并设置 OpenCode。',
 };
@@ -70,7 +73,7 @@ function KnowledgeLibrary({ corpora, selection }: { corpora: Corpus[]; selection
 }
 
 function App() {
-  const [page, setPage] = useState<Page>('research');
+  const [page, setPage] = useState<Page>(new URLSearchParams(location.search).get('view') === 'localgraph' ? 'localgraph' : 'research');
   const [corpora, setCorpora] = useState<Corpus[]>([]);
   const [adminCorpora, setAdminCorpora] = useState<Corpus[]>([]);
   const [chosen, setChosen] = useState<string[]>();
@@ -195,7 +198,7 @@ function App() {
     </aside>
 
     <main className="main"><header className="topbar"><span><current.icon size={17} />{current.title}</span>
-      {page !== 'admin' && <div className="scope">
+      {page !== 'admin' && page !== 'localgraph' && <div className="scope">
         <button type="button" className="button subtle scope-toggle" aria-expanded={scopeOpen} onClick={() => setScopeOpen(!scopeOpen)}>
           <FolderOpen size={16} />{selected.length === 1 ? corpora.find(item => item.id === selected[0])?.name : `已选 ${selected.length} 个语料库`}<ChevronDown size={15} /></button>
         {scopeOpen && <div className="scope-menu"><strong>查询范围</strong>{corpora.length ? corpora.map(item => <label key={item.id}>
@@ -203,7 +206,7 @@ function App() {
         </label>) : <p>暂无已发布语料。</p>}</div>}
       </div>}
     </header>
-    <div className={`work-area ${evidence ? 'with-evidence' : ''}`}>
+    <div className={`work-area ${evidence ? 'with-evidence' : ''} ${page === 'localgraph' ? 'local-graph-area' : ''}`}>
       <section className="content">
         <div className="headline"><h1>{page === 'research' ? '从问题到证据' : current.title}</h1><p>{descriptions[page]}</p></div>
         {error && <div className="error notice" role="alert">{error}</div>}
@@ -253,12 +256,13 @@ function App() {
         </>}
         {page === 'library' && <KnowledgeLibrary corpora={corpora} selection={selected} />}
         {page === 'graph' && <GraphView selection={selected} onEvidence={showEvidence} />}
+        {page === 'localgraph' && <ReliableGraph token={token} onUnlock={() => navigate('admin')} />}
         {page === 'analytics' && <AnalyticsView selection={selected} />}
         <div hidden={page !== 'admin'}><Admin token={token} corpora={adminCorpora} refresh={refresh} onLogin={async next => {
           setToken(next); await refresh(next);
         }} onEvidence={id => showEvidence(id, true)} /></div>
       </section>
-      <EvidencePanel key={evidence?.id ?? 'empty'} evidence={evidence} token={page === 'admin' ? token : undefined} onClose={() => setEvidence(undefined)} />
+      {page !== 'localgraph' && <EvidencePanel key={evidence?.id ?? 'empty'} evidence={evidence} token={page === 'admin' ? token : undefined} onClose={() => setEvidence(undefined)} />}
     </div></main>
   </div>;
 }

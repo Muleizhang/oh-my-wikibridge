@@ -34,6 +34,25 @@ npm run tauri dev
 
 首次进入管理员工作区时设置本机管理员口令。管理员可以创建语料库，导入资料，等待 OCR 或原生抽取完成，查看整体审核摘要后发布。访客模式只能读取已发布版本。
 
+## 本地知识图谱流水线
+
+当前版本按器物条目提取属性和事件，使用本地 PP-Structure/OCR、中文 UIE、LTP、向量召回和重排模型。名称相同的纹样、时代、工艺、材质和文化提及组织为来源内概念；具体器物、地点和机构保留为独立实例。机器结果保留原文、坐标和 OCR 版本，不自动确认事实或合并实体。
+
+PDF、页面缓存和模型权重不提交到 Git。准备本地语料后运行：
+
+```bash
+python3 scripts/prepare_kg_v2_data.py --source /private/path/volume-1.pdf
+python3 scripts/download_kg_v2_models.py
+npm run pipeline:reliable
+```
+
+开发界面：`http://localhost:1420/?view=localgraph`。实体匹配页默认显示概念词表，并可展开每次来源、查看原图和记录复核决定。详细说明见 [本地流水线](docs/reliable-pipeline.md)，数据目录说明见 [data/README.md](data/README.md)。
+
+```bash
+npm run test:kg
+npm run build
+```
+
 ## OpenCode
 
 在 OpenCode 中完成模型授权后，管理员在工作区选择或确认：

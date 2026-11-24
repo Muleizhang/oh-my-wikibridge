@@ -1,0 +1,9 @@
+torch==2.6.0
+transformers==4.38.2
+ltp==4.2.14
+ltp-core==0.1.4
+ltp-extension==0.1.13
+numpy>=1.26,<3
+sentencepiece>=0.2,<0.3
+PyMuPDF>=1.24,<2
+Pillow>=10,<13

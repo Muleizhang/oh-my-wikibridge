@@ -249,6 +249,57 @@ impl Store {
                 relation TEXT NOT NULL, object TEXT NOT NULL, PRIMARY KEY(chunk_id,subject,relation,object)
             );
             CREATE INDEX IF NOT EXISTS sources_corpus_status ON sources(corpus_id,status);
+            CREATE TABLE IF NOT EXISTS kg_runs(
+                id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+                state TEXT NOT NULL, graph_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS kg_entities(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                id TEXT NOT NULL, label TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL,
+                PRIMARY KEY(run_id,id)
+            );
+            CREATE TABLE IF NOT EXISTS kg_mentions(
+                run_id TEXT NOT NULL, id TEXT NOT NULL, entity_id TEXT NOT NULL, page INTEGER NOT NULL,
+                start INTEGER NOT NULL, end INTEGER NOT NULL, data TEXT NOT NULL,
+                PRIMARY KEY(run_id,id), FOREIGN KEY(run_id,entity_id) REFERENCES kg_entities(run_id,id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS kg_edges(
+                run_id TEXT NOT NULL, id TEXT NOT NULL, subject_id TEXT NOT NULL,
+                predicate TEXT NOT NULL, object_id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL,
+                PRIMARY KEY(run_id,id),
+                FOREIGN KEY(run_id,subject_id) REFERENCES kg_entities(run_id,id) ON DELETE CASCADE,
+                FOREIGN KEY(run_id,object_id) REFERENCES kg_entities(run_id,id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS kg_records(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                id TEXT NOT NULL, page INTEGER NOT NULL, item INTEGER NOT NULL, label TEXT NOT NULL,
+                data TEXT NOT NULL, PRIMARY KEY(run_id,id)
+            );
+            CREATE TABLE IF NOT EXISTS kg_assertions(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                id TEXT NOT NULL, subject_id TEXT, predicate TEXT NOT NULL,
+                object_kind TEXT NOT NULL, object_json TEXT NOT NULL, data TEXT NOT NULL,
+                PRIMARY KEY(run_id,id),
+                FOREIGN KEY(run_id,subject_id) REFERENCES kg_entities(run_id,id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS kg_events(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(run_id,id)
+            );
+            CREATE TABLE IF NOT EXISTS kg_source_mentions(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                id TEXT NOT NULL, entity_id TEXT, data TEXT NOT NULL, PRIMARY KEY(run_id,id),
+                FOREIGN KEY(run_id,entity_id) REFERENCES kg_entities(run_id,id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS kg_reviews(
+                id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES kg_runs(id),
+                target_kind TEXT NOT NULL, target_id TEXT NOT NULL, decision TEXT NOT NULL,
+                reviewer TEXT NOT NULL, note TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS kg_reviews_run ON kg_reviews(run_id,target_kind,target_id);
+            CREATE INDEX IF NOT EXISTS kg_mentions_entity ON kg_mentions(run_id,entity_id);
+            CREATE INDEX IF NOT EXISTS kg_edges_subject ON kg_edges(run_id,subject_id);
+            CREATE INDEX IF NOT EXISTS kg_edges_object ON kg_edges(run_id,object_id);
         "))?;
         // A second process may be open, so interrupted imports are resumed explicitly.
         Ok(store)
@@ -259,6 +310,18 @@ impl Store {
         sql(conn.busy_timeout(Duration::from_secs(10)))?;
         sql(conn.execute_batch("PRAGMA foreign_keys=ON;"))?;
         Ok(conn)
+    }
+
+    pub fn pipeline_image(&self, page: u32) -> Result<Vec<u8>> {
+        if !(1..=100).contains(&page) {
+            return Err("页码须为 1–100。".into());
+        }
+        fs::read(
+            self.root
+                .join("pipeline-pages")
+                .join(format!("v1-p{page:04}.png")),
+        )
+        .map_err(|error| error.to_string())
     }
 
     pub fn corpora(&self, admin: bool) -> Result<Vec<Corpus>> {
@@ -410,7 +473,8 @@ impl Store {
 
     pub fn start_ocr(&self, id: &str) -> Result<Import> {
         let mut conn = self.connect()?;
-        let transaction = sql(conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate))?;
+        let transaction =
+            sql(conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate))?;
         let changed = sql(transaction.execute(
             "UPDATE sources SET status='processing',error=NULL WHERE id=?1 AND status IN ('queued','draft','failed')",
             [id],

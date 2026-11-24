@@ -4,3 +4,8 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 .DS_Store
+data/corpus/
+data/local-kg/
+.venv/
+__pycache__/
+*.py[cod]

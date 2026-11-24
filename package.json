@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "pipeline:reliable": "python3 scripts/reliable_pipeline.py",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:kg": "python3 -m unittest discover -s scripts -p \"test_kg*.py\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",

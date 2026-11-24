@@ -1,6 +1,7 @@
 mod ingest;
 mod knowledge;
 mod opencode;
+mod pipeline;
 mod store;
 
 use ingest::Unit;
@@ -89,11 +90,7 @@ async fn retry_import(
     worker(move || store.retry(&source_id)).await
 }
 #[tauri::command]
-async fn start_ocr(
-    state: State<'_, AppState>,
-    token: String,
-    source_id: String,
-) -> Result<Import> {
+async fn start_ocr(state: State<'_, AppState>, token: String, source_id: String) -> Result<Import> {
     state.require_admin(&token)?;
     let store = state.store.clone();
     worker(move || store.start_ocr(&source_id)).await
@@ -189,6 +186,52 @@ async fn graph_library(
     let reviewer = admin_if_present(&state, review_token.as_deref())?;
     let store = state.store.clone();
     worker(move || knowledge::graph(&store, &corpus_ids, reviewer, &evidence_ids)).await
+}
+#[tauri::command]
+async fn local_pipeline_graph(
+    state: State<'_, AppState>,
+    token: String,
+    version: Option<String>,
+) -> Result<serde_json::Value> {
+    state.require_admin(&token)?;
+    let store = state.store.clone();
+    worker(move || pipeline::latest_version(&store, version.as_deref())).await
+}
+#[tauri::command]
+async fn review_pipeline_item(
+    state: State<'_, AppState>,
+    token: String,
+    run_id: String,
+    target_kind: String,
+    target_id: String,
+    decision: String,
+    reviewer: String,
+    note: String,
+) -> Result<String> {
+    state.require_admin(&token)?;
+    let store = state.store.clone();
+    worker(move || {
+        pipeline::review(
+            &store,
+            &run_id,
+            &target_kind,
+            &target_id,
+            &decision,
+            &reviewer,
+            &note,
+        )
+    })
+    .await
+}
+#[tauri::command]
+async fn local_pipeline_image(
+    state: State<'_, AppState>,
+    token: String,
+    page: u32,
+) -> Result<Response> {
+    state.require_admin(&token)?;
+    let store = state.store.clone();
+    worker(move || store.pipeline_image(page).map(Response::new)).await
 }
 #[tauri::command]
 async fn analyze_library(
@@ -306,7 +349,11 @@ pub fn run() {
                         _ => {}
                     })
                     .on_tray_icon_event(|tray, event| {
-                        if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            ..
+                        } = event
+                        {
                             show_main_window(tray.app_handle());
                         }
                     })
@@ -339,6 +386,9 @@ pub fn run() {
             review_corpus,
             search_library,
             graph_library,
+            local_pipeline_graph,
+            review_pipeline_item,
+            local_pipeline_image,
             analyze_library,
             backend_status,
             backend_models,

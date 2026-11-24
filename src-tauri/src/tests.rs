@@ -10,6 +10,117 @@ fn workspace(dir: &tempfile::TempDir) -> Store {
     Store::new(dir.path().join("database")).unwrap()
 }
 
+#[test]
+fn local_pipeline_keeps_identity_and_does_not_publish_candidates() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = workspace(&directory);
+    assert!(crate::pipeline::latest(&store).is_err());
+    let conn = store.connect().unwrap();
+    conn.execute(
+        "INSERT INTO corpora(id,name,description) VALUES ('kg','test','')",
+        [],
+    )
+    .unwrap();
+    conn.execute("INSERT INTO sources(id,corpus_id,name,extension,bytes,hash,status) VALUES ('src','kg','test.pdf','pdf',1,'hash','draft')", []).unwrap();
+    let graph =
+        serde_json::json!({"nodes":[{"id":"a","label":"彩陶壶"},{"id":"b","label":"彩陶壶"}]});
+    conn.execute(
+        "INSERT INTO kg_runs(id,source_id,state,graph_json) VALUES ('run','src','processing',?1)",
+        [graph.to_string()],
+    )
+    .unwrap();
+    assert!(crate::pipeline::latest(&store).is_err());
+    conn.execute("UPDATE kg_runs SET state='complete' WHERE id='run'", [])
+        .unwrap();
+    assert_eq!(crate::pipeline::latest(&store).unwrap(), graph);
+    assert!(store.corpora(false).unwrap().is_empty());
+    assert!(store.pipeline_image(0).is_err());
+    assert!(store.pipeline_image(101).is_err());
+}
+
+#[test]
+fn typed_reviews_are_reversible_and_cannot_accept_unresolved_identity() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = workspace(&directory);
+    let conn = store.connect().unwrap();
+    conn.execute(
+        "INSERT INTO corpora(id,name,description) VALUES ('v2','test','')",
+        [],
+    )
+    .unwrap();
+    conn.execute("INSERT INTO sources(id,corpus_id,name,extension,bytes,hash,status) VALUES ('src2','v2','test.pdf','pdf',1,'h2','draft')", []).unwrap();
+    let graph = serde_json::json!({"version":"typed-kg-v2", "assertions":[
+        {"id":"height","issues":[]}, {"id":"unknown","issues":["unresolved_subject"]}],
+        "identityProposals":[{"id":"different-types","typeAgreement":false}]});
+    conn.execute(
+        "INSERT INTO kg_runs(id,source_id,state,graph_json) VALUES ('v2run','src2','complete',?1)",
+        [graph.to_string()],
+    )
+    .unwrap();
+    assert!(
+        crate::pipeline::review(
+            &store,
+            "v2run",
+            "assertion",
+            "unknown",
+            "accept",
+            "tester",
+            "synthetic"
+        )
+        .is_err()
+    );
+    assert!(
+        crate::pipeline::review(
+            &store,
+            "v2run",
+            "identity",
+            "different-types",
+            "accept",
+            "tester",
+            "synthetic"
+        )
+        .is_err()
+    );
+    assert!(
+        crate::pipeline::review(
+            &store,
+            "v2run",
+            "assertion",
+            "height",
+            "accept",
+            "tester",
+            ""
+        )
+        .is_err()
+    );
+    crate::pipeline::review(
+        &store,
+        "v2run",
+        "assertion",
+        "height",
+        "accept",
+        "tester",
+        "source checked",
+    )
+    .unwrap();
+    crate::pipeline::review(
+        &store,
+        "v2run",
+        "assertion",
+        "height",
+        "revoke",
+        "tester",
+        "revised decision",
+    )
+    .unwrap();
+    let result = crate::pipeline::latest_version(&store, Some("typed-kg-v2")).unwrap();
+    assert_eq!(result["reviews"].as_array().unwrap().len(), 2);
+    assert_eq!(result["reviews"][1]["decision"], "revoke");
+    assert_eq!(result["assertions"], graph["assertions"]);
+    assert!(crate::pipeline::latest_version(&store, Some("local-kg-v1")).is_err());
+    assert!(store.corpora(false).unwrap().is_empty());
+}
+
 fn import_text(store: &Store, id: &str, path: &Path, content: &str) {
     fs::write(path, content).unwrap();
     let imported = store.begin_import(id, path).unwrap();
