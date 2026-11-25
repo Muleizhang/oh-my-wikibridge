@@ -8,7 +8,9 @@ from collections import defaultdict
 
 from kg_v2.common import OUT, ident, load, save
 from kg_v2.models import model_spec
-from kg_v2.identity import NORMALIZATION_VERSION, build_identity_review, lexical_candidates
+from kg_v2.identity import NORMALIZATION_VERSION, build_identity_review, lexical_candidate_index
+
+CANDIDATE_POLICY_VERSION = 'sparse-name-buckets-v2-bounded-profiles'
 
 
 def profile(entity, attributes):
@@ -31,7 +33,7 @@ def main():
     encoder = model_spec('embedding')
     reranker = model_spec('reranker')
     signature = hashlib.sha256(json.dumps([descriptions, encoder['revision'], reranker['revision'],
-                                         NORMALIZATION_VERSION], ensure_ascii=False).encode()).hexdigest()
+                                         NORMALIZATION_VERSION, CANDIDATE_POLICY_VERSION], ensure_ascii=False).encode()).hexdigest()
     cache = OUT / 'identity-scores.json'
     previous = load(cache) if cache.exists() else None
     if previous and previous['signature'] == signature:
@@ -41,50 +43,59 @@ def main():
         model = AutoModel.from_pretrained(encoder['path'], use_safetensors=True, local_files_only=True).eval().to(device)
         embeddings = []
         for start in range(0, len(descriptions), 24):
-            inputs = tokenizer(descriptions[start:start+24], padding=True, truncation=False, return_tensors='pt')
-            if inputs['input_ids'].shape[1] > 512: raise ValueError('Entity profile exceeds encoder context')
+            inputs = tokenizer(descriptions[start:start+24], padding=True, truncation=True, max_length=256, return_tensors='pt')
             with torch.inference_mode():
                 hidden = model(**{k: v.to(device) for k, v in inputs.items()}).last_hidden_state[:, 0]
                 embeddings.append(torch.nn.functional.normalize(hidden, dim=1).cpu().numpy())
-        vectors = np.concatenate(embeddings); similarity = vectors @ vectors.T
+        vectors = np.concatenate(embeddings)
         del model; torch.cuda.empty_cache()
-        pairs = {}
+        pairs = {}; lexical = lexical_candidate_index(entities)
+        nearest = []
+        count = min(5, len(entities) - 1)
+        for start in range(0, len(entities), 256):
+            similarity = vectors[start:start+256] @ vectors.T
+            for offset, row in enumerate(similarity):
+                row[start+offset] = -np.inf
+                nearest.append(np.argpartition(row, -count)[-count:] if count else [])
         for i, entity in enumerate(entities):
-            dense = [int(j) for j in np.argsort(-similarity[i]) if j != i][:5]
-            lexical = lexical_candidates(entities, i)
-            for j in set(dense + lexical):
+            for j in set(map(int, nearest[i])) | lexical[i]:
                 key = tuple(sorted((i, j)))
                 pairs[key] = {'id': ident('identity', entities[key[0]]['id'], entities[key[1]]['id']),
                     'left': entities[key[0]]['id'], 'right': entities[key[1]]['id'],
-                    'cosineSimilarity': round(float(similarity[i, j]), 4),
+                    'cosineSimilarity': round(float(vectors[i] @ vectors[j]), 4),
                     'nameMatch': entity['label'] == entities[j]['label'],
                     'typeAgreement': entity['kind'] == entities[j]['kind'],
                     'decision': 'review_required', 'automaticallyMerged': False}
         keys = list(pairs)
+        print(f'Reranking {len(keys)} candidate pairs for {len(entities)} source entities', flush=True)
         tokenizer = AutoTokenizer.from_pretrained(reranker['path'], local_files_only=True)
         model = AutoModelForSequenceClassification.from_pretrained(reranker['path'], use_safetensors=True,
                     local_files_only=True).eval().to(device)
         for start in range(0, len(keys), 16):
             group = keys[start:start+16]
             inputs = tokenizer([[descriptions[i], descriptions[j]] for i, j in group],
-                               padding=True, truncation=False, return_tensors='pt')
-            if inputs['input_ids'].shape[1] > 512: raise ValueError('Candidate pair exceeds reranker context')
+                               padding=True, truncation='longest_first', max_length=512, return_tensors='pt')
             with torch.inference_mode():
                 scores = model(**{k: v.to(device) for k, v in inputs.items()}).logits.flatten().cpu().tolist()
             for pair, score in zip(group, scores):
                 pairs[pair]['rerankerLogit'] = round(score, 4)
+            if start % 1600 == 0: print(f'Reranked {min(start+16,len(keys))}/{len(keys)}', flush=True)
         proposals = sorted(pairs.values(), key=lambda x: -x['rerankerLogit'])
         save(cache, {'signature': signature, 'proposals': proposals, 'models': [encoder, reranker]})
     graph['identityProposals'] = proposals
     graph['identityReview'] = build_identity_review(graph)
+    adjacent = defaultdict(list)
+    for proposal in proposals:
+        adjacent[proposal['left']].append(proposal['id']); adjacent[proposal['right']].append(proposal['id'])
     graph['identityDecisions'] = [{'entityId': e['id'], 'decision': 'source_record' if e['kind'] == 'artifact' else 'unresolved',
         'reason': '保留书内条目身份，跨条目身份尚未确认' if e['kind'] == 'artifact' else '候选已检索和重排，尚无经校准的自动匹配规则',
-        'candidateIds': [p['id'] for p in proposals if e['id'] in (p['left'], p['right'])][:5]} for e in entities]
+        'candidateIds': adjacent[e['id']][:5]} for e in entities]
     graph['summary']['identityProposals'] = len(proposals)
     graph['summary']['automaticIdentityMerges'] = 0
     graph['linking'] = {'models': [encoder['model'], reranker['model']],
-        'candidateGeneration': 'dense top-5 plus normalized name/alias union; type conflicts remain separately reviewable',
+        'candidateGeneration': 'dense top-5 plus indexed sparse normalized-name candidates; large name buckets use representative anchors',
         'scoreMeaning': 'retrieval relevance logit, not calibrated identity probability',
+        'profileLimits': 'encoder 256 tokens, paired reranker 512 tokens; model profiles only, original evidence unchanged',
         'automaticMerging': False, 'reason': 'No independently labeled identity validation set',
         'wallSeconds': round(time.perf_counter() - started, 3), 'cached': bool(previous and previous['signature'] == signature)}
     save(OUT / 'graph.json', graph); save(OUT / 'summary.json', graph['summary'])

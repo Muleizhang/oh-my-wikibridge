@@ -17,6 +17,7 @@ def main():
         if digest != (OUT / 'development-reference.sha256').read_text().strip():
             raise ValueError('Frozen development reference changed')
     graph = load(OUT / 'graph.json')
+    graph['coverage'] = load(OUT / 'extraction-run.json').get('coverage', {})
     pages = selected_pages()
     baseline_records = [r for p in pages for r in load(OUT / f'extractions/v1-p{p:04d}.json')['baselineRecords']]
     results = {'referenceAuthority': reference['authority'], 'quantity': {
@@ -24,7 +25,9 @@ def main():
         'ppstructure_same_record_parser': score_quantities(reference, graph['assertions'], graph['records'])},
         'identity': {'status': 'not_measured', 'reason': 'Needs independent same/different/unknown identity references'},
         'relations': {'status': 'not_measured', 'reason': 'Needs complete independently annotated relation and qualifier references'},
-        'reservedPagesEvaluated': False}
+        'reservedPagesEvaluated': False,
+        'previouslyReservedPagesProcessed': sorted(set(pages).intersection(range(101, 111))),
+        'heldoutNote': 'Any previously reserved pages included in this run are now processed; they are not an untouched test set.'}
     results['publication'] = publication_gate({})  # Quantity-only development checks cannot open the full KG gate.
     graph['evaluation'] = results
     graph['publication'] = results['publication']

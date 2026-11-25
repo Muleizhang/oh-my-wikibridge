@@ -318,15 +318,29 @@ impl Store {
     }
 
     pub fn pipeline_image(&self, page: u32) -> Result<Vec<u8>> {
-        if !(1..=100).contains(&page) {
-            return Err("页码须为 1–100。".into());
+        let conn = self.connect()?;
+        let selected: bool = sql(conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM kg_runs, json_each(kg_runs.graph_json, '$.selection') AS pages WHERE kg_runs.state='complete' AND pages.value=?1)",
+            [page],
+            |row| row.get(0),
+        ))?;
+        if page == 0 || !selected {
+            return Err("该页不属于已完成的图谱运行。".into());
         }
-        fs::read(
-            self.root
-                .join("pipeline-pages")
-                .join(format!("v1-p{page:04}.png")),
-        )
-        .map_err(|error| error.to_string())
+        let directory = self.root.join("pipeline-pages");
+        let manifest = directory.join("page-images.json");
+        let filename = if manifest.is_file() {
+            let text = fs::read_to_string(manifest).map_err(|error| error.to_string())?;
+            let value: serde_json::Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
+            value["pages"][page.to_string()]["file"].as_str()
+                .ok_or("未找到页面原图。")?.to_owned()
+        } else {
+            format!("v1-p{page:04}.png")
+        };
+        if Path::new(&filename).file_name().and_then(|name| name.to_str()) != Some(filename.as_str()) {
+            return Err("页面文件名无效。".into());
+        }
+        fs::read(directory.join(filename)).map_err(|error| error.to_string())
     }
 
     pub fn corpora(&self, admin: bool) -> Result<Vec<Corpus>> {

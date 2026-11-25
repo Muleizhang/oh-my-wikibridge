@@ -10,6 +10,7 @@ from pathlib import Path
 from kg_v2.schema import schema
 from kg_v2.common import OUT, ident, load, save, source_path
 from kg_v2.identity import build_identity_review
+from kg_v2.images import install_previews
 from kg_v2_validate import validate
 
 
@@ -29,17 +30,14 @@ def persist(graph, root):
     destination = root / 'sources' / (source_id + '.pdf'); destination.parent.mkdir(exist_ok=True)
     if not destination.exists():
         temporary = destination.with_suffix('.pdf.tmp'); shutil.copyfile(source, temporary); temporary.replace(destination)
-    image_dir = root / 'pipeline-pages'; image_dir.mkdir(exist_ok=True)
-    for page in graph['selection']:
-        original = OUT / f'images/v1-p{page:04d}.png'; target = image_dir / original.name
-        if not target.exists(): shutil.copyfile(original, target)
+    install_previews(graph, root)
     backup = root / 'backups/before-typed-kg-v2.sqlite3'
     if not backup.exists():
         backup.parent.mkdir(exist_ok=True)
         with sqlite3.connect(backup) as copy: conn.backup(copy)
     with conn:
-        conn.execute('INSERT OR IGNORE INTO corpora(id,name,description) VALUES (?,?,?)',
-            (corpus, '中国纹样 · 条目与陈述 v2', '20页开发样本。属性、事件和实体分离；候选尚未独立验收。'))
+        conn.execute('INSERT INTO corpora(id,name,description) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET description=excluded.description',
+            (corpus, '中国纹样 · 条目与陈述 v2', f"{len(graph['selection'])}页语料。属性、事件和实体分离；候选尚未独立验收。"))
         conn.execute('INSERT OR IGNORE INTO sources(id,corpus_id,name,extension,bytes,hash,status) VALUES (?,?,?,?,?,?,?)',
             (source_id, corpus, source.name, 'pdf', source.stat().st_size, digest, 'draft'))
         conn.execute('INSERT INTO kg_runs(id,source_id,state,graph_json) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET graph_json=excluded.graph_json',

@@ -24,18 +24,40 @@ def lexical_candidates(entities, index):
         normalize_name(n) for n in [other['label'], *other.get('aliases', [])])]
 
 
+def lexical_candidate_index(entities, max_bucket=64, anchor_count=4):
+    buckets = defaultdict(set)
+    for index, entity in enumerate(entities):
+        for name in {normalize_name(n) for n in [entity['label'], *entity.get('aliases', [])]} - {''}:
+            buckets[name].add(index)
+    candidates = [set() for _ in entities]
+    for members in buckets.values():
+        members = sorted(members)
+        if len(members) <= max_bucket:
+            for offset, left in enumerate(members):
+                candidates[left].update(members[:offset]); candidates[left].update(members[offset+1:])
+        else:
+            anchors = members[:anchor_count]
+            for left in members:
+                candidates[left].update(anchor for anchor in anchors if anchor != left)
+                if left in anchors:
+                    candidates[left].update(members[anchor_count:])
+    return candidates
+
+
 def build_identity_review(graph):
     entities = {e['id']: e for e in graph['entities']}
     documents = {(d['page'], d['engine']): d for d in graph['documents']}
     records = {r['id']: r for r in graph['records']}
+    records_by_page = defaultdict(list)
+    for record in graph['records']: records_by_page[record['page']].append(record)
     sources, members, pair_groups = {}, defaultdict(list), defaultdict(list)
     different, conflicts = [], []
     for entity in entities.values():
         ev = entity['evidence'][0]
         record = records.get(entity.get('recordId'))
         if record is None:
-            owners = [r for r in records.values() if r['page'] == ev['page']
-                      and r.get('engine', 'ppstructure') == ev['engine']
+            owners = [r for r in records_by_page[ev['page']]
+                      if r.get('engine', 'ppstructure') == ev['engine']
                       and r['span'][0] <= ev['span'][0] < ev['span'][1] <= r['span'][1]]
             record = owners[0] if len(owners) == 1 else None
         text = documents.get((ev['page'], ev['engine']), {}).get('text', '')

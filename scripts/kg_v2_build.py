@@ -24,12 +24,13 @@ def concept_kind(text):
 
 def main():
     documents, records, entities, statements, events, mentions, disagreements, baseline_values = [], [], {}, [], [], [], [], []
-    pages = selected_pages()
+    pages = selected_pages(); baseline_records = {}
     raw_open = []
     for page in pages:
         extraction = load(OUT / f'extractions/v1-p{page:04d}.json')
         doc, old = extraction['document'], extraction['baselineDocument']
         documents += [doc, old]; records += extraction['records']
+        baseline_records.update({(r['page'], r['item'], r['occurrence']): r for r in extraction['baselineRecords']})
         by_record = {r['id']: r for r in extraction['records']}
         new_values = attributes(doc, extraction['records'])
         old_values = attributes(old, extraction['baselineRecords']); baseline_values += old_values
@@ -157,8 +158,7 @@ def main():
             'status': 'definition_pending', 'definition': None, 'examples': examples[:5], 'candidateCount': len(examples)})
     # Audit OCR changes without silently replacing the old stream.
     for record in records:
-        previous = next((r for page in pages for r in load(OUT / f'extractions/v1-p{page:04d}.json')['baselineRecords']
-                         if r['page'] == record['page'] and r['item'] == record['item'] and r['occurrence'] == record['occurrence']), None)
+        previous = baseline_records.get((record['page'], record['item'], record['occurrence']))
         if previous and previous['label'] != record['label']:
             disagreements.append({'kind': 'label_disagreement', 'recordId': record['id'], 'page': record['page'],
                 'old': previous['label'], 'new': record['label'], 'resolution': 'two source versions retained; not automatically verified'})

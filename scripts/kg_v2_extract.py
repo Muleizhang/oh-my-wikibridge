@@ -73,10 +73,14 @@ def main():
                 'domainFinetuned': False, 'semanticValidation': 'pending_independent_annotation'}
             save(target, result)
         stats.append({'page': page, 'records': len(result['records']), 'fields': len(result['fields']),
+                      'pageKind': result['document']['pageKind'], 'textCharacters': len(result['document']['text']),
                       'proseWindows': len(result['prose']), 'seconds': result['seconds'], 'cached': previous is result})
         print(f'Typed extraction {len(stats)}/{len(pages)}: page {page}, {len(result["records"])} records', flush=True)
     save(OUT / 'extraction-run.json', {'pages': stats, 'wallSeconds': round(time.perf_counter() - started, 3),
-        'codeSha256': code_hash, 'network': 'unshare -n', 'domainFinetuned': False})
+        'codeSha256': code_hash, 'network': 'unshare -n', 'domainFinetuned': False,
+        'coverage': {'platePagesWithoutNumberedRecord': [s['page'] for s in stats if s['pageKind']=='plate' and not s['records']],
+                     'pagesWithoutExtractionUnits': [s['page'] for s in stats if not s['records'] and not s['proseWindows']],
+                     'interpretation': 'All selected pages processed. These counts are routing diagnostics, not measured semantic recall.'}})
 
 
 if __name__ == '__main__':
