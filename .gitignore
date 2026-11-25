@@ -10,3 +10,5 @@ data/local-kg/
 __pycache__/
 *.py[cod]
 public/book-sample/
+.env
+.env.local
