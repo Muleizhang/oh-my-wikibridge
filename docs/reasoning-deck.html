@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中国纹样知识图谱 · 符号推演与智能体原理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* ============ 大唐系列配色（源自参考色卡 + 古漆玄墨底） ============ */
+    --tang-blue:#436C85;      /* 黛青蓝 */
+    --tang-red:#B73F42;       /* 盛唐朱砂绛 */
+    --tang-gold:#DE9960;      /* 鎏金缃赭 */
+    --tang-jade:#82B29B;      /* 青碧松绿 */
+    --tang-silk:#EEE6CB;      /* 古宣象牙绢 */
+
+    --ink:#1E1915;            /* 玄墨黑漆 */
+    --ink-rgb:30,25,21;
+    --paper:#EEE6CB;          /* 古宣底 */
+    --paper-rgb:238,230,203;
+    --paper-card:#F6F0DC;
+    --ink-card:#26201B;
+
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    --serif-en:Georgia,serif;
+    --serif-zh:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong",serif;
+    --sans-zh:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);font-family:var(--sans-zh);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+  /* ============ WebGL 双背景（大唐绢纸 / 古漆流金） ============ */
+  canvas.bg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;display:block;transition:opacity 1s ease}
+  canvas#bg-light{opacity:0}
+  canvas#bg-dark{opacity:1}
+  body.light-bg canvas#bg-light{opacity:1}
+  body.light-bg canvas#bg-dark{opacity:0}
+  body.low-power canvas.bg{display:none!important}
+
+  /* ============ Deck 容器 + 横向翻页 ============ */
+  #deck{position:fixed;inset:0;width:400vw;height:100vh;display:flex;flex-wrap:nowrap;transition:transform .85s cubic-bezier(.77,0,.175,1);z-index:10;will-change:transform}
+  .slide{width:100vw;height:100vh;flex:0 0 100vw;position:relative;padding:4.2vh 5vw 8.2vh 5vw;display:flex;flex-direction:column;overflow:hidden}
+  .slide.light{color:var(--ink);background:var(--paper)}
+  .slide.dark{color:var(--paper);background:var(--ink)}
+
+  .slide::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none}
+  .slide.light::before{background:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(246,240,220,.88), rgba(238,230,203,.80) 65%, rgba(224,213,180,.88))}
+  .slide.dark::before{background:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(36,29,23,.86), rgba(24,20,16,.88) 65%, rgba(16,13,10,.94))}
+
+  /* 古风宣纸云纹框饰（呼应参考色卡中的盛唐线描质感） */
+  .scroll-frame{position:absolute;inset:2.2vh 2.4vw;border:1.5px solid rgba(183,63,66,.26);pointer-events:none;z-index:1}
+  .slide.dark .scroll-frame{border-color:rgba(222,153,96,.28)}
+  .scroll-frame::before,.scroll-frame::after{content:"";position:absolute;inset:5px;border:1px solid rgba(67,108,133,.18);pointer-events:none}
+  .slide.dark .scroll-frame::before,.slide.dark .scroll-frame::after{border-color:rgba(130,178,155,.16)}
+  .corner-orn{position:absolute;width:28px;height:28px;border:2.5px solid var(--tang-red);pointer-events:none}
+  .slide.dark .corner-orn{border-color:var(--tang-gold)}
+  .corner-orn.tl{top:-2px;left:-2px;border-right:0;border-bottom:0}
+  .corner-orn.tr{top:-2px;right:-2px;border-left:0;border-bottom:0}
+  .corner-orn.bl{bottom:-2px;left:-2px;border-right:0;border-top:0}
+  .corner-orn.br{bottom:-2px;right:-2px;border-left:0;border-top:0}
+
+  /* 顶部栏：简洁大气、无小字 */
+  .slide-head{position:relative;z-index:2;display:flex;align-items:flex-end;justify-content:space-between;gap:2vw;padding-bottom:1.8vh;border-bottom:1.5px solid rgba(67,108,133,.28)}
+  .slide.dark .slide-head{border-bottom-color:rgba(222,153,96,.30)}
+  .head-left{display:flex;align-items:center;gap:1.4vw;min-width:0}
+  .seal-badge{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:.55vh 1.1vw;border-radius:6px;font-family:var(--serif-zh);font-weight:700;font-size:clamp(18px,1.45vw,24px);letter-spacing:.12em;color:#FAF6E8;background:var(--tang-red);box-shadow:0 4px 14px rgba(183,63,66,.26)}
+  .seal-badge.blue{background:var(--tang-blue);box-shadow:0 4px 14px rgba(67,108,133,.26)}
+  .seal-badge.gold{background:#B57238;box-shadow:0 4px 14px rgba(222,153,96,.28)}
+  .seal-badge.jade{background:#4A7D68;box-shadow:0 4px 14px rgba(130,178,155,.28)}
+  .slide-title{font-family:var(--serif-zh);font-weight:900;font-size:clamp(32px,3.1vw,50px);line-height:1.12;letter-spacing:.06em}
+  .head-sub{font-family:var(--serif-zh);font-weight:600;font-size:clamp(19px,1.55vw,26px);letter-spacing:.06em;color:var(--tang-blue);white-space:nowrap}
+  .slide.dark .head-sub{color:var(--tang-gold)}
+
+  /* 主图解舞台（占比 ≥ 72%，高清矢量图解原理） */
+  .diagram-stage{position:relative;z-index:2;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:1.8vh 0 1.4vh}
+  .diagram-svg{width:100%;height:100%;max-height:66vh;display:block}
+
+  /* 底部三枚要点印签（大字精炼，无长段文字） */
+  .takeaways{position:relative;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:1.6vw;padding-top:1.2vh}
+  .pill-card{display:flex;align-items:center;gap:1vw;padding:1.3vh 1.4vw;border-radius:10px;background:rgba(255,252,242,.72);border:1.5px solid rgba(67,108,133,.22);border-left:5px solid var(--accent-col,var(--tang-blue))}
+  .slide.dark .pill-card{background:rgba(42,34,27,.82);border-color:rgba(222,153,96,.24);border-left:5px solid var(--accent-col,var(--tang-gold))}
+  .pill-num{flex:none;font-family:var(--serif-zh);font-weight:900;font-size:clamp(22px,1.8vw,30px);color:var(--accent-col,var(--tang-blue));line-height:1}
+  .pill-text{font-family:var(--serif-zh);font-weight:700;font-size:clamp(18px,1.42vw,24px);line-height:1.3;letter-spacing:.03em}
+
+  /* ============ 导航点与快捷键提示 ============ */
+  #nav{position:fixed;left:50%;bottom:2.1vh;transform:translateX(-50%);z-index:30;display:flex;gap:12px;padding:7px 15px;border-radius:999px;background:rgba(30,25,21,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  #nav .dot{width:9px;height:9px;border-radius:50%;background:rgba(238,230,203,.42);cursor:pointer;transition:all .3s ease;border:0;padding:0}
+  #nav .dot:hover{background:rgba(238,230,203,.8);transform:scale(1.15)}
+  #nav .dot.active{background:var(--tang-gold);width:26px;border-radius:999px}
+  body.light-bg #nav{background:rgba(30,25,21,.10)}
+  body.light-bg #nav .dot{background:rgba(30,25,21,.26)}
+  body.light-bg #nav .dot.active{background:var(--tang-red)}
+
+  #hint{position:fixed;bottom:2.4vh;right:3vw;z-index:30;display:flex;align-items:center;gap:.65em;font-family:var(--sans-zh);font-size:13px;letter-spacing:.08em;opacity:.62;color:var(--paper)}
+  body.light-bg #hint{color:var(--ink)}
+  #hint button{all:unset;display:inline-flex;align-items:center;gap:.4em;cursor:pointer;color:inherit;white-space:nowrap}
+  #hint button:hover,#hint button:focus-visible{opacity:1;text-decoration:underline;text-underline-offset:.3em}
+  #hint .ppt-key{padding:.12em .42em;border:1px solid currentColor;border-radius:4px;font-family:var(--mono);font-size:12px}
+  #hint .ppt-sep{opacity:.5}
+
+  /* ============ 动效系统 ============ */
+  [data-anim]{opacity:1}
+  body.motion-ready [data-anim]{opacity:0}
+  body.low-power #deck{transition:none!important}
+  body.low-power *,body.low-power *::before,body.low-power *::after{animation:none!important;transition:none!important}
+  body.low-power.motion-ready [data-anim],body.low-power [data-anim]{opacity:1!important;transform:none!important}
+  #overview [data-anim]{opacity:1!important;transform:none!important}
+
+  /* ============ 演讲者模式（保留完整双屏同步与备注） ============ */
+  body.ppt-audience #hint,body.ppt-audience #nav,
+  body.ppt-preview #hint,body.ppt-preview #nav{display:none!important}
+  body.ppt-audience{cursor:none}
+  body.ppt-preview{pointer-events:none}body.ppt-preview #deck{transition:none!important}
+  body.ppt-presenter>#deck,body.ppt-presenter>#nav,body.ppt-presenter>#hint,
+  body.ppt-presenter>.bg{visibility:hidden}
+  #ppt-presenter{position:fixed;inset:0;z-index:90;display:none;min-width:0;min-height:0;overflow:hidden;background:#101216;color:#f5f6f7;font-family:"Noto Sans SC",sans-serif}
+  body.ppt-presenter #ppt-presenter{display:grid;grid-template-rows:auto 1fr auto}
+  .ppt-presenter-top{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 24px;border-bottom:1px solid #2b2e35;background:#15181d}
+  .ppt-presenter-brand{font-weight:650;letter-spacing:.02em}.ppt-presenter-meta{display:flex;align-items:center;gap:12px;color:#aeb4be;font-size:14px}
+  .ppt-sync{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid #363a43;border-radius:999px;color:#d2d6dc;background:#1b1e24}
+  .ppt-sync::before{content:"";width:8px;height:8px;border-radius:50%;background:#818894}
+  .ppt-sync[data-state="synced"]::before{background:#72df99;box-shadow:0 0 0 4px rgba(114,223,153,.12)}
+  .ppt-sync[data-state="connecting"]::before,.ppt-sync[data-state="frozen"]::before{background:#f0c766}.ppt-sync[data-state="unsynced"]::before,.ppt-sync[data-state="blocked"]::before{background:#ff9e64}.ppt-sync[data-state="disconnected"]::before{background:#ff6b72}
+  .ppt-ui-btn{appearance:none;border:1px solid #3a3e48;background:#20242a;color:#f6f7f8;border-radius:8px;padding:9px 13px;font:600 14px/1 "Noto Sans SC",sans-serif;cursor:pointer}
+  .ppt-ui-btn:hover{background:#2a2f37;border-color:#525864}.ppt-ui-btn:focus-visible{outline:2px solid #84a8ff;outline-offset:2px}.ppt-ui-btn:disabled{opacity:.28;cursor:not-allowed}
+  .ppt-presenter-main{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(300px,.75fr);gap:18px;min-height:0;padding:18px 24px}
+  .ppt-preview-stack{position:relative;display:grid;grid-template-rows:minmax(0,1fr) clamp(132px,22vh,210px);gap:16px;min-width:0;min-height:0}
+  .ppt-stage-card,.ppt-notes-card,.ppt-presenter-overview{background:#171a20;border:1px solid #2b2f37;border-radius:12px;overflow:hidden}
+  .ppt-stage-card{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}
+  .ppt-stage-label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 14px;color:#aeb4be;font-size:13px;border-bottom:1px solid #292d34}
+  .ppt-annotation-tools{display:flex;align-items:center;gap:5px;margin-left:auto}.ppt-annotation-tools .ppt-ui-btn{padding:6px 9px;font-size:12px}.ppt-annotation-tools .ppt-ui-btn.is-active{color:#111318;background:#ff5b63;border-color:#ff5b63}.ppt-annotation-tools .ppt-grid-btn.is-active{color:#111318;background:#edf1f5;border-color:#edf1f5}.ppt-annotation-tools .ppt-clear-btn{min-width:0}.ppt-grid-btn{display:inline-flex;align-items:center;gap:6px}.ppt-grid-icon{display:grid;grid-template-columns:repeat(2,4px);gap:2px}.ppt-grid-icon i{width:4px;height:4px;background:currentColor}
+  .ppt-frame-viewport{position:relative;display:grid;place-items:center;min-width:0;min-height:0;overflow:hidden;background:#08090b}
+  .ppt-frame{display:block;width:0;height:0;max-width:100%;max-height:100%;aspect-ratio:16/9;border:0;background:#08090b}.ppt-next-frame{opacity:.86}#ppt-next-card.is-end .ppt-frame{visibility:hidden}#ppt-next-card.is-end .ppt-frame-viewport::after{content:"演示结束";position:absolute;color:#727a86;font:650 14px/1 "Noto Sans SC",sans-serif;letter-spacing:.08em}
+  .ppt-annotation-layer{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:0;height:0;pointer-events:none;touch-action:none}.ppt-annotation-layer.is-active{pointer-events:auto;cursor:crosshair}
+  #ppt-audience-ink{position:fixed;inset:0;z-index:70;width:100vw;height:100vh;pointer-events:none}#ppt-audience-cover{position:fixed;inset:0;z-index:80;display:none;pointer-events:none}#ppt-audience-cover.is-ended{display:grid!important;place-items:center;background:#101216!important;color:#f5f6f7;font:650 clamp(24px,3vw,46px)/1.2 "Noto Sans SC",sans-serif;letter-spacing:.08em}
+  .ppt-preview-stack.is-overview>.ppt-stage-card{display:none}.ppt-presenter-overview{grid-row:1/-1;display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}.ppt-presenter-overview[hidden]{display:none}.ppt-overview-head{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid #292d34}.ppt-overview-head strong{font-size:15px}.ppt-overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-content:start;overflow:auto;padding:14px}.ppt-overview-page{appearance:none;min-height:112px;display:grid;grid-template-rows:auto 1fr auto;gap:12px;padding:13px;border:1px solid #343943;border-radius:10px;background:#111318;color:#eef1f4;text-align:left;cursor:pointer}.ppt-overview-page:hover{background:#1d2128;border-color:#636b78}.ppt-overview-page.is-current{border-color:#84a8ff;box-shadow:inset 0 0 0 1px #84a8ff}.ppt-overview-page-no{color:#8f97a3;font:600 12px/1 var(--mono,monospace)}.ppt-overview-page-title{font-size:14px;font-weight:650;line-height:1.35}.ppt-overview-page-meta{display:flex;justify-content:space-between;gap:8px;color:#7f8793;font-size:11px}
+  .ppt-notes-card{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0}.ppt-notes-head{padding:16px 18px;border-bottom:1px solid #292d34}.ppt-notes-label{margin-bottom:6px;color:#848c98;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.ppt-notes-title{font-size:21px;font-weight:680;line-height:1.32}.ppt-purpose-block{margin-top:14px;padding:11px 12px;border-left:3px solid #84a8ff;background:#111318}.ppt-purpose-copy{color:#c9ced6;font-size:14px;line-height:1.55}.ppt-notes-draft-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:15px;padding-top:13px;border-top:1px solid #2d3139}.ppt-notes-draft-head .ppt-notes-label{margin:0 0 4px}.ppt-note-meta{color:#8f97a3;font-size:12px}
+  .ppt-notes-tools{display:flex;align-items:center;gap:6px}.ppt-notes-tools .ppt-ui-btn{padding:7px 9px}.ppt-note-editor{width:100%;height:100%;min-height:0;resize:none;border:0;outline:0;background:#171a20;color:#edf0f3;padding:18px;font:400 var(--ppt-note-size,17px)/1.72 "Noto Sans SC",sans-serif}.ppt-note-editor:focus{box-shadow:inset 0 0 0 1px #3d4654}
+  .ppt-saved{color:#72df99;white-space:nowrap}.ppt-presenter-bottom{display:grid;grid-template-columns:minmax(330px,1fr) auto minmax(110px,1fr);align-items:center;gap:20px;padding:12px 24px;border-top:1px solid #2b2e35;background:#15181d}
+  .ppt-time-dashboard{display:flex;align-items:stretch;min-width:0}.ppt-time-stat{min-width:90px;display:grid;align-content:center;gap:4px;padding:0 16px}.ppt-time-stat:first-child{padding-left:0}.ppt-time-stat+.ppt-time-stat{border-left:1px solid #343943}.ppt-time-label{color:#89919d;font-size:11px;font-weight:700;letter-spacing:.1em}.ppt-time-value{color:#f7f8fa;font:650 23px/1 var(--mono,monospace);font-variant-numeric:tabular-nums}.ppt-time-hint{color:#747c88;font-size:11px;white-space:nowrap}.ppt-time-stat.is-over .ppt-time-label,.ppt-time-stat.is-over .ppt-time-value{color:#ff8a90}.ppt-time-stat.is-remaining .ppt-time-value{color:#72df99}
+  .ppt-control-stack{display:grid;gap:7px;justify-items:center}.ppt-controls,.ppt-session-actions{display:flex;align-items:center;justify-content:center;gap:7px}.ppt-controls .ppt-ui-btn,.ppt-session-actions .ppt-ui-btn{min-width:68px}.ppt-session-actions{padding-top:7px;border-top:1px solid #343943}.ppt-rehearsal-on{color:#ff8a90}.ppt-page-state{text-align:right}.ppt-page-state strong{display:block;color:#fff;font-size:17px;margin-bottom:5px}.ppt-page-state span{color:#8f97a3;font:600 13px/1 var(--mono,monospace)}.ppt-auto-state{display:inline-flex;align-items:center;gap:6px;border-radius:999px}.ppt-auto-state.is-on{color:#72df99;border-color:rgba(114,223,153,.45);background:rgba(114,223,153,.08)}.ppt-auto-state.is-paused{color:#f0c766;border-color:rgba(240,199,102,.42);background:rgba(240,199,102,.08)}
+  #ppt-presenter[data-layout="slides"] .ppt-presenter-main{grid-template-columns:minmax(0,2.15fr) minmax(260px,.58fr)}#ppt-presenter[data-layout="notes"] .ppt-presenter-main{grid-template-columns:minmax(0,1.15fr) minmax(380px,1fr)}
+  .ppt-dialog{position:fixed;inset:0;z-index:130;display:grid;place-items:center;padding:24px;background:rgba(4,6,9,.72);backdrop-filter:blur(10px)}.ppt-dialog[hidden]{display:none}.ppt-dialog-panel{width:min(720px,calc(100vw - 48px));max-height:min(760px,calc(100vh - 48px));display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border:1px solid #343943;border-radius:14px;background:#171a20;box-shadow:0 24px 80px rgba(0,0,0,.45)}.ppt-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid #2b2f37}.ppt-dialog-title{font-size:20px;font-weight:700}.ppt-dialog-body{overflow:auto;padding:18px;color:#d8dce2;font-size:14px;line-height:1.6}.ppt-dialog-section+.ppt-dialog-section{margin-top:22px}.ppt-dialog-section h3{margin:0 0 10px;color:#fff;font-size:15px}.ppt-dialog-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.ppt-dialog-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #282c33}.ppt-dialog-row:last-child{border-bottom:0}.ppt-field{display:grid;gap:6px}.ppt-field label{color:#aeb4be;font-size:12px}.ppt-field input{width:100%;border:1px solid #3a3e48;border-radius:8px;background:#101216;color:#fff;padding:9px 10px;font:600 14px sans-serif}.ppt-check{display:flex;align-items:flex-start;gap:10px}.ppt-check-dot{width:9px;height:9px;margin-top:7px;border-radius:50%;background:#ff6b72}.ppt-check.is-ok .ppt-check-dot{background:#72df99}.ppt-check.is-warn .ppt-check-dot{background:#f0c766}.ppt-summary{width:100%;border-collapse:collapse;font-size:13px}.ppt-summary th,.ppt-summary td{padding:9px 8px;border-bottom:1px solid #2b2f37;text-align:left}.ppt-summary th{color:#9fa6b1;font-weight:600}.ppt-summary td:last-child,.ppt-summary th:last-child{text-align:right}.ppt-muted{color:#8f96a1}.ppt-shortcuts{display:grid;grid-template-columns:auto 1fr;gap:8px 14px}.ppt-shortcuts kbd{min-width:44px;padding:4px 7px;border:1px solid #3a3e48;border-radius:6px;background:#101216;color:#fff;text-align:center;font:600 12px var(--mono,monospace)}
+  .ppt-settings-card{padding:15px;border:1px solid #30353e;border-radius:12px;background:#12151a}.ppt-settings-card+.ppt-settings-card{margin-top:12px}.ppt-settings-card h3{margin:0 0 3px}.ppt-settings-copy{margin:0 0 14px;color:#858d99;font-size:12px}.ppt-switch-row{display:flex;align-items:center;justify-content:space-between;gap:18px;cursor:pointer}.ppt-switch-row input{position:absolute;opacity:0;pointer-events:none}.ppt-switch{width:48px;height:28px;flex:0 0 auto;padding:3px;border:1px solid #434955;border-radius:999px;background:#252a31;transition:.2s}.ppt-switch::after{content:"";display:block;width:20px;height:20px;border-radius:50%;background:#a8afb9;transition:.2s}.ppt-switch-row input:checked+.ppt-switch{border-color:#72df99;background:rgba(114,223,153,.16)}.ppt-switch-row input:checked+.ppt-switch::after{transform:translateX(20px);background:#72df99}.ppt-stepper{display:grid;grid-template-columns:38px minmax(72px,1fr) auto 38px;align-items:center;margin-top:14px;border:1px solid #363c46;border-radius:10px;background:#0d0f13;overflow:hidden}.ppt-stepper button{height:42px;border:0;background:#20242a;color:#fff;font-size:19px;cursor:pointer}.ppt-stepper button:hover{background:#2c323b}.ppt-stepper input{width:100%;height:42px;border:0!important;border-radius:0!important;background:transparent!important;text-align:center;font:650 16px var(--mono,monospace)!important;-moz-appearance:textfield}.ppt-stepper-unit{color:#858d99;font-size:12px}.ppt-segmented{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.ppt-segmented.screen{grid-template-columns:repeat(4,1fr)}.ppt-segmented .ppt-ui-btn{min-width:0}.ppt-settings-save{width:100%;margin-top:14px;background:#edf1f5;color:#111318;border-color:#edf1f5}.ppt-settings-save:hover{background:#fff}.ppt-settings-save+.ppt-settings-copy{margin:10px 0 0}
+  #overview{z-index:110!important}
+  @media (max-width:960px){
+    .takeaways{grid-template-columns:1fr}
+    .head-sub{display:none}
+  }
+</style>
+</head>
+<body>
+<script>
+  (function(){
+    const KEY = 'guizang-ppt-low-power';
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const stored = localStorage.getItem(KEY);
+    window.__lowPowerMode = stored === '1' || (stored === null && reduced);
+    function updateHint(){
+      const label = document.querySelector('.ppt-low-power-label');
+      if(label) label.textContent = window.__lowPowerMode ? '动态' : '静态';
+    }
+    window.__setLowPowerMode = function(on, opts={}){
+      window.__lowPowerMode = !!on;
+      document.body.classList.toggle('low-power', window.__lowPowerMode);
+      if(opts.persist !== false) localStorage.setItem(KEY, window.__lowPowerMode ? '1' : '0');
+      if(window.__lowPowerMode && document.getAnimations){
+        document.getAnimations().forEach(a=>a.cancel());
+      }
+      updateHint();
+      dispatchEvent(new CustomEvent('ppt-low-power-change', {detail:{on:window.__lowPowerMode}}));
+      if(window.__playSlide) window.__playSlide(window.__currentSlideIndex || 0);
+    };
+    document.body.classList.toggle('low-power', window.__lowPowerMode);
+    addEventListener('DOMContentLoaded', updateHint, {once:true});
+  })();
+</script>
+
+<canvas id="bg-dark" class="bg"></canvas>
+<canvas id="bg-light" class="bg"></canvas>
+<div id="hint" role="toolbar" aria-label="快捷控制">
+  <span>← → 翻页</span><span class="ppt-sep">·</span>
+  <button id="ppt-low-power-btn" type="button"><span class="ppt-key">B</span><span class="ppt-low-power-label">静态</span></button><span class="ppt-sep">·</span>
+  <button id="ppt-overview-btn" type="button"><span class="ppt-key">ESC</span>总览</button><span class="ppt-sep">·</span>
+  <button id="ppt-presenter-btn" type="button"><span class="ppt-key">P</span>演讲模式</button>
+</div>
+
+<div id="deck">
+
+<!-- ======================================================================
+     SLIDE 1: 符号推演 ① · 演化路径（多跳语义路径 + RDFS 本体闭包）
+     ====================================================================== -->
+<section class="slide light" data-slide-id="symbolic-path" data-theme="light" data-title="符号推演 ① · 演化路径">
+  <div class="scroll-frame">
+    <span class="corner-orn tl"></span><span class="corner-orn tr"></span>
+    <span class="corner-orn bl"></span><span class="corner-orn br"></span>
+  </div>
+
+  <header class="slide-head" data-anim>
+    <div class="head-left">
+      <span class="seal-badge blue">推演 壹</span>
+      <h1 class="slide-title">演化路径 · 多跳寻迹</h1>
+    </div>
+    <div class="head-sub">图谱寻路 ＋ RDFS 本体泛化</div>
+  </header>
+
+  <main class="diagram-stage" data-anim>
+    <svg class="diagram-svg" viewBox="0 0 1440 590" role="img" aria-label="演化路径多跳语义寻路与本体泛化原理图">
+      <defs>
+        <marker id="arr-blue" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#436C85"/>
+        </marker>
+        <marker id="arr-red" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#B73F42"/>
+        </marker>
+        <marker id="arr-jade" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#4B836B"/>
+        </marker>
+        <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#1E1915" flood-opacity="0.12"/>
+        </filter>
+      </defs>
+
+      <!-- 大唐淡雅卷云暗纹底 -->
+      <g opacity="0.09" fill="none" stroke="#436C85" stroke-width="2">
+        <path d="M40 530 Q180 460 340 510 T680 495 T1040 520 T1400 475"/>
+        <path d="M60 85 Q220 35 420 75 T840 60 T1380 85"/>
+        <circle cx="720" cy="245" r="215" stroke-dasharray="6 10"/>
+      </g>
+
+      <!-- 上层：RDFS 本体泛化虚线拱桥（打通跨术语断层） -->
+      <g>
+        <rect x="485" y="24" width="470" height="86" rx="43" fill="#F8F3E4" stroke="#538D74" stroke-width="3" stroke-dasharray="10 7" filter="url(#soft-shadow)"/>
+        <text x="720" y="61" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="28" fill="#2E634D">RDFS 本体父类闭包 ⊑</text>
+        <text x="720" y="94" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="21" fill="#436C85">彩陶 ⊑ 陶瓷类　·　龙纹 ⊑ 龙虎神兽纹系</text>
+
+        <!-- 左右两根本体虚线连接拱桥 -->
+        <path d="M 164 224 Q 238 68 482 68" fill="none" stroke="#538D74" stroke-width="3.5" stroke-dasharray="9 7" marker-end="url(#arr-jade)"/>
+        <path d="M 958 68 Q 1202 68 1276 224" fill="none" stroke="#538D74" stroke-width="3.5" stroke-dasharray="9 7" marker-end="url(#arr-jade)"/>
+        <rect x="232" y="96" width="166" height="38" rx="19" fill="#82B29B"/>
+        <text x="315" y="122" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#FAF6E8">本体泛化开启</text>
+        <rect x="1042" y="96" width="166" height="38" rx="19" fill="#82B29B"/>
+        <text x="1125" y="122" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#FAF6E8">跨术语连通</text>
+      </g>
+
+      <!-- 主链：五节点多跳实证路径（铜镜圆章造型，宽松留白零重叠） -->
+      <!-- 实证连线 -->
+      <line x1="214" y1="305" x2="314" y2="305" stroke="#436C85" stroke-width="4.5" marker-end="url(#arr-blue)"/>
+      <line x1="524" y1="305" x2="624" y2="305" stroke="#B73F42" stroke-width="4.5" marker-end="url(#arr-red)"/>
+      <line x1="814" y1="305" x2="914" y2="305" stroke="#B73F42" stroke-width="4.5" marker-end="url(#arr-red)"/>
+      <line x1="1124" y1="305" x2="1224" y2="305" stroke="#436C85" stroke-width="4.5" marker-end="url(#arr-blue)"/>
+
+      <!-- 边上实证标签 -->
+      <g font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="19">
+        <rect x="223" y="254" width="84" height="34" rx="8" fill="#436C85"/>
+        <text x="265" y="278" text-anchor="middle" fill="#FAF6E8">实证 E1</text>
+
+        <rect x="530" y="254" width="90" height="34" rx="8" fill="#B73F42"/>
+        <text x="575" y="278" text-anchor="middle" fill="#FAF6E8">饰有纹样</text>
+
+        <rect x="820" y="254" width="90" height="34" rx="8" fill="#B73F42"/>
+        <text x="865" y="278" text-anchor="middle" fill="#FAF6E8">同纹共现</text>
+
+        <rect x="1133" y="254" width="84" height="34" rx="8" fill="#436C85"/>
+        <text x="1175" y="278" text-anchor="middle" fill="#FAF6E8">实证 E2</text>
+      </g>
+
+      <!-- 节点 1：起点实体 -->
+      <g filter="url(#soft-shadow)">
+        <circle cx="126" cy="305" r="84" fill="#436C85"/>
+        <circle cx="126" cy="305" r="73" fill="none" stroke="#EEE6CB" stroke-width="2.2" opacity="0.65"/>
+        <text x="126" y="289" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="20" fill="#EEE6CB" opacity="0.88">起 点</text>
+        <text x="126" y="330" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="34" fill="#FFFFFF">彩陶</text>
+      </g>
+
+      <!-- 节点 2：器物 A -->
+      <g filter="url(#soft-shadow)">
+        <rect x="322" y="242" width="198" height="126" rx="18" fill="#FAF6E8" stroke="#DE9960" stroke-width="3.5"/>
+        <rect x="322" y="242" width="198" height="38" rx="14" fill="#DE9960"/>
+        <text x="421" y="268" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#1E1915">器物实证 A</text>
+        <text x="421" y="318" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="700" font-size="24" fill="#1E1915">几何纹彩陶碗</text>
+        <text x="421" y="350" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="19" fill="#436C85">新石器 · 彩陶</text>
+      </g>
+
+      <!-- 节点 3：中枢纹样桥 -->
+      <g filter="url(#soft-shadow)">
+        <circle cx="720" cy="305" r="88" fill="#B73F42"/>
+        <circle cx="720" cy="305" r="76" fill="none" stroke="#EEE6CB" stroke-width="2.2" opacity="0.7"/>
+        <text x="720" y="288" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="20" fill="#EEE6CB">桥梁纹样</text>
+        <text x="720" y="330" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="32" fill="#FFFFFF">几何纹</text>
+      </g>
+
+      <!-- 节点 4：器物 B -->
+      <g filter="url(#soft-shadow)">
+        <rect x="920" y="242" width="198" height="126" rx="18" fill="#FAF6E8" stroke="#DE9960" stroke-width="3.5"/>
+        <rect x="920" y="242" width="198" height="38" rx="14" fill="#DE9960"/>
+        <text x="1019" y="268" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#1E1915">器物实证 B</text>
+        <text x="1019" y="318" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="700" font-size="24" fill="#1E1915">几何纹青铜方壶</text>
+        <text x="1019" y="350" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="19" fill="#436C85">商周 · 青铜</text>
+      </g>
+
+      <!-- 节点 5：终点实体 -->
+      <g filter="url(#soft-shadow)">
+        <circle cx="1314" cy="305" r="84" fill="#436C85"/>
+        <circle cx="1314" cy="305" r="73" fill="none" stroke="#EEE6CB" stroke-width="2.2" opacity="0.65"/>
+        <text x="1314" y="289" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="20" fill="#EEE6CB" opacity="0.88">终 点</text>
+        <text x="1314" y="330" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="34" fill="#FFFFFF">青铜</text>
+      </g>
+
+      <!-- 底部算法机制条（清晰图解底层寻路逻辑） -->
+      <g filter="url(#soft-shadow)">
+        <rect x="115" y="452" width="1210" height="106" rx="18" fill="#FAF6E8" stroke="#436C85" stroke-width="2.5"/>
+        <rect x="115" y="452" width="210" height="106" rx="16" fill="#436C85"/>
+        <text x="220" y="498" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="26" fill="#FAF6E8">寻路内核</text>
+        <text x="220" y="532" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="20" fill="#EEE6CB">2–8 跳有界搜索</text>
+
+        <text x="485" y="497" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="25" fill="#B73F42">① 反向 BFS 剪枝</text>
+        <text x="485" y="534" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="20" fill="#2A221B">算剩余跳数下界 · 秒级收敛</text>
+
+        <line x1="650" y1="472" x2="650" y2="538" stroke="#436C85" stroke-width="2" opacity="0.3"/>
+
+        <text x="820" y="497" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="25" fill="#2E634D">② 桥梁去重排序</text>
+        <text x="820" y="534" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="20" fill="#2A221B">惩罚高频热词 · 呈现多元路径</text>
+
+        <line x1="990" y1="472" x2="990" y2="538" stroke="#436C85" stroke-width="2" opacity="0.3"/>
+
+        <text x="1158" y="497" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="25" fill="#9E5E24">③ 学术严谨边界</text>
+        <text x="1158" y="534" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="20" fill="#2A221B">图上连通＝关联候选，非历史定论</text>
+      </g>
+    </svg>
+  </main>
+
+  <footer class="takeaways" data-anim>
+    <div class="pill-card" style="--accent-col:var(--tang-blue)">
+      <span class="pill-num">壹</span>
+      <span class="pill-text">每跳锚定原书器物与页码实证</span>
+    </div>
+    <div class="pill-card" style="--accent-col:#4A7D68">
+      <span class="pill-num">贰</span>
+      <span class="pill-text">一键对比「字面路径」与「本体泛化」</span>
+    </div>
+    <div class="pill-card" style="--accent-col:var(--tang-red)">
+      <span class="pill-num">叁</span>
+      <span class="pill-text">自动生成可执行 SPARQL 与画布联动</span>
+    </div>
+  </footer>
+</section>
+
+<!-- ======================================================================
+     SLIDE 2: 符号推演 ② · 对比差集（集合运算 + SPARQL NOT EXISTS）
+     ====================================================================== -->
+<section class="slide light" data-slide-id="symbolic-compare" data-theme="light" data-title="符号推演 ② · 对比差集">
+  <div class="scroll-frame">
+    <span class="corner-orn tl"></span><span class="corner-orn tr"></span>
+    <span class="corner-orn bl"></span><span class="corner-orn br"></span>
+  </div>
+
+  <header class="slide-head" data-anim>
+    <div class="head-left">
+      <span class="seal-badge">推演 贰</span>
+      <h1 class="slide-title">对比差集 · 集合辨异</h1>
+    </div>
+    <div class="head-sub">交集差集 ＋ SPARQL 否定排除</div>
+  </header>
+
+  <main class="diagram-stage" data-anim>
+    <svg class="diagram-svg" viewBox="0 0 1440 590" role="img" aria-label="双实体交集差集与SPARQL否定排除原理图">
+      <defs>
+        <filter id="sh2" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#1E1915" flood-opacity="0.12"/>
+        </filter>
+      </defs>
+
+      <!-- 左侧：盛唐铜镜双圆韦恩图 -->
+      <g filter="url(#sh2)">
+        <!-- 圆 A（商代 · 朱砂绛） -->
+        <circle cx="315" cy="285" r="218" fill="#B73F42" fill-opacity="0.20" stroke="#B73F42" stroke-width="4.5"/>
+        <circle cx="315" cy="285" r="204" fill="none" stroke="#B73F42" stroke-width="1.5" stroke-dasharray="6 6" opacity="0.5"/>
+
+        <!-- 圆 B（春秋 · 黛青蓝） -->
+        <circle cx="575" cy="285" r="218" fill="#436C85" fill-opacity="0.20" stroke="#436C85" stroke-width="4.5"/>
+        <circle cx="575" cy="285" r="204" fill="none" stroke="#436C85" stroke-width="1.5" stroke-dasharray="6 6" opacity="0.5"/>
+      </g>
+
+      <!-- 交集高亮核心菱形印 -->
+      <g filter="url(#sh2)">
+        <ellipse cx="445" cy="285" rx="88" ry="158" fill="#DE9960" fill-opacity="0.45" stroke="#B57238" stroke-width="3.5"/>
+        <text x="445" y="236" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="30" fill="#1E1915">共有交集</text>
+        <text x="445" y="274" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="800" font-size="26" fill="#8C3128">A ∩ B</text>
+        <rect x="369" y="302" width="152" height="44" rx="22" fill="#1E1915"/>
+        <text x="445" y="332" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#EEE6CB">Jaccard 量化</text>
+      </g>
+
+      <!-- 左独有文案 -->
+      <g text-anchor="middle">
+        <rect x="148" y="138" width="144" height="44" rx="22" fill="#B73F42"/>
+        <text x="220" y="168" font-family="Noto Serif SC,serif" font-weight="900" font-size="24" fill="#FAF6E8">实体 A 商代</text>
+        <text x="215" y="248" font-family="Noto Serif SC,serif" font-weight="900" font-size="28" fill="#8C2629">仅 A 检索到</text>
+        <text x="215" y="288" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="23" fill="#2A221B">A \ B 差集</text>
+        <text x="215" y="336" font-family="Noto Serif SC,serif" font-weight="600" font-size="22" fill="#4A2422">饕餮纹 · 云雷纹</text>
+        <text x="215" y="370" font-family="Noto Serif SC,serif" font-weight="600" font-size="22" fill="#4A2422">蝉纹 · 虎纹</text>
+      </g>
+
+      <!-- 右独有文案 -->
+      <g text-anchor="middle">
+        <rect x="598" y="138" width="144" height="44" rx="22" fill="#436C85"/>
+        <text x="670" y="168" font-family="Noto Serif SC,serif" font-weight="900" font-size="24" fill="#FAF6E8">实体 B 春秋</text>
+        <text x="675" y="248" font-family="Noto Serif SC,serif" font-weight="900" font-size="28" fill="#2A4D63">仅 B 检索到</text>
+        <text x="675" y="288" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="23" fill="#2A221B">B \ A 差集</text>
+        <text x="675" y="336" font-family="Noto Serif SC,serif" font-weight="600" font-size="22" fill="#1F3C4E">龙凤纹 · 勾云纹</text>
+        <text x="675" y="370" font-family="Noto Serif SC,serif" font-weight="600" font-size="22" fill="#1F3C4E">弦纹 · 蟠螭纹</text>
+      </g>
+
+      <!-- 右侧：三大核心推导卡（大字直观） -->
+      <!-- 卡片 1：SPARQL 否定排除 -->
+      <g filter="url(#sh2)">
+        <rect x="855" y="42" width="545" height="170" rx="18" fill="#231D18" stroke="#DE9960" stroke-width="3"/>
+        <rect x="880" y="64" width="232" height="38" rx="10" fill="#B73F42"/>
+        <text x="996" y="90" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="21" fill="#FAF6E8">SPARQL 否定排除</text>
+        <text x="884" y="140" font-family="ui-monospace,monospace" font-weight="700" font-size="22" fill="#DE9960">?a :period_class "商代" ;</text>
+        <text x="884" y="172" font-family="ui-monospace,monospace" font-weight="700" font-size="22" fill="#82B29B">FILTER NOT EXISTS { "春秋" }</text>
+      </g>
+
+      <!-- 卡片 2：三维自由切换 -->
+      <g filter="url(#sh2)">
+        <rect x="855" y="236" width="545" height="145" rx="18" fill="#FAF6E8" stroke="#82B29B" stroke-width="3"/>
+        <text x="885" y="282" font-family="Noto Serif SC,serif" font-weight="900" font-size="28" fill="#2E634D">三维度双轴同步比对</text>
+        <g font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="22">
+          <rect x="885" y="308" width="150" height="48" rx="12" fill="#436C85"/>
+          <text x="960" y="340" text-anchor="middle" fill="#FAF6E8">时代对比</text>
+          <rect x="1053" y="308" width="150" height="48" rx="12" fill="#82B29B"/>
+          <text x="1128" y="340" text-anchor="middle" fill="#1E1915">材质对比</text>
+          <rect x="1221" y="308" width="150" height="48" rx="12" fill="#DE9960"/>
+          <text x="1296" y="340" text-anchor="middle" fill="#1E1915">纹样对比</text>
+        </g>
+      </g>
+
+      <!-- 卡片 3：标注覆盖率防误判 -->
+      <g filter="url(#sh2)">
+        <rect x="855" y="405" width="545" height="142" rx="18" fill="#FAF6E8" stroke="#B73F42" stroke-width="3"/>
+        <text x="885" y="452" font-family="Noto Serif SC,serif" font-weight="900" font-size="28" fill="#B73F42">内置标注覆盖率守卫</text>
+        <!-- 覆盖率进度示意条 -->
+        <rect x="885" y="476" width="330" height="22" rx="11" fill="#E2D9BE"/>
+        <rect x="885" y="476" width="248" height="22" rx="11" fill="#82B29B"/>
+        <text x="1235" y="495" font-family="Noto Sans SC,sans-serif" font-weight="800" font-size="22" fill="#2E634D">实时统计</text>
+        <text x="885" y="530" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="22" fill="#1E1915">未录入 ≠ 历史不存在 · 杜绝以偏概全</text>
+      </g>
+    </svg>
+  </main>
+
+  <footer class="takeaways" data-anim>
+    <div class="pill-card" style="--accent-col:var(--tang-red)">
+      <span class="pill-num">壹</span>
+      <span class="pill-text">一眼拆解共有交集与双边差集</span>
+    </div>
+    <div class="pill-card" style="--accent-col:var(--tang-blue)">
+      <span class="pill-num">贰</span>
+      <span class="pill-text">原生执行 FILTER NOT EXISTS 逻辑排除</span>
+    </div>
+    <div class="pill-card" style="--accent-col:#4A7D68">
+      <span class="pill-num">叁</span>
+      <span class="pill-text">覆盖率透明公开，严谨区分缺标与独有</span>
+    </div>
+  </footer>
+</section>
+
+<!-- ======================================================================
+     SLIDE 3: 符号推演 ③ · 推理补全（关联规则 + Adamic-Adar 链接预测）
+     ====================================================================== -->
+<section class="slide light" data-slide-id="symbolic-predict" data-theme="light" data-title="符号推演 ③ · 推理补全">
+  <div class="scroll-frame">
+    <span class="corner-orn tl"></span><span class="corner-orn tr"></span>
+    <span class="corner-orn bl"></span><span class="corner-orn br"></span>
+  </div>
+
+  <header class="slide-head" data-anim>
+    <div class="head-left">
+      <span class="seal-badge gold">推演 叁</span>
+      <h1 class="slide-title">推理补全 · 缺项预测</h1>
+    </div>
+    <div class="head-sub">零大模型 · 关联规则 ＋ Adamic-Adar 投票</div>
+  </header>
+
+  <main class="diagram-stage" data-anim>
+    <svg class="diagram-svg" viewBox="0 0 1440 590" role="img" aria-label="零LLM关联规则与Adamic-Adar缺失知识补全原理图">
+      <defs>
+        <marker id="arr-g3" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#B57238"/>
+        </marker>
+        <marker id="arr-r3" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#B73F42"/>
+        </marker>
+        <filter id="sh3" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#1E1915" flood-opacity="0.12"/>
+        </filter>
+      </defs>
+
+      <!-- 第一段：残缺器物输入 -->
+      <g filter="url(#sh3)">
+        <rect x="34" y="88" width="320" height="414" rx="22" fill="#FAF6E8" stroke="#436C85" stroke-width="3.5"/>
+        <rect x="34" y="88" width="320" height="62" rx="18" fill="#436C85"/>
+        <text x="194" y="128" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="27" fill="#FAF6E8">① 缺项器物输入</text>
+
+        <text x="194" y="198" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="27" fill="#1E1915">八角星纹彩陶盆</text>
+
+        <!-- 已知特征 -->
+        <rect x="64" y="232" width="260" height="54" rx="12" fill="#82B29B" fill-opacity="0.28" stroke="#4B836B" stroke-width="2.2"/>
+        <text x="194" y="267" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="22" fill="#1E4B39">材质：彩陶 ⊑ 陶瓷类</text>
+
+        <rect x="64" y="304" width="260" height="54" rx="12" fill="#DE9960" fill-opacity="0.28" stroke="#B57238" stroke-width="2.2"/>
+        <text x="194" y="339" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#6E3E11">纹样：八角星纹 ⊑ 星日系</text>
+
+        <!-- 缺失项虚线框 -->
+        <rect x="64" y="384" width="260" height="84" rx="14" fill="#B73F42" fill-opacity="0.10" stroke="#B73F42" stroke-width="3" stroke-dasharray="8 6"/>
+        <text x="194" y="422" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="26" fill="#B73F42">所属时代：？</text>
+        <text x="194" y="454" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="19" fill="#8C2629">（可推演时代 / 纹样 / 材质）</text>
+      </g>
+
+      <!-- 箭头 1→2 -->
+      <line x1="364" y1="295" x2="432" y2="295" stroke="#B57238" stroke-width="5" marker-end="url(#arr-g3)"/>
+
+      <!-- 第二段：双引擎联合计算 -->
+      <g filter="url(#sh3)">
+        <rect x="444" y="54" width="490" height="482" rx="24" fill="#231D18" stroke="#DE9960" stroke-width="3.5"/>
+        <text x="689" y="106" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="30" fill="#EEE6CB">② 纯符号双引擎联合打分</text>
+
+        <!-- 子卡 A：关联规则挖掘 -->
+        <rect x="476" y="136" width="426" height="168" rx="16" fill="#322922" stroke="#DE9960" stroke-width="2.5"/>
+        <rect x="498" y="156" width="228" height="36" rx="10" fill="#DE9960"/>
+        <text x="612" y="181" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="800" font-size="20" fill="#1E1915">A · 关联规则挖掘</text>
+        <text x="498" y="230" font-family="Noto Serif SC,serif" font-weight="700" font-size="23" fill="#FAF6E8">{陶瓷类 ∧ 星日纹系} ⇒ 新石器</text>
+        <text x="498" y="274" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#82B29B">置信度 Confidence · 提升度 Lift 4.25×</text>
+
+        <!-- 子卡 B：Adamic-Adar 链接预测 -->
+        <rect x="476" y="330" width="426" height="174" rx="16" fill="#322922" stroke="#82B29B" stroke-width="2.5"/>
+        <rect x="498" y="350" width="268" height="36" rx="10" fill="#82B29B"/>
+        <text x="632" y="375" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="800" font-size="20" fill="#1E1915">B · Adamic-Adar 加权</text>
+        <text x="498" y="426" font-family="Noto Serif SC,serif" font-weight="700" font-size="24" fill="#FAF6E8">稀有特征权重更高：1 / log(度数)</text>
+        <text x="498" y="468" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="21" fill="#DE9960">具体词优先于父类 · 样本量平滑校准</text>
+      </g>
+
+      <!-- 箭头 2→3（虚线表示预测边） -->
+      <line x1="944" y1="295" x2="1018" y2="295" stroke="#B73F42" stroke-width="5" stroke-dasharray="10 6" marker-end="url(#arr-r3)"/>
+
+      <!-- 第三段：可解释虚线补全输出 -->
+      <g filter="url(#sh3)">
+        <rect x="1030" y="88" width="376" height="414" rx="22" fill="#FAF6E8" stroke="#B73F42" stroke-width="3.5"/>
+        <rect x="1030" y="88" width="376" height="62" rx="18" fill="#B73F42"/>
+        <text x="1218" y="128" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="27" fill="#FAF6E8">③ 虚线补全 ＋ 证据链</text>
+
+        <!-- 预测结果大印章 -->
+        <rect x="1064" y="176" width="308" height="114" rx="16" fill="#B73F42" fill-opacity="0.10" stroke="#B73F42" stroke-width="2.5" stroke-dasharray="8 6"/>
+        <text x="1218" y="218" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="32" fill="#B73F42">⇒ 新石器时代</text>
+        <!-- 置信度条 -->
+        <rect x="1090" y="242" width="184" height="22" rx="11" fill="#E3D9BE"/>
+        <rect x="1090" y="242" width="176" height="22" rx="11" fill="#4B836B"/>
+        <text x="1322" y="261" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="900" font-size="24" fill="#2E634D">96%</text>
+
+        <!-- 支撑证据器物 -->
+        <text x="1068" y="338" font-family="Noto Serif SC,serif" font-weight="900" font-size="23" fill="#436C85">可点击核验支撑器物：</text>
+        <rect x="1064" y="356" width="308" height="48" rx="10" fill="#436C85" fill-opacity="0.12" stroke="#436C85" stroke-width="1.8"/>
+        <text x="1218" y="388" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="21" fill="#1E1915">同规则支撑条目 E1 · E2</text>
+
+        <rect x="1064" y="420" width="308" height="50" rx="10" fill="#DE9960" fill-opacity="0.22" stroke="#B57238" stroke-width="1.8"/>
+        <text x="1218" y="452" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="19.5" fill="#6E3E11">星图虚线渲染 · 严分实证与推论</text>
+      </g>
+    </svg>
+  </main>
+
+  <footer class="takeaways" data-anim>
+    <div class="pill-card" style="--accent-col:#B57238">
+      <span class="pill-num">壹</span>
+      <span class="pill-text">纯本地数学推理，零 API 零幻觉</span>
+    </div>
+    <div class="pill-card" style="--accent-col:#4A7D68">
+      <span class="pill-num">贰</span>
+      <span class="pill-text">单/双前提规则结合稀有度权重</span>
+    </div>
+    <div class="pill-card" style="--accent-col:var(--tang-red)">
+      <span class="pill-num">叁</span>
+      <span class="pill-text">每条预测自带公式、置信度与支撑物证</span>
+    </div>
+  </footer>
+</section>
+
+<!-- ======================================================================
+     SLIDE 4: AI 对话工具 · DeepSeek 神经-符号推演智能体（漆墨流金收官）
+     ====================================================================== -->
+<section class="slide dark" data-slide-id="neuro-symbolic-agent" data-theme="dark" data-title="AI 对话 · 神经-符号智能体">
+  <div class="scroll-frame">
+    <span class="corner-orn tl"></span><span class="corner-orn tr"></span>
+    <span class="corner-orn bl"></span><span class="corner-orn br"></span>
+  </div>
+
+  <header class="slide-head" data-anim>
+    <div class="head-left">
+      <span class="seal-badge">智能体</span>
+      <h1 class="slide-title">DeepSeek 神经-符号对话</h1>
+    </div>
+    <div class="head-sub">大模型编排 ＋ 符号引擎核验 ＋ 实时驾驶星图</div>
+  </header>
+
+  <main class="diagram-stage" data-anim>
+    <svg class="diagram-svg" viewBox="0 0 1440 590" role="img" aria-label="DeepSeek神经-符号智能体工具调用、引用核验与画布联动架构图">
+      <defs>
+        <marker id="arr-gold4" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#DE9960"/>
+        </marker>
+        <marker id="arr-jade4" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#82B29B"/>
+        </marker>
+        <marker id="arr-red4" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+          <path d="M1 1.5 L10 6 L1 10.5 Z" fill="#D96B6E"/>
+        </marker>
+        <filter id="sh4" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.45"/>
+        </filter>
+      </defs>
+
+      <!-- 大唐流金暗纹 -->
+      <g opacity="0.11" fill="none" stroke="#DE9960" stroke-width="1.8">
+        <circle cx="520" cy="295" r="245" stroke-dasharray="5 9"/>
+        <path d="M40 540 Q360 470 720 530 T1400 490"/>
+      </g>
+
+      <!-- 1) 左侧：学者自然语言提问 -->
+      <g filter="url(#sh4)">
+        <rect x="28" y="168" width="248" height="254" rx="20" fill="#2A221B" stroke="#EEE6CB" stroke-width="2.5"/>
+        <rect x="28" y="168" width="248" height="54" rx="16" fill="#436C85"/>
+        <text x="152" y="203" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="25" fill="#FAF6E8">自然语言提问</text>
+        <text x="152" y="274" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="700" font-size="24" fill="#EEE6CB">“彩陶与青铜的</text>
+        <text x="152" y="314" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="700" font-size="24" fill="#EEE6CB">纹样如何关联？”</text>
+        <rect x="56" y="352" width="192" height="44" rx="22" fill="#DE9960" fill-opacity="0.22" stroke="#DE9960" stroke-width="1.8"/>
+        <text x="152" y="381" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#DE9960">多轮上下文理解</text>
+      </g>
+
+      <line x1="286" y1="295" x2="346" y2="295" stroke="#DE9960" stroke-width="4.5" marker-end="url(#arr-gold4)"/>
+
+      <!-- 2) 中央上：DeepSeek 神经中枢（铜镜主印） -->
+      <g filter="url(#sh4)">
+        <rect x="358" y="42" width="388" height="172" rx="22" fill="#2D231B" stroke="#DE9960" stroke-width="3.5"/>
+        <text x="552" y="96" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="31" fill="#DE9960">DeepSeek 神经中枢</text>
+        <text x="552" y="140" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="22" fill="#EEE6CB">意图拆解 · 自主多步 Tool Calls</text>
+        <text x="552" y="182" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="21" fill="#82B29B">路径任务自动双跑（本体开 / 关）</text>
+      </g>
+
+      <!-- 双向调用箭头：神经中枢 ↔ 6大符号工具箱 -->
+      <line x1="478" y1="222" x2="478" y2="294" stroke="#DE9960" stroke-width="4.5" marker-end="url(#arr-gold4)"/>
+      <line x1="626" y1="304" x2="626" y2="232" stroke="#82B29B" stroke-width="4.5" marker-end="url(#arr-jade4)"/>
+      <text x="458" y="268" text-anchor="end" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#DE9960">调用工具</text>
+      <text x="646" y="268" text-anchor="start" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="20" fill="#82B29B">返回 [E#][R#]</text>
+
+      <!-- 3) 中央下：本地符号工具箱（6 大工具） -->
+      <g filter="url(#sh4)">
+        <rect x="342" y="308" width="420" height="248" rx="22" fill="#202A30" stroke="#82B29B" stroke-width="3.5"/>
+        <text x="552" y="354" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="27" fill="#82B29B">本地符号推演工具箱（6 项）</text>
+
+        <g font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="21" text-anchor="middle">
+          <rect x="366" y="378" width="176" height="46" rx="10" fill="#436C85"/>
+          <text x="454" y="408" fill="#FAF6E8">多跳演化路径</text>
+          <rect x="562" y="378" width="176" height="46" rx="10" fill="#B73F42"/>
+          <text x="650" y="408" fill="#FAF6E8">双实体对比差集</text>
+
+          <rect x="366" y="436" width="176" height="46" rx="10" fill="#B57238"/>
+          <text x="454" y="466" fill="#FAF6E8">缺项链接预测</text>
+          <rect x="562" y="436" width="176" height="46" rx="10" fill="#4B7E68"/>
+          <text x="650" y="466" fill="#FAF6E8">SPARQL 检索</text>
+
+          <rect x="366" y="494" width="176" height="44" rx="10" fill="#323F47" stroke="#82B29B" stroke-width="1.5"/>
+          <text x="454" y="523" fill="#EEE6CB">组合条件查询</text>
+          <rect x="562" y="494" width="176" height="44" rx="10" fill="#323F47" stroke="#DE9960" stroke-width="1.5"/>
+          <text x="650" y="523" fill="#EEE6CB">单器物原页核验</text>
+        </g>
+      </g>
+
+      <!-- 箭头 2→4：进入核验守卫 -->
+      <line x1="756" y1="128" x2="826" y2="128" stroke="#D96B6E" stroke-width="4.5" marker-end="url(#arr-red4)"/>
+
+      <!-- 4) 右上：严格引用核验守卫 -->
+      <g filter="url(#sh4)">
+        <rect x="838" y="42" width="570" height="218" rx="22" fill="#301C1B" stroke="#B73F42" stroke-width="3.5"/>
+        <rect x="866" y="64" width="234" height="40" rx="10" fill="#B73F42"/>
+        <text x="983" y="92" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="22" fill="#FAF6E8">防幻觉核验守卫</text>
+
+        <text x="868" y="148" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="23" fill="#EEE6CB">• 严禁编造 [E#] 实证与 [R#] 推论编号</text>
+        <text x="868" y="190" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="23" fill="#DE9960">• 自动校验引用合法性 · 失败降级符号摘要</text>
+        <text x="868" y="232" font-family="Noto Sans SC,sans-serif" font-weight="700" font-size="23" fill="#82B29B">• 透明折叠呈现每一步推理 Trace</text>
+      </g>
+
+      <!-- 箭头 4→5：双向驱动输出 -->
+      <line x1="1123" y1="268" x2="1123" y2="322" stroke="#DE9960" stroke-width="4.5" marker-end="url(#arr-gold4)"/>
+
+      <!-- 5) 右下：双通道交互输出 -->
+      <g filter="url(#sh4)">
+        <rect x="838" y="334" width="570" height="222" rx="22" fill="#2A221B" stroke="#DE9960" stroke-width="3.5"/>
+        <text x="1123" y="382" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="29" fill="#EEE6CB">可溯源回答 ＋ 实时驾驶星图</text>
+
+        <!-- 左输出：引用胶囊 -->
+        <rect x="864" y="408" width="250" height="122" rx="14" fill="#1E1813" stroke="#DE9960" stroke-width="2"/>
+        <text x="989" y="452" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="24" fill="#DE9960">就地点击 [E1] [R1]</text>
+        <text x="989" y="498" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="21" fill="#EEE6CB">直达原书扫描与红框</text>
+
+        <!-- 右输出：画布联动 -->
+        <rect x="1134" y="408" width="250" height="122" rx="14" fill="#1E292E" stroke="#82B29B" stroke-width="2"/>
+        <text x="1259" y="452" text-anchor="middle" font-family="Noto Serif SC,serif" font-weight="900" font-size="24" fill="#82B29B">2D / 3D 星图同步</text>
+        <text x="1259" y="498" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-weight="600" font-size="21" fill="#EEE6CB">自动高亮路径与差集</text>
+      </g>
+    </svg>
+  </main>
+
+  <footer class="takeaways" data-anim>
+    <div class="pill-card" style="--accent-col:var(--tang-gold)">
+      <span class="pill-num">壹</span>
+      <span class="pill-text">大模型负责语义编排，符号引擎负责精确计算</span>
+    </div>
+    <div class="pill-card" style="--accent-col:var(--tang-red)">
+      <span class="pill-num">贰</span>
+      <span class="pill-text">每一句结论都绑定 [E#] 原书实证与 [R#] 推论</span>
+    </div>
+    <div class="pill-card" style="--accent-col:var(--tang-jade)">
+      <span class="pill-num">叁</span>
+      <span class="pill-text">对话即交互，回答完毕自动重播星图推演视角</span>
+    </div>
+  </footer>
+</section>
+
+</div>
+
+<div id="nav"></div>
+
+<script>
+const SPEAKER_NOTES = [
+  {
+    id: 'symbolic-path',
+    title: '符号推演 ① · 演化路径',
+    section: '符号推演引擎',
+    minutes: 1.0,
+    purpose: '让听众直观理解图谱如何在器物与纹样之间进行多跳寻路，以及 RDFS 本体泛化如何打通跨术语边界',
+    talk: [
+      '先看第一个纯本地的符号推演工具——演化路径。它的任务是在图谱里为任意两个历史节点（比如彩陶和青铜）找出2到8跳的语义关联路径。',
+      '请看中间这条主链：彩陶连着一件几何纹彩陶碗，通过「几何纹」这座桥梁，连接到商周青铜方壶，再抵达青铜。每一步都不是大模型猜出来的，而是对应原书的真实页码实证 E1、E2。',
+      '上面这条绿色虚线拱桥是我们的亮点——RDFS 本体父类闭包。当不同朝代术语不完全一致时，开启本体泛化就能把「彩陶」归入「陶瓷类」、把具体龙纹归入「龙虎神兽纹系」，打通隐性语义断点。',
+      '底层我们做了反向 BFS 剩余跳数剪枝和桥梁去重排序，既保证毫秒级响应，又避免所有路径都挤在同一个高频热词上；同时明确界定：图上连通只是关联候选，不直接等同于历史传承定论。'
+    ],
+    transition: '看清了两点之间「怎么连」之后，学者最常问的第二个问题是：两个朝代或两种材质之间，到底「同在哪、异在哪」？这就要用到第二个工具——对比差集。',
+    cue: '手势从左到右顺着主链滑过「彩陶 → 几何纹 → 青铜」，再指向上方绿色本体拱桥',
+    advance: '讲完「同在哪、异在哪」后翻到第 2 页'
+  },
+  {
+    id: 'symbolic-compare',
+    title: '符号推演 ② · 对比差集',
+    section: '符号推演引擎',
+    minutes: 1.0,
+    purpose: '用韦恩图与 SPARQL 否定排除，讲清集合对比的计算原理和「覆盖率守卫」带来的学术严谨性',
+    talk: [
+      '第二个工具是对比差集，专门解决「比较与辨异」的问题，支持时代、材质、纹样三个维度的双轴同步比对。',
+      '看左边的双圆图，比如对比商代和春秋：系统瞬间算出三块集合——中间是共有交集 A ∩ B，并用 Jaccard 系数定量衡量重合度；左右两边是仅在单侧检索到的差集，例如商代偏重饕餮、云雷，春秋则常见龙凤、勾云。',
+      '右上角展示了它的逻辑内核：引擎原生执行带 FILTER NOT EXISTS 的 SPARQL 否定排除查询，精确筛出「A 有而 B 无」的记录。',
+      '更关键的是右下角的标注覆盖率守卫：我们把两边的标注覆盖率直接摊开，反复提醒——当前未检索到不等于历史上不存在，避免把数据缺口误判成历史独有。'
+    ],
+    transition: '说到数据缺口，图谱里确实有很多器物在原书图注里缺时代或漏纹样。能不能用纯数学方法把这些缺项合理补全？这就引出第三个工具——推理补全。',
+    cue: '先指向左侧双圆交集，再点向右下角的覆盖率进度条强调学术边界',
+    advance: '讲完「把缺项合理补全」后翻到第 3 页'
+  },
+  {
+    id: 'symbolic-predict',
+    title: '符号推演 ③ · 推理补全',
+    section: '符号推演引擎',
+    minutes: 1.0,
+    purpose: '拆解零 LLM 缺失知识补全的双算法协同（关联规则 + Adamic-Adar），突出完全可解释、无幻觉的优势',
+    talk: [
+      '第三个符号工具是推理补全，它完全离线、不调用任何大模型，专门为缺失时代、纹样或材质的器物提供高置信候选补全。',
+      '以左边这件「八角星纹彩陶盆」为例：它已知材质属于陶瓷类、纹样属于星日纹系，但缺少时代标注。',
+      '进入中间的双引擎内核：第一步做单前提与双前提关联规则挖掘，算出规则的置信度 Confidence 和提升度 Lift；第二步叠加 Adamic-Adar 共同邻居加权，给越稀有的特征分配越高权重，防止常见高频标签淹没关键线索，并按样本量做平滑校准。',
+      '最后看右边输出：系统在星图上画出一条醒目的「虚线预测边」，给出 96% 校准置信度、完整推导公式，以及可一键点击核验的原书支撑器物，让实证与推论界限分明。'
+    ],
+    transition: '前面三个符号引擎做到了精确、透明、可验证，但普通用户不想手写查询、也不想逐个点菜单。所以我们把它们全部交给第四页的 DeepSeek 神经-符号智能体来统一编排。',
+    cue: '顺着左输入 → 中双引擎 → 右虚线补全的三段流向讲解',
+    advance: '讲完「统一编排」后翻到第 4 页'
+  },
+  {
+    id: 'neuro-symbolic-agent',
+    title: 'AI 对话 · 神经-符号智能体',
+    section: '神经-符号融合',
+    minutes: 1.1,
+    purpose: '完整呈现大模型与符号引擎的闭环协作机制，强调防幻觉引用守卫与对话驱动星图交互',
+    talk: [
+      '最后看我们的 AI 对话工具——DeepSeek 神经-符号推演智能体。核心理念只有一句话：大模型只管理解与编排，事实计算全部交给符号引擎。',
+      '当学者用自然语言提问，比如「彩陶与青铜的纹样如何关联」，DeepSeek 不会直接凭记忆瞎编，而是通过多轮 Tool Calls 自主调用下方这 6 个本地符号工具，包括刚才介绍的演化路径、对比差集、缺项预测和 SPARQL 检索。',
+      '工具返回带编号的原书实证 [E#] 和符号推论 [R#] 后，还要经过右上角的防幻觉核验守卫：严禁模型编造任何不存在的编号，核验不过则打回重写或安全降级为符号计算摘要。',
+      '最终呈现在用户面前的，既是句句可点、直达原书扫描红框的可溯源回答，也是右侧的画布实时联动——聊到哪条演化路径，2D/3D 星图就会同步飞过去高亮重播，真正做到「问得自由，算得严谨，看得直观」。'
+    ],
+    transition: '以上就是我们三个符号推演工具与 AI 对话智能体的完整原理，谢谢大家，下面欢迎提问或进入现场演示。',
+    cue: '重点停顿在中央「调用工具 ↔ 返回 [E#][R#]」闭环和右上角「防幻觉核验守卫」',
+    delivery: '收尾语速放稳，重音落在「问得自由，算得严谨，看得直观」'
+  }
+];
+window.__SPEAKER_NOTES__ = SPEAKER_NOTES;
+</script>
+
+<script>
+/* =============== WebGL 双背景（大唐古漆流金 / 暖宣云纹） =============== */
+const VS = `attribute vec2 position;void main(){gl_Position=vec4(position,0.0,1.0);}`;
+
+const FS_DARK = `precision highp float;
+uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_resolution.xy;
+  vec2 p=uv*2.0-1.0;p.x*=u_resolution.x/u_resolution.y;
+  for(float i=1.0;i<4.0;i++){
+    p.x+=0.11/i*sin(i*2.4*p.y+u_time*0.28);
+    p.y+=0.11/i*cos(i*2.0*p.x+u_time*0.22);
+  }
+  float wave=sin(p.x*2.8+p.y*2.2+u_time*0.35)*0.5+0.5;
+  vec3 lacquer=vec3(0.095,0.080,0.068);
+  vec3 goldMist=vec3(0.24,0.17,0.11);
+  vec3 cinnabar=vec3(0.20,0.09,0.09);
+  vec3 col=mix(lacquer,goldMist,smoothstep(0.25,0.92,wave)*0.55);
+  col=mix(col,cinnabar,smoothstep(0.65,1.0,sin(p.y*3.2-u_time*0.25)*0.5+0.5)*0.22);
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const FS_LIGHT = `precision highp float;
+uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){
+  vec2 i=floor(p),f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1,0)),c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+  vec2 u=f*f*(3.0-2.0*f);
+  return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;
+}
+float fbm(vec2 p){
+  float v=0.0,a=0.5;
+  mat2 m=mat2(0.80,0.60,-0.60,0.80);
+  for(int i=0;i<4;i++){v+=a*noise(p);p=m*p*2.02;a*=0.5;}
+  return v;
+}
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_resolution.xy;
+  vec2 p=uv;p.x*=u_resolution.x/u_resolution.y;
+  float f=fbm(p*2.1+vec2(u_time*0.035,-u_time*0.025));
+  vec3 silkDark=vec3(0.885,0.840,0.725);
+  vec3 silkLight=vec3(0.955,0.925,0.840);
+  vec3 col=mix(silkDark,silkLight,f);
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const mouse={x:0.5,y:0.5};
+addEventListener('mousemove',e=>{mouse.x=e.clientX/innerWidth;mouse.y=e.clientY/innerHeight});
+
+function bootGL(canvasId, fsSrc){
+  const canvas=document.getElementById(canvasId);
+  const gl=canvas.getContext('webgl',{alpha:false,antialias:true});
+  if(!gl) return ()=>false;
+  const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);return sh};
+  const prog=gl.createProgram();
+  gl.attachShader(prog,mk(gl.VERTEX_SHADER,VS));
+  gl.attachShader(prog,mk(gl.FRAGMENT_SHADER,fsSrc));
+  gl.linkProgram(prog);gl.useProgram(prog);
+  const buf=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+  const pos=gl.getAttribLocation(prog,'position');
+  gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,2,gl.FLOAT,false,0,0);
+  const lRes=gl.getUniformLocation(prog,'u_resolution');
+  const lT=gl.getUniformLocation(prog,'u_time');
+  const lM=gl.getUniformLocation(prog,'u_mouse');
+  const resize=()=>{
+    const d=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=innerWidth*d;canvas.height=innerHeight*d;
+    gl.viewport(0,0,canvas.width,canvas.height);
+  };
+  addEventListener('resize',resize);resize();
+  return (tSec)=>{
+    gl.uniform2f(lRes,canvas.width,canvas.height);
+    gl.uniform1f(lT,tSec);
+    gl.uniform2f(lM,mouse.x,1-mouse.y);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    return true;
+  };
+}
+let drawDark=null, drawLight=null, glRAF=0, glT0=Date.now();
+function startGL(){
+  if(window.__lowPowerMode || glRAF) return;
+  if(!drawDark) drawDark=bootGL('bg-dark',FS_DARK);
+  if(!drawLight) drawLight=bootGL('bg-light',FS_LIGHT);
+  glT0=Date.now();
+  function loop(){
+    if(window.__lowPowerMode){glRAF=0;return;}
+    const t=(Date.now()-glT0)/1000;
+    drawDark(t);drawLight(t);
+    glRAF=requestAnimationFrame(loop);
+  }
+  glRAF=requestAnimationFrame(loop);
+}
+function stopGL(){ if(glRAF) cancelAnimationFrame(glRAF); glRAF=0; }
+startGL();
+addEventListener('ppt-low-power-change', e=>{e.detail.on ? stopGL() : startGL();});
+
+// =============== 导航（翻页 / 圆点 / 键盘 / 滚轮 / 触屏） ===============
+const deck=document.getElementById('deck');
+const slides=deck.querySelectorAll('.slide');
+const nav=document.getElementById('nav');
+let idx=0,total=slides.length,lock=false;
+deck.style.width=(total*100)+'vw';
+
+slides.forEach((s,i)=>{
+  const b=document.createElement('button');
+  b.className='dot';b.dataset.i=i;b.setAttribute('aria-label','Page '+(i+1));
+  b.onclick=()=>go(i);
+  nav.appendChild(b);
+});
+
+function go(n,opts={}){
+  if(lock&&!opts.force)return;
+  idx=Math.max(0,Math.min(total-1,n));
+  window.__currentSlideIndex = idx;
+  deck.style.transform=`translateX(${-idx*100}vw)`;
+  nav.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  const el=slides[idx];
+  const th=el.dataset.theme || (el.classList.contains('light')?'light':'dark');
+  document.body.classList.toggle('light-bg',th==='light');
+  if(window.__playSlide) setTimeout(()=>window.__playSlide(idx), 320);
+  window.__pptPresenter?.onSlideChange(idx);
+  if(!opts.force){lock=true;setTimeout(()=>lock=false,650);}
+}
+
+/* =============== ESC 索引视图 =============== */
+let overviewOn=false;
+const ov=document.createElement('div');
+ov.id='overview';
+ov.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(var(--ink-rgb),.92);backdrop-filter:blur(12px);display:none;overflow-y:auto;padding:5vh 4vw';
+document.body.appendChild(ov);
+
+function buildOverview(){
+  ov.innerHTML='';
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(2,1fr);gap:3vh 2.4vw;max-width:86vw;margin:0 auto';
+  slides.forEach((s,i)=>{
+    const card=document.createElement('div');
+    card.style.cssText='cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid '+(i===idx?'#DE9960':'rgba(238,230,203,.22)')+';transition:border-color .2s';
+    card.onmouseenter=()=>card.style.borderColor='#DE9960';
+    card.onmouseleave=()=>card.style.borderColor=i===idx?'#DE9960':'rgba(238,230,203,.22)';
+    const wrap=document.createElement('div');
+    wrap.style.cssText='width:100%;aspect-ratio:16/9;overflow:hidden;position:relative;pointer-events:none;background:'+(s.classList.contains('light')?'var(--paper)':'var(--ink)');
+    const clone=s.cloneNode(true);
+    clone.style.cssText='width:100vw;height:100vh;transform:scale('+(1/2.5)+');transform-origin:top left;position:absolute;top:0;left:0;pointer-events:none';
+    wrap.appendChild(clone);
+    const label=document.createElement('div');
+    label.style.cssText='padding:10px 14px;font-family:var(--serif-zh);font-size:15px;letter-spacing:.08em;color:var(--paper);background:#181410';
+    label.textContent=window.__pptPresenter?.slideLabel(i) || ((i+1)+' / '+total);
+    card.appendChild(wrap);
+    card.appendChild(label);
+    card.onclick=()=>{toggleOverview();go(i)};
+    grid.appendChild(card);
+  });
+  ov.appendChild(grid);
+}
+
+function toggleOverview(){
+  overviewOn=!overviewOn;
+  if(overviewOn){buildOverview();ov.style.display='block';}
+  else{ov.style.display='none';}
+}
+
+/* =============== 演讲者模式 / 观众屏同步 =============== */
+window.__pptPresenter=(()=>{
+  const query=new URLSearchParams(location.search);
+  const requestedMode=query.get('mode')||'deck';
+  const originalTitle=document.title;
+  const notes=()=>Array.isArray(window.__SPEAKER_NOTES__)?window.__SPEAKER_NOTES__:[];
+  const slideId=i=>slides[i]?.dataset.slideId||`slide-${String(i+1).padStart(2,'0')}`;
+  const storageKey=name=>`guizang-ppt-${name}:${location.pathname}`;
+  let mode='deck',session=query.get('session')||Math.random().toString(36).slice(2),audienceWindow=null;
+  let channel=null,transportReady=false,popupBlocked=false,audienceOpenedAt=0,lastAckAt=0,lastAckIndex=-1,lastAckSeq=-1,seq=0,lastPingAt=0;
+  let renderedNoteId='',saveTimer=0,noteSize=Number(localStorage.getItem('guizang-ppt-note-size')||17),presenterFrameObserver=null;
+  let elapsed=0,timerRunning=false,timerStartedAt=0,timedSlideIndex=idx,slideTimerStartedAt=0,slideElapsed=Array(total).fill(0);
+  let rehearsalActive=false,presenterOverviewOn=false,lowPowerBeforePresenter=window.__lowPowerMode;
+  let layoutMode=localStorage.getItem(storageKey('layout'))||'balanced';
+  let autoEnabled=localStorage.getItem(storageKey('auto-enabled'))==='1';
+  let autoGlobalSeconds=Math.max(0,Number(localStorage.getItem(storageKey('auto-seconds'))||0));
+  let autoDeadline=0,autoRemainingMs=0;
+  let screenMode='normal',audienceFrozen=false;
+  let annotationTool='none',annotationPointerDown=false,annotationStart=null,draftCircle=null,circles=[],audienceCircles=[];
+  let laserPoint=null,audienceLaser=null,laserHideAt=0,audienceLaserHideAt=0,lastLaserSent=0;
+  const seenNonces=[],seenNonceSet=new Set();
+  const syncKey=()=>`guizang-ppt-sync:${location.pathname}:${session}`;
+  const channelName=()=>`guizang-ppt:${location.pathname}:${session}`;
+
+  function noteAt(i){
+    const id=slideId(i);
+    return notes().find(n=>n.id===id)||{id,title:slides[i]?.dataset.title||`第 ${i+1} 页`,purpose:'—',talk:[],transition:''};
+  }
+  function slideLabel(i){return `${i+1} / ${total} · ${noteAt(i).title||slideId(i)}`;}
+  function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+  function valueLines(value){
+    if(Array.isArray(value))return value.filter(Boolean).map(x=>`• ${x}`).join('\n');
+    return value?String(value):'';
+  }
+  function generatedNote(n){
+    const parts=[];
+    if(Array.isArray(n.talk)&&n.talk.length)parts.push(`【讲稿要点】\n${valueLines(n.talk)}`);
+    if(n.transition)parts.push(`【转场】\n${n.transition}`);
+    const optional=[['舞台提示',n.cue],['互动',n.interaction],['表达提示',n.delivery],['翻页时机',n.advance],['备用方案',n.fallback],['读音提醒',n.pronunciation]];
+    optional.forEach(([label,value])=>{const text=valueLines(value);if(text)parts.push(`【${label}】\n${text}`);});
+    return parts.join('\n\n')||'—';
+  }
+  function noteStorageKey(id){return `guizang-ppt-note:${location.pathname}:${id}`;}
+  function loadNoteValue(id,i,n){
+    const saved=localStorage.getItem(noteStorageKey(id));
+    if(saved!==null)return saved;
+    return generatedNote(n);
+  }
+  function frameUrl(targetMode,i){
+    const url=new URL(location.href);url.hash='';
+    url.searchParams.set('mode',targetMode);url.searchParams.set('session',session);url.searchParams.set('slide',String(i+1));
+    return url.href;
+  }
+  function postPreviewGoto(frame,i){
+    try{frame.contentWindow?.postMessage({__guizangPptSync:1,session,role:'presenter',type:'preview-goto',index:i},'*');}catch(e){}
+  }
+  function updatePreviewFrame(frame,i){
+    frame.dataset.slide=String(i);
+    if(!frame.dataset.previewBound){frame.dataset.previewBound='1';frame.addEventListener('load',()=>postPreviewGoto(frame,Number(frame.dataset.slide)));}
+    if(!frame.getAttribute('src'))frame.src=frameUrl('preview',i);else postPreviewGoto(frame,i);
+  }
+  function plannedMsAt(i){const m=Number(noteAt(i).minutes);return Number.isFinite(m)&&m>0?m*60000:null;}
+  function totalPlannedMs(){const v=Array.from({length:total},(_,i)=>plannedMsAt(i));return v.length&&v.every(Number.isFinite)?v.reduce((s,x)=>s+x,0):null;}
+  function sectionInfo(i){
+    const name=String(noteAt(i).section||'').trim();if(!name)return null;
+    let first=i,last=i;
+    while(first>0&&String(noteAt(first-1).section||'').trim()===name)first--;
+    while(last<total-1&&String(noteAt(last+1).section||'').trim()===name)last++;
+    const targets=[];for(let x=first;x<=last;x++)targets.push(plannedMsAt(x));
+    const planned=targets.every(Number.isFinite)?targets.reduce((s,x)=>s+x,0):null;
+    const used=slideElapsed.slice(first,last+1).reduce((s,x)=>s+x,0)+(timerRunning&&timedSlideIndex>=first&&timedSlideIndex<=last?Date.now()-slideTimerStartedAt:0);
+    return{name,position:i-first+1,count:last-first+1,planned,used};
+  }
+  function durationText(ms){
+    const value=Math.max(0,Math.round(Number(ms)||0)),seconds=Math.floor(value/1000);
+    const hours=Math.floor(seconds/3600),minutes=Math.floor((seconds%3600)/60),secs=seconds%60;
+    return hours?`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`:`${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+  }
+  function signedDuration(ms){return `${ms>=0?'+':'−'}${durationText(Math.abs(ms))}`;}
+  function clockTime(ts){return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function fitFrame(frame){
+    const viewport=frame?.closest('.ppt-frame-viewport');if(!viewport)return;
+    const aw=viewport.clientWidth,ah=viewport.clientHeight;if(!aw||!ah)return;
+    const w=Math.min(aw,ah*(16/9)),h=w*(9/16);
+    frame.style.width=`${w}px`;frame.style.height=`${h}px`;
+    if(frame.id==='ppt-current-frame')sizeInk(document.getElementById('ppt-presenter-ink'),w,h);
+  }
+  function fitPresenterFrames(){fitFrame(document.getElementById('ppt-current-frame'));fitFrame(document.getElementById('ppt-next-frame'));}
+  function sizeInk(canvas,w,h){
+    if(!canvas||!w||!h)return;canvas.style.width=`${w}px`;canvas.style.height=`${h}px`;
+    const dpr=Math.min(devicePixelRatio||1,2),pw=Math.round(w*dpr),ph=Math.round(h*dpr);
+    if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;}
+  }
+  function drawEllipse(ctx,circle,w,h,alpha=1){
+    const x1=circle.x1*w,y1=circle.y1*h,x2=circle.x2*w,y2=circle.y2*h;
+    ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle='#ff4f59';ctx.lineWidth=Math.max(3,w*.004);ctx.lineCap='round';
+    ctx.beginPath();ctx.ellipse((x1+x2)/2,(y1+y2)/2,Math.abs(x2-x1)/2,Math.abs(y2-y1)/2,0,0,Math.PI*2);ctx.stroke();ctx.restore();
+  }
+  function drawInk(canvas,list,laser,draft){
+    if(!canvas)return;const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;
+    sizeInk(canvas,w,h);const dpr=canvas.width/w,ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    (list||[]).forEach(c=>drawEllipse(ctx,c,w,h));
+    if(draft)drawEllipse(ctx,draft,w,h,.72);
+    if(laser){
+      const x=laser.x*w,y=laser.y*h,r=Math.max(6,w*.007);
+      const glow=ctx.createRadialGradient(x,y,0,x,y,r*2.8);glow.addColorStop(0,'rgba(255,255,255,.98)');glow.addColorStop(.2,'rgba(255,64,72,.98)');glow.addColorStop(1,'rgba(255,64,72,0)');
+      ctx.fillStyle=glow;ctx.beginPath();ctx.arc(x,y,r*2.8,0,Math.PI*2);ctx.fill();
+    }
+  }
+  function renderInks(){
+    const now=Date.now();if(now>laserHideAt)laserPoint=null;if(now>audienceLaserHideAt)audienceLaser=null;
+    drawInk(document.getElementById('ppt-presenter-ink'),circles,laserPoint,draftCircle);
+    drawInk(document.getElementById('ppt-audience-ink'),audienceCircles,audienceLaser,null);
+  }
+  function setAnnotationTool(tool){
+    annotationTool=annotationTool===tool?'none':tool;annotationPointerDown=false;draftCircle=null;
+    const canvas=document.getElementById('ppt-presenter-ink');canvas?.classList.toggle('is-active',annotationTool!=='none');
+    document.querySelectorAll('[data-ppt-tool]').forEach(b=>b.classList.toggle('is-active',b.dataset.pptTool===annotationTool));
+    renderInks();
+  }
+  function annotationPoint(e){const r=e.currentTarget.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};}
+  function onAnnotationPointerDown(e){if(annotationTool!=='circle')return;e.preventDefault();annotationPointerDown=true;annotationStart=annotationPoint(e);draftCircle={x1:annotationStart.x,y1:annotationStart.y,x2:annotationStart.x,y2:annotationStart.y};e.currentTarget.setPointerCapture?.(e.pointerId);renderInks();}
+  function onAnnotationPointerMove(e){
+    if(annotationTool==='laser'){const pt=annotationPoint(e);laserPoint=pt;laserHideAt=Date.now()+650;if(Date.now()-lastLaserSent>32){lastLaserSent=Date.now();emit({type:'laser',index:idx,point:pt},{persist:false});}renderInks();return;}
+    if(annotationTool==='circle'&&annotationPointerDown&&draftCircle){const pt=annotationPoint(e);draftCircle.x2=pt.x;draftCircle.y2=pt.y;renderInks();}
+  }
+  function onAnnotationPointerUp(e){
+    if(annotationTool!=='circle'||!annotationPointerDown||!draftCircle)return;e.preventDefault();annotationPointerDown=false;
+    const c={...draftCircle};draftCircle=null;
+    if(Math.abs(c.x2-c.x1)>.012&&Math.abs(c.y2-c.y1)>.012){circles.push(c);emit({type:'circle',index:idx,circle:c});}
+    renderInks();
+  }
+  function onAnnotationPointerLeave(){if(annotationTool==='laser'){laserPoint=null;emit({type:'laser',index:idx,point:null},{persist:false});renderInks();}}
+  function clearAnnotations(broadcast=true){circles=[];draftCircle=null;laserPoint=null;if(broadcast)emit({type:'clear',index:idx});renderInks();}
+  function buildPresenterOverview(){
+    const grid=document.getElementById('ppt-presenter-overview-grid');if(!grid)return;grid.innerHTML='';
+    slides.forEach((_,i)=>{
+      const n=noteAt(i),b=document.createElement('button');b.type='button';b.className=`ppt-overview-page${i===idx?' is-current':''}`;
+      b.innerHTML=`<span class="ppt-overview-page-no">${String(i+1).padStart(2,'0')} / ${String(total).padStart(2,'0')}</span><span class="ppt-overview-page-title">${escapeHTML(n.title||slideId(i))}</span><span class="ppt-overview-page-meta"><span>${escapeHTML(n.section||'未分组')}</span><span>${Math.round(((i+1)/total)*100)}%</span></span>`;
+      b.onclick=()=>{togglePresenterOverview(false);go(i,{force:true});};grid.appendChild(b);
+    });
+  }
+  function togglePresenterOverview(force){
+    presenterOverviewOn=typeof force==='boolean'?force:!presenterOverviewOn;
+    if(presenterOverviewOn&&annotationTool!=='none')setAnnotationTool('none');
+    document.querySelector('.ppt-preview-stack')?.classList.toggle('is-overview',presenterOverviewOn);
+    const o=document.getElementById('ppt-presenter-overview');if(o)o.hidden=!presenterOverviewOn;
+    const b=document.getElementById('ppt-grid');if(b){b.classList.toggle('is-active',presenterOverviewOn);b.setAttribute('aria-pressed',String(presenterOverviewOn));}
+    if(presenterOverviewOn)buildPresenterOverview();else requestAnimationFrame(fitPresenterFrames);renderAutoState();
+  }
+  function mountShell(){
+    if(document.getElementById('ppt-presenter'))return;
+    document.body.insertAdjacentHTML('beforeend',`<div id="ppt-presenter" data-layout="${layoutMode}" aria-label="演讲者视图">
+      <div class="ppt-presenter-top"><div><div class="ppt-presenter-brand">演讲者视图</div><div class="ppt-presenter-meta"><span id="ppt-plan"></span><span id="ppt-section" hidden></span></div></div><div class="ppt-presenter-meta"><span id="ppt-sync" class="ppt-sync" data-state="disconnected">观众屏 · 未连接</span><button id="ppt-auto-toggle" class="ppt-ui-btn ppt-auto-state" type="button">自动翻页 · 关闭</button><button id="ppt-preflight" class="ppt-ui-btn" type="button">检查</button><button id="ppt-settings" class="ppt-ui-btn" type="button">设置</button><button id="ppt-reopen" class="ppt-ui-btn" type="button">重新打开观众屏</button><button id="ppt-exit" class="ppt-ui-btn" type="button">退出</button></div></div>
+      <div class="ppt-presenter-main"><div class="ppt-preview-stack"><div class="ppt-stage-card"><div class="ppt-stage-label"><span>当前页</span><span class="ppt-annotation-tools"><button id="ppt-grid" class="ppt-ui-btn ppt-grid-btn" type="button" aria-pressed="false"><span class="ppt-grid-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>宫格</button><button class="ppt-ui-btn" data-ppt-tool="laser" type="button">激光</button><button class="ppt-ui-btn" data-ppt-tool="circle" type="button">圈选</button><button id="ppt-ink-clear" class="ppt-ui-btn ppt-clear-btn" type="button">清除</button></span><span id="ppt-current-label"></span></div><div class="ppt-frame-viewport"><iframe id="ppt-current-frame" class="ppt-frame" title="当前页预览"></iframe><canvas id="ppt-presenter-ink" class="ppt-annotation-layer" aria-label="演讲标注层"></canvas></div></div><div class="ppt-stage-card" id="ppt-next-card"><div class="ppt-stage-label"><span>下一页</span><span id="ppt-next-label"></span></div><div class="ppt-frame-viewport"><iframe id="ppt-next-frame" class="ppt-frame ppt-next-frame" title="下一页预览"></iframe></div></div><div id="ppt-presenter-overview" class="ppt-presenter-overview" hidden><div class="ppt-overview-head"><strong>选择页面</strong><button id="ppt-overview-close" class="ppt-ui-btn" type="button">返回预览</button></div><div id="ppt-presenter-overview-grid" class="ppt-overview-grid"></div></div></div>
+      <div class="ppt-notes-card"><div class="ppt-notes-head"><div class="ppt-notes-label">标题</div><div id="ppt-notes-title" class="ppt-notes-title"></div><div class="ppt-purpose-block"><div class="ppt-notes-label">本页目的</div><div id="ppt-notes-purpose" class="ppt-purpose-copy"></div></div><div class="ppt-notes-draft-head"><div><div class="ppt-notes-label">草稿（备注）</div><div id="ppt-note-meta" class="ppt-note-meta"></div></div><span class="ppt-notes-tools"><span id="ppt-saved" class="ppt-saved">已保存</span><button id="ppt-note-smaller" class="ppt-ui-btn" type="button">A−</button><button id="ppt-note-larger" class="ppt-ui-btn" type="button">A+</button></span></div></div><textarea id="ppt-note-editor" class="ppt-note-editor" spellcheck="false" aria-label="本页演讲备注"></textarea></div></div>
+      <div class="ppt-presenter-bottom"><div class="ppt-time-dashboard"><div class="ppt-time-stat"><span class="ppt-time-label">已进行</span><strong id="ppt-clock" class="ppt-time-value">00:00</strong><span class="ppt-time-hint">总时长</span></div><div class="ppt-time-stat"><span class="ppt-time-label">本页</span><strong id="ppt-slide-clock" class="ppt-time-value">00:00</strong><span id="ppt-slide-plan" class="ppt-time-hint">计划 —</span></div><div id="ppt-slide-status-box" class="ppt-time-stat"><span id="ppt-slide-status-label" class="ppt-time-label">计划</span><strong id="ppt-slide-status" class="ppt-time-value">—</strong><span id="ppt-slide-status-hint" class="ppt-time-hint">未设置</span></div></div><div class="ppt-control-stack"><div class="ppt-controls"><button id="ppt-first" class="ppt-ui-btn" type="button">首页</button><button id="ppt-prev" class="ppt-ui-btn" type="button">上一页</button><button id="ppt-next" class="ppt-ui-btn" type="button">下一页</button><button id="ppt-last" class="ppt-ui-btn" type="button">尾页</button></div><div class="ppt-session-actions"><button id="ppt-timer-toggle" class="ppt-ui-btn" type="button">开始计时</button><button id="ppt-timer-reset" class="ppt-ui-btn" type="button">重置计时</button><button id="ppt-rehearsal" class="ppt-ui-btn" type="button">排练</button></div></div><div class="ppt-page-state"><strong id="ppt-page-count"></strong><span id="ppt-page-percent"></span></div></div>
+      <div id="ppt-dialog" class="ppt-dialog" hidden><div class="ppt-dialog-panel" role="dialog" aria-modal="true"><div class="ppt-dialog-head"><div id="ppt-dialog-title" class="ppt-dialog-title"></div><button id="ppt-dialog-close" class="ppt-ui-btn" type="button">关闭</button></div><div id="ppt-dialog-body" class="ppt-dialog-body"></div></div></div>
+    </div>`);
+    document.getElementById('ppt-reopen').onclick=reopenAudience;
+    document.getElementById('ppt-exit').onclick=exitPresenter;
+    document.getElementById('ppt-preflight').onclick=openPreflight;
+    document.getElementById('ppt-settings').onclick=openSettings;
+    document.getElementById('ppt-first').onclick=()=>go(0,{force:true});
+    document.getElementById('ppt-prev').onclick=()=>go(idx-1,{force:true});
+    document.getElementById('ppt-grid').onclick=()=>togglePresenterOverview();
+    document.getElementById('ppt-overview-close').onclick=()=>togglePresenterOverview(false);
+    document.getElementById('ppt-next').onclick=()=>go(idx+1,{force:true});
+    document.getElementById('ppt-last').onclick=()=>go(idx===total-1?0:total-1,{force:true});
+    document.getElementById('ppt-timer-toggle').onclick=toggleTimer;
+    document.getElementById('ppt-timer-reset').onclick=resetTimer;
+    document.getElementById('ppt-rehearsal').onclick=toggleRehearsal;
+    document.getElementById('ppt-auto-toggle').onclick=toggleAutoAdvance;
+    document.getElementById('ppt-note-smaller').onclick=()=>setNoteSize(noteSize-1);
+    document.getElementById('ppt-note-larger').onclick=()=>setNoteSize(noteSize+1);
+    document.getElementById('ppt-note-editor').addEventListener('input',saveNote);
+    document.querySelectorAll('[data-ppt-tool]').forEach(b=>b.onclick=()=>setAnnotationTool(b.dataset.pptTool));
+    document.getElementById('ppt-ink-clear').onclick=()=>clearAnnotations(true);
+    const ink=document.getElementById('ppt-presenter-ink');
+    ink.addEventListener('pointerdown',onAnnotationPointerDown);ink.addEventListener('pointermove',onAnnotationPointerMove);ink.addEventListener('pointerup',onAnnotationPointerUp);ink.addEventListener('pointercancel',onAnnotationPointerUp);ink.addEventListener('pointerleave',onAnnotationPointerLeave);
+    document.getElementById('ppt-dialog-close').onclick=closeDialog;
+    document.getElementById('ppt-dialog').onclick=e=>{if(e.target.id==='ppt-dialog')closeDialog();};
+    if('ResizeObserver'in window){presenterFrameObserver=new ResizeObserver(()=>requestAnimationFrame(fitPresenterFrames));presenterFrameObserver.observe(document.querySelector('.ppt-preview-stack'));}
+    else addEventListener('resize',fitPresenterFrames);
+    setNoteSize(noteSize,false);applyLayout(layoutMode,false);requestAnimationFrame(fitPresenterFrames);
+  }
+  function updateShell(){
+    if(mode!=='presenter')return;mountShell();
+    const n=noteAt(idx),next=Math.min(idx+1,total-1),id=slideId(idx),editor=document.getElementById('ppt-note-editor');
+    const cf=document.getElementById('ppt-current-frame'),nf=document.getElementById('ppt-next-frame');
+    if(cf.dataset.slide!==String(idx))updatePreviewFrame(cf,idx);
+    if(nf.dataset.slide!==String(next))updatePreviewFrame(nf,next);
+    document.getElementById('ppt-next-card').classList.toggle('is-end',idx===total-1);
+    document.getElementById('ppt-current-label').textContent=`${idx+1} / ${total}`;
+    document.getElementById('ppt-next-label').textContent=idx===total-1?'已到尾页':`${next+1} / ${total}`;
+    document.getElementById('ppt-notes-title').textContent=n.title||`第 ${idx+1} 页`;
+    document.getElementById('ppt-notes-purpose').textContent=n.purpose||'—';
+    const target=plannedMsAt(idx);document.getElementById('ppt-note-meta').textContent=`建议 ${target?(target/60000).toFixed(1):'—'} 分钟 · ${id}`;
+    document.getElementById('ppt-page-count').textContent=`第 ${idx+1} / ${total} 页`;
+    document.getElementById('ppt-page-percent').textContent=`${Math.round(((idx+1)/total)*100)}%`;
+    document.getElementById('ppt-first').disabled=idx===0;document.getElementById('ppt-prev').disabled=idx===0;document.getElementById('ppt-next').disabled=idx===total-1;
+    document.getElementById('ppt-last').textContent=idx===total-1?'重新开始':'尾页';
+    if(renderedNoteId!==id){renderedNoteId=id;editor.value=loadNoteValue(id,idx,n);editor.scrollTop=0;document.getElementById('ppt-saved').textContent='已保存';}
+    if(presenterOverviewOn)buildPresenterOverview();requestAnimationFrame(fitPresenterFrames);renderTimer();updateSyncStatus();
+  }
+  function saveNote(){
+    const saved=document.getElementById('ppt-saved');saved.textContent='保存中…';saved.classList.remove('ppt-saved');clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{localStorage.setItem(noteStorageKey(renderedNoteId),document.getElementById('ppt-note-editor').value);saved.textContent='已保存';saved.classList.add('ppt-saved');},300);
+  }
+  function setNoteSize(v,p=true){noteSize=Math.max(14,Math.min(26,v));document.documentElement.style.setProperty('--ppt-note-size',`${noteSize}px`);if(p)localStorage.setItem('guizang-ppt-note-size',String(noteSize));}
+  function currentElapsed(){return elapsed+(timerRunning?Date.now()-timerStartedAt:0);}
+  function currentSlideElapsed(i=idx){return slideElapsed[i]+(timerRunning&&timedSlideIndex===i?Date.now()-slideTimerStartedAt:0);}
+  function commitRunningTime(now=Date.now()){if(!timerRunning)return;elapsed+=now-timerStartedAt;slideElapsed[timedSlideIndex]+=now-slideTimerStartedAt;timerStartedAt=now;slideTimerStartedAt=now;}
+  function rollSlideTimer(ni){if(timerRunning)commitRunningTime();timedSlideIndex=ni;slideTimerStartedAt=Date.now();}
+  function renderTimer(){
+    const totalUsed=currentElapsed(),pageUsed=currentSlideElapsed(),target=plannedMsAt(idx);
+    const c=document.getElementById('ppt-clock');if(c)c.textContent=durationText(totalUsed);
+    const sc=document.getElementById('ppt-slide-clock'),sp=document.getElementById('ppt-slide-plan'),sb=document.getElementById('ppt-slide-status-box'),sl=document.getElementById('ppt-slide-status-label'),sv=document.getElementById('ppt-slide-status'),sh=document.getElementById('ppt-slide-status-hint');
+    if(sc)sc.textContent=durationText(pageUsed);if(sp)sp.textContent=target?`计划 ${durationText(target)}`:'计划 —';
+    if(sb&&sl&&sv&&sh){const over=Boolean(target&&pageUsed>target),rem=Boolean(target&&!over);sb.classList.toggle('is-over',over);sb.classList.toggle('is-remaining',rem);sl.textContent=over?'超时':(rem?'剩余':'计划');sv.textContent=target?durationText(Math.abs(target-pageUsed)):'—';sh.textContent=over?'已超出本页计划':(rem?'距本页计划':'未设置');}
+    const tp=totalPlannedMs(),pl=document.getElementById('ppt-plan');if(pl)pl.textContent=tp?`计划 ${Number(tp/60000).toFixed(1)} 分钟 · 预计 ${clockTime(Date.now()+Math.max(0,tp-totalUsed))}`:'计划 —';
+    const sec=sectionInfo(idx),se=document.getElementById('ppt-section');if(se){se.hidden=!sec;se.textContent=sec?`${sec.name} · ${sec.position}/${sec.count}${sec.planned?` · 剩余 ${durationText(Math.max(0,sec.planned-sec.used))}`:''}`:'';}
+    const tb=document.getElementById('ppt-timer-toggle');if(tb)tb.textContent=timerRunning?'暂停':(totalUsed?'继续计时':'开始计时');
+    const rb=document.getElementById('ppt-rehearsal');if(rb){rb.textContent=rehearsalActive?'结束排练':'排练';rb.classList.toggle('ppt-rehearsal-on',rehearsalActive);}
+    renderAutoState();
+  }
+  function toggleTimer(){const now=Date.now();if(timerRunning){commitRunningTime(now);timerRunning=false;}else{timerStartedAt=now;slideTimerStartedAt=now;timedSlideIndex=idx;timerRunning=true;}renderTimer();}
+  function resetTimer(){elapsed=0;slideElapsed=Array(total).fill(0);timedSlideIndex=idx;if(timerRunning){timerStartedAt=Date.now();slideTimerStartedAt=timerStartedAt;}else{timerStartedAt=0;slideTimerStartedAt=0;}renderTimer();}
+  function rehearsalHistory(){try{return JSON.parse(localStorage.getItem(storageKey('rehearsals'))||'[]');}catch(e){return[];}}
+  function toggleRehearsal(){if(rehearsalActive){finishRehearsal(true);return;}rehearsalActive=true;if(timerRunning){commitRunningTime();timerRunning=false;}resetTimer();toggleTimer();renderTimer();}
+  function finishRehearsal(show){
+    if(!rehearsalActive)return;if(timerRunning){commitRunningTime();timerRunning=false;}
+    const r={endedAt:Date.now(),totalMs:elapsed,slides:slideElapsed.map((ms,i)=>({index:i,id:slideId(i),title:noteAt(i).title||slideId(i),ms,targetMs:plannedMsAt(i)}))};
+    const h=rehearsalHistory();h.unshift(r);try{localStorage.setItem(storageKey('rehearsals'),JSON.stringify(h.slice(0,5)));}catch(e){}
+    rehearsalActive=false;renderTimer();if(show)openRehearsalSummary(r,h.slice(0,5));
+  }
+  function openRehearsalSummary(r,h){
+    const rows=r.slides.filter(x=>x.ms>0).map(x=>`<tr><td>${x.index+1}</td><td>${escapeHTML(x.title)}</td><td>${durationText(x.ms)}</td><td>${x.targetMs?signedDuration(x.ms-x.targetMs):'—'}</td></tr>`).join('');
+    const recent=h.map(x=>`<div class="ppt-dialog-row"><span>${new Date(x.endedAt).toLocaleString()}</span><strong>${durationText(x.totalMs)}</strong></div>`).join('');
+    openDialog('排练记录',`<div class="ppt-dialog-section"><div class="ppt-dialog-row"><span>本次总时长</span><strong>${durationText(r.totalMs)}</strong></div><table class="ppt-summary"><thead><tr><th>#</th><th>页面</th><th>实际</th><th>与计划相比</th></tr></thead><tbody>${rows||'<tr><td colspan="4">没有记录到页面时间</td></tr>'}</tbody></table></div><div class="ppt-dialog-section"><h3>最近排练</h3>${recent}</div>`);
+  }
+  function autoDurationMs(i=idx){const ex=Number(noteAt(i).autoAdvanceSeconds);const s=Number.isFinite(ex)&&ex>0?ex:autoGlobalSeconds;return s>0?s*1000:null;}
+  function armAutoAdvance(){autoDeadline=0;autoRemainingMs=autoDurationMs()||0;}
+  function autoBlockedReason(){
+    if(presenterOverviewOn||overviewOn)return'宫格选页中';if(annotationTool!=='none')return'标注中';if(screenMode!=='normal')return'观众屏已暂停';if(document.hidden)return'窗口不可见';
+    const d=document.getElementById('ppt-dialog');if(d&&!d.hidden)return'设置中';
+    if(audienceOpenedAt&&syncState()!=='synced')return'等待观众屏同步';return'';
+  }
+  function updateAutoAdvance(){
+    if(!autoEnabled)return;const dur=autoDurationMs();if(!dur||idx===total-1)return;
+    const blk=autoBlockedReason(),now=Date.now();
+    if(blk){if(autoDeadline){autoRemainingMs=Math.max(0,autoDeadline-now);autoDeadline=0;}return;}
+    if(!autoDeadline)autoDeadline=now+(autoRemainingMs||dur);
+    autoRemainingMs=Math.max(0,autoDeadline-now);
+    if(now>=autoDeadline){autoDeadline=0;autoRemainingMs=0;go(idx+1,{force:true});}
+  }
+  function renderAutoState(){
+    const b=document.getElementById('ppt-auto-toggle');if(!b)return;
+    const dur=autoDurationMs(),blk=autoEnabled?autoBlockedReason():'';
+    b.classList.toggle('is-on',autoEnabled&&!blk);b.classList.toggle('is-paused',autoEnabled&&Boolean(blk));
+    if(!autoEnabled)b.textContent='自动翻页 · 关闭';
+    else if(!dur)b.textContent='自动翻页 · 等待时长';
+    else if(idx===total-1)b.textContent='自动翻页 · 已结束';
+    else if(blk)b.textContent=`自动翻页 · ${blk}`;
+    else b.textContent=`自动翻页 · ${durationText(autoRemainingMs||dur)}`;
+  }
+  function toggleAutoAdvance(){if(!autoEnabled&&!autoDurationMs()){openSettings();return;}autoEnabled=!autoEnabled;localStorage.setItem(storageKey('auto-enabled'),autoEnabled?'1':'0');armAutoAdvance();renderAutoState();}
+  function openDialog(title,html){const d=document.getElementById('ppt-dialog');if(!d)return;document.getElementById('ppt-dialog-title').textContent=title;document.getElementById('ppt-dialog-body').innerHTML=html;d.hidden=false;renderAutoState();}
+  function closeDialog(){const d=document.getElementById('ppt-dialog');if(d)d.hidden=true;renderAutoState();}
+  function applyLayout(v,p=true){layoutMode=['balanced','slides','notes'].includes(v)?v:'balanced';document.getElementById('ppt-presenter')?.setAttribute('data-layout',layoutMode);if(p)localStorage.setItem(storageKey('layout'),layoutMode);requestAnimationFrame(fitPresenterFrames);}
+  function applyAudienceScreen(v){const c=document.getElementById('ppt-audience-cover');if(!c)return;c.classList.remove('is-ended');c.textContent='';if(v==='black'||v==='white'){c.style.display='block';c.style.background=v;}else c.style.display='none';}
+  function showAudienceEnded(){const c=document.getElementById('ppt-audience-cover');if(c){c.style.display='';c.style.background='';c.textContent='演示已结束';c.classList.add('is-ended');}setTimeout(()=>{try{window.close();}catch(e){}},120);}
+  function setScreenMode(v){const next=['normal','black','white','frozen'].includes(v)?v:'normal',wf=audienceFrozen;screenMode=next;audienceFrozen=next==='frozen';emit({type:'screen',mode:next});if(wf&&!audienceFrozen)sendGoto(true);updateSyncStatus();armAutoAdvance();renderAutoState();}
+  function openSettings(){
+    openDialog('演示设置',`<div class="ppt-settings-card"><label class="ppt-switch-row" for="ppt-auto-enabled-setting"><span><strong>自动翻页</strong><br><span class="ppt-muted">需要时手动开启，默认关闭</span></span><input id="ppt-auto-enabled-setting" type="checkbox" ${autoEnabled?'checked':''}><span class="ppt-switch" aria-hidden="true"></span></label><div class="ppt-field"><label for="ppt-auto-seconds-setting">全局间隔</label><div class="ppt-stepper"><button id="ppt-auto-minus" type="button">−</button><input id="ppt-auto-seconds-setting" type="number" min="1" step="1" value="${autoGlobalSeconds||''}" placeholder="—"><span class="ppt-stepper-unit">秒</span><button id="ppt-auto-plus" type="button">+</button></div></div><button id="ppt-settings-save" class="ppt-ui-btn ppt-settings-save" type="button">保存自动翻页</button></div><div class="ppt-settings-card"><h3>演讲者布局</h3><div class="ppt-segmented"><button class="ppt-ui-btn" data-layout-choice="balanced" type="button">均衡</button><button class="ppt-ui-btn" data-layout-choice="slides" type="button">页面优先</button><button class="ppt-ui-btn" data-layout-choice="notes" type="button">备注优先</button></div></div><div class="ppt-settings-card"><h3>观众屏</h3><div class="ppt-segmented screen"><button class="ppt-ui-btn" data-screen-choice="normal" type="button">正常</button><button class="ppt-ui-btn" data-screen-choice="black" type="button">黑屏 B</button><button class="ppt-ui-btn" data-screen-choice="white" type="button">白屏 W</button><button class="ppt-ui-btn" data-screen-choice="frozen" type="button">冻结 F</button></div></div><div class="ppt-dialog-section"><button id="ppt-open-shortcuts" class="ppt-ui-btn" type="button">查看快捷键</button></div>`);
+    document.querySelectorAll('[data-layout-choice]').forEach(b=>{b.onclick=()=>{applyLayout(b.dataset.layoutChoice);openSettings();};});
+    document.querySelectorAll('[data-screen-choice]').forEach(b=>{b.onclick=()=>{setScreenMode(b.dataset.screenChoice);openSettings();};});
+    const inp=document.getElementById('ppt-auto-seconds-setting'),step=d=>{inp.value=String(Math.max(1,Math.max(0,Number(inp.value||0))+d));};
+    document.getElementById('ppt-auto-minus').onclick=()=>step(-1);document.getElementById('ppt-auto-plus').onclick=()=>step(1);
+    document.getElementById('ppt-settings-save').onclick=()=>{autoEnabled=document.getElementById('ppt-auto-enabled-setting').checked;autoGlobalSeconds=Math.max(0,Number(inp.value||0));localStorage.setItem(storageKey('auto-enabled'),autoEnabled?'1':'0');localStorage.setItem(storageKey('auto-seconds'),String(autoGlobalSeconds));armAutoAdvance();closeDialog();};
+    document.getElementById('ppt-open-shortcuts').onclick=openShortcuts;
+  }
+  function openShortcuts(){
+    const items=[['← / →','上一页 / 下一页'],['Home / End','首页 / 尾页'],['Esc','宫格选页'],['L','激光笔'],['C','圈选'],['X','清除标记'],['B / W','黑屏 / 白屏'],['F','冻结观众屏'],['A','自动翻页'],['R','排练'],['?','快捷键说明']];
+    openDialog('快捷键',`<div class="ppt-shortcuts">${items.map(([k,l])=>`<kbd>${k}</kbd><span>${l}</span>`).join('')}</div>`);
+  }
+  function openPreflight(){
+    const frame=document.getElementById('ppt-current-frame'),rect=frame?.getBoundingClientRect();
+    const checks=[
+      {label:'观众屏连接',ok:['synced','frozen'].includes(syncState()),detail:`当前状态：${document.getElementById('ppt-sync')?.textContent||'未连接'}`},
+      {label:'弹窗权限',ok:!popupBlocked,detail:popupBlocked?'浏览器阻止了观众窗口':'未检测到弹窗拦截'},
+      {label:'全屏状态',ok:Boolean(document.fullscreenElement),warn:true,detail:document.fullscreenElement?'已进入全屏':'建议演讲前进入全屏'},
+      {label:'当前页 16:9',ok:Boolean(rect&&Math.abs(rect.width/rect.height-16/9)<.003),detail:rect?`${Math.round(rect.width)} × ${Math.round(rect.height)}`:'尚未渲染'}
+    ];
+    openDialog('演前检查',`<div class="ppt-dialog-section">${checks.map(it=>`<div class="ppt-dialog-row"><div class="ppt-check ${it.ok?'is-ok':(it.warn?'is-warn':'')}"><span class="ppt-check-dot"></span><span><strong>${it.label}</strong><br><span class="ppt-muted">${it.detail}</span></span></div><strong>${it.ok?'正常':(it.warn?'建议':'异常')}</strong></div>`).join('')}</div><div class="ppt-dialog-section"><button id="ppt-preflight-refresh" class="ppt-ui-btn" type="button">重新检查</button> <button id="ppt-enter-fullscreen" class="ppt-ui-btn" type="button">进入全屏</button></div>`);
+    document.getElementById('ppt-preflight-refresh').onclick=openPreflight;
+    document.getElementById('ppt-enter-fullscreen').onclick=async()=>{try{await document.documentElement.requestFullscreen();}catch(e){}openPreflight();};
+  }
+  function initTransport(){
+    if(transportReady)return;transportReady=true;
+    if('BroadcastChannel'in window){try{channel=new BroadcastChannel(channelName());channel.onmessage=e=>receive(e.data);}catch(e){}}
+    addEventListener('message',e=>receive(e.data));
+    addEventListener('storage',e=>{if(e.key===syncKey()&&e.newValue){try{receive(JSON.parse(e.newValue));}catch(err){}}});
+  }
+  function emit(payload,{persist=true}={}){
+    const msg={__guizangPptSync:1,session,role:mode,...payload,at:Date.now(),nonce:Math.random().toString(36).slice(2)};
+    try{channel?.postMessage(msg);}catch(e){}
+    if(persist)try{localStorage.setItem(syncKey(),JSON.stringify(msg));}catch(e){}
+    try{if(mode==='presenter'&&audienceWindow&&!audienceWindow.closed)audienceWindow.postMessage(msg,'*');}catch(e){}
+    try{if(mode==='audience'&&window.opener&&!window.opener.closed)window.opener.postMessage(msg,'*');}catch(e){}
+  }
+  function receive(msg){
+    if(!msg||msg.__guizangPptSync!==1||msg.session!==session||msg.role===mode)return;
+    if(msg.nonce){if(seenNonceSet.has(msg.nonce))return;seenNonceSet.add(msg.nonce);seenNonces.push(msg.nonce);if(seenNonces.length>256)seenNonceSet.delete(seenNonces.shift());}
+    if(mode==='presenter'){if(msg.type==='ready'){popupBlocked=false;sendGoto(true);}if(msg.type==='ack'){lastAckAt=Date.now();lastAckIndex=Number(msg.index);lastAckSeq=Number(msg.seq);updateSyncStatus();}return;}
+    if(mode!=='audience')return;
+    if(msg.type==='bye'){showAudienceEnded();return;}
+    if(msg.type==='screen'){applyAudienceScreen(msg.mode);return;}
+    if(msg.type==='laser'&&Number(msg.index)===idx){audienceLaser=msg.point||null;audienceLaserHideAt=Date.now()+650;renderInks();return;}
+    if(msg.type==='circle'&&Number(msg.index)===idx&&msg.circle){audienceCircles.push(msg.circle);renderInks();return;}
+    if(msg.type==='clear'&&Number(msg.index)===idx){audienceCircles=[];renderInks();return;}
+    if(msg.type==='goto'||msg.type==='ping'){if(msg.type==='goto'){audienceCircles=Array.isArray(msg.circles)?msg.circles:[];applyAudienceScreen(msg.screenMode);go(Number(msg.index),{force:true});}emit({type:'ack',index:idx,seq:Number(msg.seq)});}
+  }
+  function receivePreview(msg){if(!msg||msg.__guizangPptSync!==1||msg.session!==session||msg.role!=='presenter'||msg.type!=='preview-goto')return;go(Number(msg.index),{force:true});}
+  function sendGoto(force=false){if(mode!=='presenter'||audienceFrozen)return;if(force||lastAckIndex!==idx)seq++;emit({type:'goto',index:idx,seq,screenMode,circles});updateSyncStatus();}
+  function syncState(){if(popupBlocked)return'blocked';if(audienceWindow&&audienceWindow.closed)return'disconnected';if(audienceFrozen)return'frozen';if(!lastAckAt)return audienceOpenedAt&&Date.now()-audienceOpenedAt<2600?'connecting':'disconnected';if(Date.now()-lastAckAt>2600)return'disconnected';if(lastAckIndex!==idx||lastAckSeq<seq)return'unsynced';return'synced';}
+  function updateSyncStatus(){const el=document.getElementById('ppt-sync');if(!el)return;const st=syncState();const labels={blocked:'弹窗被拦截',disconnected:'未连接',connecting:'连接中',unsynced:'未同步',frozen:'已冻结',synced:`已同步 · 第 ${idx+1} 页`};el.dataset.state=st;el.textContent=`观众屏 · ${labels[st]}`;}
+  function reopenAudience(){initTransport();popupBlocked=false;audienceOpenedAt=Date.now();lastAckAt=0;lastAckIndex=-1;lastAckSeq=-1;if(audienceFrozen){audienceFrozen=false;screenMode='normal';}audienceWindow=window.open(frameUrl('audience',idx),`guizang-ppt-audience-${session}`,'popup=yes,width=1440,height=900');if(!audienceWindow)popupBlocked=true;updateSyncStatus();}
+  function enterPresenter(openAudience=true){if(mode==='presenter')return;if(overviewOn)toggleOverview();lowPowerBeforePresenter=window.__lowPowerMode;mode='presenter';initTransport();mountShell();document.body.classList.remove('ppt-audience','ppt-preview');document.body.classList.add('ppt-presenter');document.title=`演讲者视图 · ${originalTitle}`;window.__setLowPowerMode?.(true,{persist:false});updateShell();armAutoAdvance();if(openAudience)reopenAudience();}
+  function exitPresenter(){if(rehearsalActive)finishRehearsal(false);else if(timerRunning){commitRunningTime();timerRunning=false;}togglePresenterOverview(false);emit({type:'bye'});audienceWindow=null;audienceOpenedAt=0;lastAckAt=0;lastAckIndex=-1;lastAckSeq=-1;mode='deck';document.body.classList.remove('ppt-presenter');document.title=originalTitle;window.__setLowPowerMode?.(lowPowerBeforePresenter,{persist:false});}
+  function initAudience(){mode='audience';document.body.classList.add('ppt-audience');document.title=`观众屏 · ${originalTitle}`;document.body.insertAdjacentHTML('beforeend','<canvas id="ppt-audience-ink" aria-hidden="true"></canvas><div id="ppt-audience-cover" aria-hidden="true"></div>');const r=()=>{sizeInk(document.getElementById('ppt-audience-ink'),innerWidth,innerHeight);renderInks();};addEventListener('resize',r);r();initTransport();emit({type:'ready',index:idx});}
+  function initPreview(){mode='preview';document.body.classList.add('ppt-preview');window.__setLowPowerMode?.(true,{persist:false});addEventListener('message',e=>{if(e.source===parent)receivePreview(e.data);});}
+  function onSlideChange(ni){if(mode!=='presenter')return;rollSlideTimer(ni);circles=[];draftCircle=null;laserPoint=null;annotationPointerDown=false;armAutoAdvance();updateShell();sendGoto();}
+  function handleKey(e){
+    const ed=e.target?.matches?.('input,textarea,[contenteditable="true"]');if(ed){if(e.key==='Escape')e.target.blur();return true;}
+    if(mode==='audience'||mode==='preview'){e.preventDefault();return true;}
+    if(mode==='deck'&&e.key?.toLowerCase()==='p'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();enterPresenter(true);return true;}
+    if(mode!=='presenter')return false;
+    const key=e.key?.toLowerCase(),dlg=document.getElementById('ppt-dialog');
+    if(!dlg?.hidden){if(e.key==='Escape'){e.preventDefault();closeDialog();}return true;}
+    if(e.key==='?'||key==='/'){e.preventDefault();openShortcuts();return true;}
+    if(e.key==='Escape'){e.preventDefault();if(annotationTool!=='none')setAnnotationTool('none');else togglePresenterOverview();return true;}
+    if(presenterOverviewOn)return true;
+    if(key==='l'){e.preventDefault();setAnnotationTool('laser');return true;}
+    if(key==='c'){e.preventDefault();setAnnotationTool('circle');return true;}
+    if(key==='x'){e.preventDefault();clearAnnotations(true);return true;}
+    if(key==='b'){e.preventDefault();setScreenMode(screenMode==='black'?'normal':'black');return true;}
+    if(key==='w'){e.preventDefault();setScreenMode(screenMode==='white'?'normal':'white');return true;}
+    if(key==='f'){e.preventDefault();setScreenMode(audienceFrozen?'normal':'frozen');return true;}
+    if(key==='a'){e.preventDefault();toggleAutoAdvance();return true;}
+    if(key==='r'){e.preventDefault();toggleRehearsal();return true;}
+    if(['ArrowRight','PageDown',' ','ArrowDown'].includes(e.key)){e.preventDefault();go(idx+1,{force:true});return true;}
+    if(['ArrowLeft','PageUp','ArrowUp'].includes(e.key)){e.preventDefault();go(idx-1,{force:true});return true;}
+    if(e.key==='Home'){e.preventDefault();go(0,{force:true});return true;}
+    if(e.key==='End'){e.preventDefault();go(total-1,{force:true});return true;}
+    return false;
+  }
+  function initMode(){
+    document.getElementById('ppt-low-power-btn')?.addEventListener('click',()=>window.__setLowPowerMode(!window.__lowPowerMode));
+    document.getElementById('ppt-overview-btn')?.addEventListener('click',toggleOverview);
+    document.getElementById('ppt-presenter-btn')?.addEventListener('click',()=>enterPresenter(true));
+    if(requestedMode==='audience')initAudience();else if(requestedMode==='preview')initPreview();else if(requestedMode==='presenter')enterPresenter(false);
+  }
+  setInterval(()=>{renderTimer();renderInks();updateAutoAdvance();if(mode==='presenter'&&Date.now()-lastPingAt>900){lastPingAt=Date.now();if(audienceWindow?.closed)updateSyncStatus();emit({type:'ping',index:idx,seq});updateSyncStatus();}},250);
+  return{initMode,onSlideChange,handleKey,slideLabel,enterPresenter,reopenAudience,toggleOverview:togglePresenterOverview};
+})();
+
+addEventListener('keydown',e=>{
+  if(window.__pptPresenter?.handleKey(e))return;
+  if(e.key==='Escape'){e.preventDefault();toggleOverview();return;}
+  if(e.key && e.key.toLowerCase()==='b' && !e.metaKey && !e.ctrlKey && !e.altKey){e.preventDefault();window.__setLowPowerMode(!window.__lowPowerMode);return;}
+  if(overviewOn)return;
+  if(['ArrowRight','PageDown',' ','ArrowDown'].includes(e.key)){go(idx+1);return;}
+  if(['ArrowLeft','PageUp','ArrowUp'].includes(e.key))go(idx-1);
+  if(e.key==='Home')go(0);
+  if(e.key==='End')go(total-1);
+});
+
+let wheelTO=null,wheelAcc=0;
+addEventListener('wheel',e=>{
+  wheelAcc+=e.deltaY+e.deltaX;
+  if(Math.abs(wheelAcc)>50){go(idx+(wheelAcc>0?1:-1));wheelAcc=0;}
+  clearTimeout(wheelTO);wheelTO=setTimeout(()=>wheelAcc=0,150);
+},{passive:true});
+
+let tx=0,ty=0;
+addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
+addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy))go(idx+(dx<0?1:-1));
+},{passive:true});
+
+const initialSlideParam = new URLSearchParams(location.search).get('slide');
+const initialSlide = initialSlideParam ? Number(initialSlideParam) - 1 : 0;
+go(Number.isFinite(initialSlide) ? initialSlide : 0);
+window.__pptPresenter?.initMode();
+</script>
+
+<script type="module">
+let motion;
+try { motion = await import('https://cdn.jsdelivr.net/npm/motion@11.11.17/+esm'); }
+catch {
+  document.querySelectorAll('[data-anim]').forEach(el=>{el.style.opacity='1';el.style.transform='none'});
+}
+if(motion){
+  const { animate, stagger } = motion;
+  document.body.classList.add('motion-ready');
+  const EASE = [.22, 1, .36, 1];
+  const slides = [...document.querySelectorAll('.slide')];
+  function playSlide(i){
+    const slide = slides[i];
+    if(!slide) return;
+    if(window.__lowPowerMode){
+      slide.querySelectorAll('[data-anim]').forEach(el=>{el.style.opacity='1';el.style.transform='none'});
+      return;
+    }
+    const all = [...slide.querySelectorAll('[data-anim]')];
+    all.forEach(el=>{el.style.opacity='';el.style.transform='';});
+    if(all.length) animate(all, {opacity:[0,1], y:[14,0]}, {duration:.65, delay:stagger(.12, {start:.08}), easing:EASE});
+  }
+  window.__playSlide = playSlide;
+  playSlide(window.__currentSlideIndex || 0);
+}
+</script>
+</body>
+</html>
