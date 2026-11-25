@@ -20,16 +20,20 @@ WikiBridge 是一个本地优先的多模态知识工程与纹样知识图谱工
 
 ```bash
 echo "DEEPSEEK_API_KEY=你的密钥" > .env.local
-npm run atlas -- --port 1423 --site data/local-kg/atlas-100/site
+npm run atlas -- --port 1423 --site data/local-kg/share/wikibridge-three-volumes/site
 ```
 
 启动后访问 `http://127.0.0.1:1423/`，按 **`R`** 或点击顶栏 **「推理」** 打开双模推理工作台。
 
-历史长河沿蜿蜒回环的水路按时代展开，纹样以不同大小、疏密和柔和光晕错落分布。悬停可查看聚合条数，点击查看全部图录与出处，放大后逐步展开；未标注时代的条目从「时代待定」入口查看。静止时保留轻缓流光，纹样主图按需重绘，缩略图按当前视野加载。
+三册站点从 `site/manifest.json` 读取器物和裁图关联，并从同一个 `site/` 目录加载 `annotations-v2/` 与 `assets/`。只使用第一册样本时，可将 `--site` 改为 `data/local-kg/atlas-100/site`。
+
+历史长河用 SVG 河道按时代展示纹样。同一时代、同名纹样聚成一簇，孤例和未标纹样的条目独立显示。悬停可查看其他时代的同名纹样连线，点击可查看簇内图录或单件出处。未标注时代的条目从「时代待定」入口查看。
 
 三册处理完成后，可运行 `python3 scripts/package_kg_share.py` 生成 `data/local-kg/share/wikibridge-three-volumes-original-pages.zip` 发给组员。包内含统一星图、三册全部原尺寸页图（直接复制，不缩放或重新编码）、当前完整候选图谱和启动说明；星图另保留小预览加速，原页和证据使用原图。解压后 Windows 双击「启动预览.bat」，macOS / Linux 运行 `sh start-viewer.sh`（需要 Python 3）。浏览及符号推演无需密钥，大模型服务需各自配置。打包采用固定文件清单，不读取环境配置或历史实验目录；需要轻量预览版时加 `--image-mode preview`。
 
 也支持通过 OpenRouter 调用 DeepSeek。在 `.env.local` 中设置 `ATLAS_AGENT_PROVIDER=openrouter`、`OPENROUTER_API_KEY` 和可选的 `OPENROUTER_MODEL`（默认 `deepseek/deepseek-v3.2`），然后重启服务。密钥仅在服务端使用。
+
+星图的 AI 对话默认请求 Thinking 模式。直连 DeepSeek 时默认使用 `deepseek-flash`，旧配置中的 `deepseek-chat` 和 `deepseek-reasoner` 也会自动映射到该模型。「思维过程」会显示模型接口提供的推理文本和图谱工具调用进度。
 
 ### 2. 启动主工作台（Vite / Tauri）
 

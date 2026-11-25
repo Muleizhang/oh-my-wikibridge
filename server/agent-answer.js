@@ -1,5 +1,71 @@
+import { COMPARISON_DIMENSIONS } from '../src/kg-reasoner.js';
+
 export function hasToolMarkup(text) {
   return /<\/?[|｜]DSML[|｜]|<\/?(?:tool_call|function_call|function_calls)\b|\[TOOL_CALLS\]/i.test(text || '');
+}
+
+export async function readAgentCompletion(response, onThinking, onToolName) {
+  const showThinking = part => {
+    const text = part.reasoning_content || part.reasoning
+      || part.reasoning_details?.map(detail => detail.text || detail.summary || '').join('');
+    if (text) onThinking(text);
+  };
+  if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+    const { choices, error } = await response.json();
+    if (error) throw new Error(error.message || '模型接口返回错误。');
+    const choice = choices?.[0];
+    if (choice?.message) showThinking(choice.message);
+    return choice;
+  }
+
+  const message = { role: 'assistant', content: '' };
+  const calls = [];
+  const reasoningDetails = new Map();
+  let finishReason;
+  let buffer = '';
+  const readEvent = event => {
+    const data = event.split(/\r?\n/).filter(line => line.startsWith('data:'))
+      .map(line => line.slice(5).trimStart()).join('\n');
+    if (!data || data === '[DONE]') return;
+    const packet = JSON.parse(data);
+    if (packet.error) throw new Error(packet.error.message || '模型流式响应出错。');
+    const choice = packet.choices?.[0];
+    if (!choice) return;
+    const delta = choice.delta || {};
+    message.content += delta.content || '';
+    for (const field of ['reasoning_content', 'reasoning']) {
+      if (typeof delta[field] === 'string') message[field] = (message[field] || '') + delta[field];
+    }
+    for (const [position, part] of (delta.reasoning_details || []).entries()) {
+      const key = part.index ?? part.id ?? position;
+      const previous = reasoningDetails.get(key) || {};
+      const detail = { ...previous, ...part };
+      for (const field of ['text', 'summary', 'data', 'signature']) {
+        if (typeof part[field] === 'string') detail[field] = (previous[field] || '') + part[field];
+      }
+      reasoningDetails.set(key, detail);
+    }
+    showThinking(delta);
+    for (const part of delta.tool_calls || []) {
+      const call = calls[part.index] ??= { id: '', type: 'function', function: { name: '', arguments: '' } };
+      call.id += part.id || '';
+      call.function.name += part.function?.name || '';
+      call.function.arguments += part.function?.arguments || '';
+      if (part.function?.name) onToolName(call.function.name);
+    }
+    if (choice.finish_reason) finishReason = choice.finish_reason;
+  };
+  for await (const chunk of response.body.pipeThrough(new TextDecoderStream())) {
+    buffer += chunk;
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop();
+    for (const event of events) readEvent(event);
+  }
+  if (buffer.trim()) readEvent(buffer);
+  if (!finishReason) throw new Error('模型连接已中断，未收到完整结果。');
+  if (calls.length) message.tool_calls = calls.filter(Boolean);
+  if (reasoningDetails.size) message.reasoning_details = [...reasoningDetails.values()];
+  return { message, finish_reason: finishReason };
 }
 
 // Some providers serialize DeepSeek calls in content. Decode only complete calls
@@ -72,11 +138,12 @@ export function assessAgentAnswer(message, finishReason, { citations, inferences
 }
 
 // If generation cannot finish, return the computed result with its registered proof.
-export function comparisonSummary(result, ref) {
+export function comparisonSummary(result, ref, primaryOnly = false) {
   const labels = values => values.slice(0, 6).map(value => value.label).join('、') || '当前未检索到';
-  const lines = [`当前候选图谱：${result.entityA} ${result.countA} 条，${result.entityB} ${result.countB} 条。${result.useOntology ? '时代对比包含下位时期。' : '按所选字面标签对比。'}[${ref}]`];
-  for (const axis of [result.primary, result.secondary]) {
-    const name = { motif: '纹样', material: '材质', era: '时代' }[axis.axis] || axis.axis;
+  const scope = result.useOntology ? '已启用本体泛化。' : '按所选字面标签对比。';
+  const lines = [`当前候选图谱：${result.entityA} ${result.countA} 条，${result.entityB} ${result.countB} 条。${scope}[${ref}]`];
+  for (const axis of primaryOnly ? [result.primary] : [result.primary, result.secondary]) {
+    const name = COMPARISON_DIMENSIONS[axis.axis]?.label || axis.axis;
     const c = axis.coverage;
     if (c) lines.push(`${name}记录覆盖：${result.entityA} ${c.withValuesA}/${c.totalA}，${result.entityB} ${c.withValuesB}/${c.totalB}。[${ref}]`);
     if (!axis.comparable) {
@@ -87,8 +154,20 @@ export function comparisonSummary(result, ref) {
     lines.push(`两边均有记录的${name}（部分）：${labels(axis.shared)}。[${ref}]`);
     lines.push(`仅在${result.entityA}检索到的${name}（部分）：${labels(axis.onlyA)}；仅在${result.entityB}检索到：${labels(axis.onlyB)}。[${ref}]`);
   }
-  lines.push('这些差集仅描述当前已录入候选。未检索到不代表历史上不存在，共有纹样也不能单独证明传承。');
+  lines.push('这些差集仅描述当前已录入候选。未检索到不代表历史上不存在。');
+  if (!primaryOnly) lines.push('共有纹样也不能单独证明传承。');
   return lines.join('\n\n');
+}
+
+export function resolveCompareIntent(hint) {
+  if (hint?.type !== 'compare' || hint.axis === undefined) return null;
+  const { kind, entityA, entityB, axis, useOntology } = hint;
+  const validLabel = value => typeof value === 'string' && value.length <= 200 && value.trim();
+  if (!Object.hasOwn(COMPARISON_DIMENSIONS, kind) || !Object.hasOwn(COMPARISON_DIMENSIONS, axis) || kind === axis
+      || !validLabel(entityA) || !validLabel(entityB) || entityA.trim() === entityB.trim()) {
+    throw new Error('请选择两个不同的比较对象，以及与分组不同的比较内容。');
+  }
+  return { kind, entityA: entityA.trim(), entityB: entityB.trim(), axis, useOntology: useOntology !== false };
 }
 
 // Suggestions carry explicit intent; free text falls back to explicit path wording
@@ -97,13 +176,14 @@ export function resolvePathIntent(question, hint, catalog = {}) {
   const valid = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 200;
   if (hint?.type === 'path' && valid(hint.source) && valid(hint.target)) {
     return { type: 'path', source: hint.source.trim(), target: hint.target.trim(),
-      maxHops: Math.max(2, Math.min(8, Number(hint.maxHops) || 6)) };
+      maxHops: Math.max(2, Math.min(8, Number(hint.maxHops) || 6)),
+      maxPaths: Math.max(1, Math.min(50, Math.trunc(Number(hint.maxPaths)) || 4)) };
   }
   if (!/路径|链路/.test(question || '')) return null;
   const quoted = [...question.matchAll(/[「“"]([^」”"]{1,200})[」”"]/g)].map(m => m[1]);
   let labels = quoted;
   if (labels.length < 2) {
-    const known = [...(catalog.eras || []), ...(catalog.materials || []), ...(catalog.motifs || [])];
+    const known = Object.entries(COMPARISON_DIMENSIONS).flatMap(([kind, dim]) => catalog[kind === 'era' ? 'eras' : dim.field] || []);
     const hits = [...new Set(known.map(x => x.name))].filter(valid)
       .map(label => ({ label, start: question.indexOf(label) })).filter(x => x.start >= 0)
       .sort((a, b) => a.start - b.start || b.label.length - a.label.length);

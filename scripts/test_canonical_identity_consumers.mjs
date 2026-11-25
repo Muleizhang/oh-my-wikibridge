@@ -84,12 +84,30 @@ test('different relation qualifiers remain separately queryable after identity a
 test('atlas model keeps canonical nodes and separately addressable source pages',()=>{
   const text=readFileSync(new URL('./atlas_viewer.html',import.meta.url),'utf8');
   const start=text.indexOf('  function buildGraphModel('),end=text.indexOf('\n  /*',start);
-  const sandbox={EXTRA_DIMENSIONS:{},predToKind:()=>'',eraChronology:label=>({group:label,order:1}),hashStr:()=>1};
+  const sandbox={URL,EXTRA_DIMENSIONS:{},predToKind:()=>'',eraChronology:label=>({group:label,order:1}),hashStr:()=>1};
   vm.createContext(sandbox);vm.runInContext(text.slice(start,end)+'\nthis.build = buildGraphModel;',sandbox);
-  const model=sandbox.build(manifestFixture());
+  const manifest=manifestFixture();
+  const source=manifest.sourceItems[1];
+  const cropDir='annotations-v2/vol1/p0002';
+  Object.assign(source, { sourceEntityId:'v1:entity-b', imageKind:'artifact_candidate',
+    detailUrl:`${cropDir}/groups/b-thumb.jpg`, imageUrl:`${cropDir}/crops/b.jpg`,
+    imageCandidates:[{imageUrl:`${cropDir}/crops/part.jpg`}] });
+  delete source.canonicalArtifactId;
+  manifest.artifactIdentity.sourceToCanonical[source.sourceEntityId]='canonical-ab';
+  manifest.pages=[{page:2,previewUrl:'assets/originals/v1/v1-p0002.source.jpg'}];
+  const model=sandbox.build(manifest,'http://localhost:1423/kg/manifest.json');
   assert.equal(model.items.length,2);
   assert.equal(model.sourceItems.length,3);
   assert.equal(model.itemById.get('canonical-ab').sourceRecords.length,2);
   assert.equal(model.canonicalBySource.get('v1:b').id,'canonical-ab');
-  assert.equal(model.sourceById.get('v1:b').page,2);
+  assert.equal(model.canonicalBySource.get('v1:entity-b').id,'canonical-ab');
+  const record=model.sourceById.get('v1:entity-b');
+  assert.equal(record,model.sourceById.get('v1:b'));
+  assert.equal(record.page,2);
+  assert.equal(record.imageKind,'artifact_candidate');
+  assert.equal(record.thumbUrl,`http://localhost:1423/kg/${cropDir}/groups/b-thumb.jpg`);
+  assert.equal(record.plateUrl,`http://localhost:1423/kg/${cropDir}/crops/b.jpg`);
+  assert.equal(record.imageCandidates[0].imageUrl,`http://localhost:1423/kg/${cropDir}/crops/part.jpg`);
+  assert.equal(record.pageUrl,'http://localhost:1423/kg/p2.jpg');
+  assert.equal(model.pages[0].previewUrl,'http://localhost:1423/kg/assets/originals/v1/v1-p0002.source.jpg');
 });

@@ -38,6 +38,17 @@ export const EXTRA_DIMENSIONS = {
   place: { predicate: 'excavated_at', field: 'places', label: '出土与发现' },
   organization: { predicate: 'held_by', field: 'holders', label: '收藏单位' },
 };
+export const COMPARISON_DIMENSIONS = {
+  era: { predicate: 'period', field: 'periods', label: '时代' },
+  material: { predicate: 'made_of', field: 'materials', label: '材质' },
+  motif: { predicate: 'decorated_with', field: 'motifs', label: '纹样' },
+  artifact_type: { predicate: 'artifact_type', field: 'artifactTypes', label: '器类' },
+  ...EXTRA_DIMENSIONS,
+};
+// Provenance and collection links need a source record rather than a prediction.
+export const PREDICTION_DIMENSIONS = Object.fromEntries(Object.entries(COMPARISON_DIMENSIONS)
+  .filter(([kind]) => kind !== 'place' && kind !== 'organization')
+  .map(([kind, dim]) => [dim.predicate, { kind, ...dim }]));
 const EXTRA_FIELDS = Object.fromEntries(Object.entries(EXTRA_DIMENSIONS).map(([kind, dim]) => [dim.predicate, [kind, dim.field]]));
 EXTRA_FIELDS.discovered_at = ['place', 'places'];
 EXTRA_FIELDS.collected_at = ['place', 'places'];
@@ -320,6 +331,7 @@ function normalizeManifest(manifest) {
       modelScore: r.modelScore ?? null,
       extractionMethod: r.extractionMethod || '',
       supportingEvidence: r.supportingEvidence || [],
+      sourceRecordId: r.sourceRecordId,
       sources: r.sources || [],
       evidenceIds: r.evidenceIds || [r.evidenceId].filter(Boolean),
     };
@@ -673,7 +685,7 @@ export function createKGReasoner(rawData) {
 
   function matchingArtifacts(kind, label, useOntology) {
     const accepted = expandValues(kind, label, useOntology);
-    const field = EXTRA_DIMENSIONS[kind]?.field || { era: 'periods', material: 'materials', motif: 'motifs', artifact_type: 'artifactTypes' }[kind];
+    const field = COMPARISON_DIMENSIONS[kind]?.field;
     return allArtifacts.filter(art => {
       const vals = art[field] || [];
       return vals.some(v => accepted.has(v));
@@ -686,7 +698,7 @@ export function createKGReasoner(rawData) {
   function findPaths(sourceInput, targetInput, opts = {}) {
     const useOntology = opts.useOntology !== false;
     const maxHops = Math.max(2, Math.min(8, Number(opts.maxHops) || 6));
-    const maxPaths = Math.max(1, Math.min(8, Number(opts.maxPaths) || 4));
+    const maxPaths = Math.max(1, Math.min(50, Number(opts.maxPaths) || 4));
     const maxExpansions = Math.max(1, Math.min(14000, Number(opts.maxExpansions) || 14000));
     const g = useOntology ? graphOntology : graphLiteral;
     const src = resolveNode(sourceInput, useOntology);
@@ -719,61 +731,142 @@ export function createKGReasoner(rawData) {
         error: '起点与终点相同，请选择两个不同节点。', paths: [], evidence: [], sparql: '' };
     }
 
-    // Priority-BFS discovering diverse simple paths up to maxHops
-    const queue = [{ node: src.key, cost: 0, edges: [], visited: new Set([src.key]) }];
+    // A lower bound on the remaining hops prunes branches that cannot reach the target.
+    const remainingHops = new Map([[dst.key, 0]]);
+    const frontier = [dst.key];
+    for (let i = 0; i < frontier.length; i++) {
+      const hops = remainingHops.get(frontier[i]) + 1;
+      if (hops > maxHops) break;
+      for (const { to } of g.adj.get(frontier[i])) {
+        if (remainingHops.has(to)) continue;
+        remainingHops.set(to, hops);
+        frontier.push(to);
+      }
+    }
+
+    // Common concepts have many interchangeable routes through them.
+    const bridgeCost = new Map();
+    for (const key of remainingHops.keys()) {
+      if (key !== src.key && key !== dst.key && g.nodes.get(key).kind !== 'artifact') {
+        bridgeCost.set(key, Math.log2(g.adj.get(key).length) / 2);
+      }
+    }
+
+    const queue = [{ node: src.key, cost: 0, priority: remainingHops.get(src.key) ?? Infinity,
+      edges: [], visited: new Set([src.key]) }];
+    // shortcut: diversify within a bounded candidate pool, revisit if rare valid routes are still missed often.
+    const candidateLimit = maxPaths === 1 ? 4 : Math.max(96, maxPaths * 6);
     const found = [];
-    const bridgeUsage = new Map();
+    const seenSig = new Set();
     let expansions = 0;
 
-    while (queue.length && found.length < maxPaths * 4 && expansions < maxExpansions) {
-      // Pop lowest cost state
+    while (queue.length && found.length < candidateLimit && expansions < maxExpansions) {
       let bestIdx = 0;
       for (let i = 1; i < queue.length; i++) {
-        if (queue[i].cost < queue[bestIdx].cost) bestIdx = i;
+        if (queue[i].priority < queue[bestIdx].priority) bestIdx = i;
       }
       const cur = queue.splice(bestIdx, 1)[0];
       expansions++;
 
-      if (cur.edges.length >= maxHops) continue;
+      const nextHops = cur.edges.length + 1;
       const neighbors = g.adj.get(cur.node) || [];
       for (const edge of neighbors) {
-        if (cur.visited.has(edge.to)) continue;
+        const hopsLeft = remainingHops.get(edge.to) ?? Infinity;
+        if (cur.visited.has(edge.to) || nextHops + hopsLeft > maxHops) continue;
         // Avoid trivial back-and-forth across two ontology edges in a row
         const prevEdge = cur.edges[cur.edges.length - 1];
         if (prevEdge?.isInferred && edge.isInferred && prevEdge.from.startsWith('ont_')) continue;
 
         const nextEdges = [...cur.edges, edge];
-        const penalty = (bridgeUsage.get(edge.to) || 0) * 0.45;
-        const nextCost = cur.cost + edge.cost + penalty;
+        const nextCost = cur.cost + edge.cost + (bridgeCost.get(edge.to) || 0);
 
         if (edge.to === dst.key) {
-          found.push({ cost: nextCost, edges: nextEdges });
-          for (const e of nextEdges) {
-            if (e.to !== dst.key) bridgeUsage.set(e.to, (bridgeUsage.get(e.to) || 0) + 1);
-          }
+          const signature = JSON.stringify(nextEdges.map(e => e.to));
+          if (seenSig.has(signature)) continue;
+          seenSig.add(signature);
+          const bridges = nextEdges.slice(0, -1).map(e => e.to).filter(key => bridgeCost.has(key));
+          found.push({ cost: nextCost, edges: nextEdges, bridges });
           continue;
         }
-        if (nextEdges.length < maxHops) {
-          const nextVisited = new Set(cur.visited);
-          nextVisited.add(edge.to);
-          queue.push({ node: edge.to, cost: nextCost, edges: nextEdges, visited: nextVisited });
-        }
+        const nextVisited = new Set(cur.visited);
+        nextVisited.add(edge.to);
+        queue.push({ node: edge.to, cost: nextCost, priority: nextCost + hopsLeft,
+          edges: nextEdges, visited: nextVisited });
       }
     }
 
-    // Deduplicate & rank diverse paths (prefer shorter, factual-first, distinct bridge concepts)
-    const seenSig = new Set();
+    // Prefer paths whose intermediate concepts are least used in the selected results.
     const ranked = [];
+    const bridgeUsage = new Map();
+    const reuse = path => Math.max(0, ...path.bridges.map(key => bridgeUsage.get(key) || 0));
     found.sort((a, b) => a.edges.length - b.edges.length || a.cost - b.cost);
-    for (const p of found) {
-      const sig = p.edges.map(e => `${e.from}->${e.to}`).join('|');
-      if (seenSig.has(sig)) continue;
-      seenSig.add(sig);
-      ranked.push(p);
-      if (ranked.length >= maxPaths) break;
+    while (found.length && ranked.length < maxPaths) {
+      let best = 0;
+      let leastReuse = reuse(found[0]);
+      for (let i = 1; i < found.length && leastReuse > 0; i++) {
+        const count = reuse(found[i]);
+        if (count < leastReuse) {
+          best = i;
+          leastReuse = count;
+        }
+      }
+      const [path] = found.splice(best, 1);
+      ranked.push(path);
+      for (const key of path.bridges) bridgeUsage.set(key, (bridgeUsage.get(key) || 0) + 1);
     }
 
-    // Build formal proof trees & Horn rule annotations for each path
+    const { paths: annotatedPaths, evidence } = annotatePaths(g, ranked);
+
+    search.expansions = expansions;
+    search.completeWithinConstraints = queue.length === 0;
+    search.budgetExhausted = queue.length > 0 && expansions >= maxExpansions;
+    search.stoppedReason = search.completeWithinConstraints ? 'exhausted'
+      : search.budgetExhausted ? 'expansion_budget' : 'candidate_limit';
+
+    // Unknown reachability stays unknown when the bounded search stops early.
+    let literalReachable = annotatedPaths.length > 0 ? true : search.completeWithinConstraints ? false : null;
+    if (useOntology) {
+      const litSrc = resolveNode(sourceInput, false);
+      const litDst = resolveNode(targetInput, false);
+      if (!litSrc || !litDst) literalReachable = false;
+      else {
+        const litRes = findPaths(litSrc.key, litDst.key, { useOntology: false, maxHops, maxPaths: 1, maxExpansions });
+        literalReachable = litRes.paths.length > 0 ? true : litRes.search.completeWithinConstraints ? false : null;
+      }
+    }
+
+    const sparql = buildPathSparql(src, dst, annotatedPaths[0], useOntology);
+
+    return {
+      ok: true,
+      mode: 'path',
+      ...context, search,
+      literalReachable,
+      ontologyUnlocked: useOntology && literalReachable === false && annotatedPaths.length > 0,
+      paths: annotatedPaths,
+      evidence,
+      sparql,
+    };
+  }
+
+  function inspectPath(nodeKeys, edgeIds, useOntology) {
+    if (!Array.isArray(nodeKeys) || !Array.isArray(edgeIds) || !edgeIds.length || edgeIds.length > 8
+        || nodeKeys.length !== edgeIds.length + 1 || new Set(nodeKeys).size !== nodeKeys.length
+        || ![...nodeKeys, ...edgeIds].every(key => typeof key === 'string' && key.length > 0 && key.length <= 300)) {
+      return { ok: false, error: '路径标识无效，请重新查找后再解读。' };
+    }
+    const g = useOntology ? graphOntology : graphLiteral;
+    const edges = [];
+    for (let i = 0; i < edgeIds.length; i++) {
+      const edge = g.adj.get(nodeKeys[i])?.find(edge => edge.to === nodeKeys[i + 1] && edge.id === edgeIds[i]);
+      if (!edge) return { ok: false, error: '这条路径已无法在当前图谱中核验，请重新查找后再解读。' };
+      edges.push(edge);
+    }
+    const { paths, evidence } = annotatePaths(g, [{ edges }]);
+    return { ok: true, source: g.nodes.get(nodeKeys[0]), target: g.nodes.get(nodeKeys.at(-1)), paths, evidence, useOntology };
+  }
+
+  function annotatePaths(g, ranked) {
     const evidenceMap = new Map();
     const registerEv = triple => {
       if (!triple) return null;
@@ -803,6 +896,7 @@ export function createKGReasoner(rawData) {
           isInferred: Boolean(edge.isInferred),
           axiom: edge.axiom?.formula || null,
           evidenceRef: evRef,
+          edgeId: edge.id,
           tripleId: edge.triple?.id || null,
           artifactId: edge.triple?.subjectKind === 'interpretation' ? null : edge.triple?.subjectId || null,
           page: edge.triple?.page || null,
@@ -821,40 +915,10 @@ export function createKGReasoner(rawData) {
         nodeKeys,
         artifactIds,
         rulesTriggered,
-        summary: buildPathSummary(src, dst, steps, rulesTriggered),
+        summary: buildPathSummary(steps, rulesTriggered),
       };
     });
-
-    search.expansions = expansions;
-    search.completeWithinConstraints = queue.length === 0;
-    search.budgetExhausted = queue.length > 0 && expansions >= maxExpansions;
-    search.stoppedReason = search.completeWithinConstraints ? 'exhausted'
-      : search.budgetExhausted ? 'expansion_budget' : 'candidate_limit';
-
-    // Unknown reachability stays unknown when the bounded search stops early.
-    let literalReachable = annotatedPaths.length > 0 ? true : search.completeWithinConstraints ? false : null;
-    if (useOntology) {
-      const litSrc = resolveNode(sourceInput, false);
-      const litDst = resolveNode(targetInput, false);
-      if (!litSrc || !litDst) literalReachable = false;
-      else {
-        const litRes = findPaths(litSrc.key, litDst.key, { useOntology: false, maxHops, maxPaths: 1, maxExpansions });
-        literalReachable = litRes.paths.length > 0 ? true : litRes.search.completeWithinConstraints ? false : null;
-      }
-    }
-
-    const sparql = buildPathSparql(src, dst, annotatedPaths[0], useOntology);
-
-    return {
-      ok: true,
-      mode: 'path',
-      ...context, search,
-      literalReachable,
-      ontologyUnlocked: useOntology && literalReachable === false && annotatedPaths.length > 0,
-      paths: annotatedPaths,
-      evidence: [...evidenceMap.values()],
-      sparql,
-    };
+    return { paths: annotatedPaths, evidence: [...evidenceMap.values()] };
   }
 
   function analyzePathRules(steps, nodes) {
@@ -908,7 +972,7 @@ export function createKGReasoner(rawData) {
     return rules;
   }
 
-  function buildPathSummary(src, dst, steps, rules) {
+  function buildPathSummary(steps, rules) {
     const chain = [steps[0].fromLabel, ...steps.map(s => s.toLabel)].join(' — ');
     const ruleNames = rules.map(r => r.name).join(' · ');
     return ruleNames ? `${chain}（触发：${ruleNames}）` : chain;
@@ -948,9 +1012,15 @@ export function createKGReasoner(rawData) {
    */
   function compareEntities(kind, entityA, entityB, opts = {}) {
     const useOntology = opts.useOntology !== false;
-    if (!['era', 'material', 'motif', 'artifact_type', ...Object.keys(EXTRA_DIMENSIONS).filter(k => k !== 'place')].includes(kind)) {
-      return { ok: false, error: '请选择时代、材质、纹样、器类、工艺、文化、构图、装饰部位/角色或收藏单位进行对比。' };
+    const kinds = Object.keys(COMPARISON_DIMENSIONS);
+    if (!kinds.includes(kind)) {
+      return { ok: false, error: '请选择有效的比较分组。' };
     }
+    const primaryAxis = opts.axis ?? (kind === 'motif' ? 'material' : 'motif');
+    if (primaryAxis === kind || !kinds.includes(primaryAxis)) {
+      return { ok: false, error: '请选择与分组不同的比较内容。' };
+    }
+    const secondaryAxis = kinds.find(axis => axis !== kind && axis !== primaryAxis);
     const artsA = matchingArtifacts(kind, entityA, useOntology);
     const artsB = matchingArtifacts(kind, entityB, useOntology);
     if (!artsA.length || !artsB.length) {
@@ -960,17 +1030,13 @@ export function createKGReasoner(rawData) {
       };
     }
 
-    // Target comparison axis: Era/Material -> compare Motifs (+ secondary axis); Motif -> compare Materials + Eras
-    const primaryAxis = kind === 'motif' ? 'material' : 'motif';
-    const secondaryAxis = kind === 'material' || kind === 'motif' ? 'era' : 'material';
-
     const collectAxis = (arts, axis) => {
       const map = new Map(); // label -> { label, count, artifacts, triples }
-      const pred = axis === 'era' ? 'period' : (axis === 'material' ? 'made_of' : 'decorated_with');
+      const { predicate } = COMPARISON_DIMENSIONS[axis];
       for (const art of arts) {
         for (const tid of art.tripleIds) {
           const t = kg.tripleById.get(tid);
-          if (!t || t.predicate !== pred) continue;
+          if (!t || (axis === 'place' ? t.objectKind !== 'place' : t.predicate !== predicate)) continue;
           const label = (useOntology && axis === 'era') ? eraInfo(t.objectLabel).group
             : ((useOntology && axis === 'material' && materialClass(t.objectLabel)) ? materialClass(t.objectLabel) : t.objectLabel);
           if (!map.has(label)) map.set(label, { label, count: 0, artifactIds: [], triples: [] });
@@ -1033,14 +1099,13 @@ export function createKGReasoner(rawData) {
     const primary = diffAxis(primaryAxis);
     const secondary = diffAxis(secondaryAxis);
 
-    const predA = kind === 'era' ? (useOntology ? ':period_class' : ':period')
-      : (kind === 'material' ? (useOntology ? ':made_of_class' : ':made_of')
-        : kind === 'artifact_type' ? ':artifact_type' : EXTRA_DIMENSIONS[kind] ? ':'+EXTRA_DIMENSIONS[kind].predicate : ':decorated_with');
-    const targetPred = primaryAxis === 'motif' ? ':decorated_with' : (primaryAxis === 'material' ? ':made_of' : ':period');
+    const predA = useOntology && kind === 'era' ? ':period_class'
+      : useOntology && kind === 'material' ? ':made_of_class' : `:${COMPARISON_DIMENSIONS[kind].predicate}`;
+    const targetPred = `:${COMPARISON_DIMENSIONS[primaryAxis].predicate}`;
     const valA = (useOntology && kind === 'material' && materialClass(entityA)) ? materialClass(entityA) : entityA;
     const valB = (useOntology && kind === 'material' && materialClass(entityB)) ? materialClass(entityB) : entityB;
 
-    const sparql = [
+    const sparql = kind === 'place' || primaryAxis === 'place' ? '' : [
       `# 当前图谱差集：找出「${entityA}」已录入而「${entityB}」未检索到的${PREDICATE_LABELS[targetPred.slice(1)]}；不代表历史独有`,
       `SELECT DISTINCT ?target ?artifact WHERE {`,
       `  ?artifact ${predA} "${valA}" .`,
@@ -1374,8 +1439,11 @@ export function createKGReasoner(rawData) {
    * ENGINE 3: Zero-LLM Missing Knowledge Completion (Association Rules + Adamic-Adar Link Prediction)
    */
   function predictMissing(opts = {}) {
-    const targetPredicate = ['period', 'made_of', 'decorated_with'].includes(opts.targetPredicate)
-      ? opts.targetPredicate : 'period';
+    const targetPredicate = opts.targetPredicate ?? 'period';
+    if (!Object.hasOwn(PREDICTION_DIMENSIONS, targetPredicate)) {
+      return { ok: false, targetPredicate, error: '此属性需要来源记录，无法推断补全。', predictions: [], evidence: [], sparql: '' };
+    }
+    const targetField = PREDICTION_DIMENSIONS[targetPredicate].field;
     const useOntology = opts.useOntology !== false;
     const limit = Math.max(1, Math.min(40, Number(opts.limit) || 18));
     const filterArtifactId = kg.artifactAliases?.get(opts.artifactId) || opts.artifactId || null;
@@ -1387,7 +1455,7 @@ export function createKGReasoner(rawData) {
       if (targetPredicate === 'made_of') {
         return useOntology ? [...new Set(art.materials.map(m => materialClass(m) || m))] : art.materials;
       }
-      return art.motifs;
+      return art[targetField];
     };
 
     const getFeatures = art => {
@@ -1415,6 +1483,10 @@ export function createKGReasoner(rawData) {
             if (fam && fam !== mo) feats.push({ key: `ont_motif:${fam}`, kind: 'motif', label: fam });
           }
         }
+      }
+      for (const { kind, field, predicate } of Object.values(PREDICTION_DIMENSIONS)) {
+        if (['era', 'material', 'motif'].includes(kind) || predicate === targetPredicate) continue;
+        for (const label of art[field]) feats.push({ key: `${kind}:${label}`, kind, label });
       }
       // Deduplicate by key
       return [...new Map(feats.map(f => [f.key, f])).values()];
@@ -1461,8 +1533,7 @@ export function createKGReasoner(rawData) {
 
     // 2) Score candidate missing predictions for artifacts lacking targetPredicate
     const candidates = allArtifacts.filter(a => {
-      if (filterArtifactId) return a.id === filterArtifactId;
-      return getTargetVals(a).length === 0;
+      return (!filterArtifactId || a.id === filterArtifactId) && getTargetVals(a).length === 0;
     });
 
     const predictions = [];
@@ -1766,51 +1837,12 @@ export function createKGReasoner(rawData) {
     const extraSummary = Object.fromEntries(Object.entries(extraCounts).map(([field, counts]) =>
       [field, [...counts.entries()].sort((a, b) => b[1]-a[1]).map(([name, count]) => ({ name, count }))]));
 
-    // Pick observed labels; this does not guarantee a connecting path or enough annotations.
-    const e1 = eras[0]?.name, e2 = eras[1]?.name, eLast = eras[eras.length - 1]?.name;
-    const m1 = materials[0]?.name, m2 = materials[1]?.name;
-    const mo1 = motifs.find(m => !/连续|边缘/.test(m.name))?.name || motifs[0]?.name;
-    const mo2 = motifs.find(m => m.name !== mo1 && !/连续|边缘/.test(m.name))?.name || motifs[1]?.name;
-
-    const suggestions = [];
-    if (e1 && e2) {
-      suggestions.push({
-        type: 'path',
-        label: `${e1} → ${e2} 关联路径检索`,
-        source: e1, target: e2,
-        question: `请检索「${e1}」与「${e2}」之间的多跳纹样或材质关联路径，说明本体泛化前后的差异与标注缺口，并判断这些证据是否足以支持传承或迁移。`,
-      });
-    }
-    if (e2 && eLast && e2 !== eLast) {
-      suggestions.push({
-        type: 'compare',
-        label: `对比 ${e2} vs ${eLast}`,
-        kind: 'era', entityA: e2, entityB: eLast,
-        question: `对比「${e2}」与「${eLast}」的纹样与材质记录：当前共有、差集与标注覆盖率分别是多少？不要把差集解释为历史独有。`,
-      });
-    }
-    if (m1 && m2) {
-      suggestions.push({
-        type: 'compare',
-        label: `对比 ${m1} vs ${m2}`,
-        kind: 'material', entityA: m1, entityB: m2,
-        question: `对比材质「${m1}」与「${m2}」所承载的纹样有哪些交集与差异？是否存在跨材质迁移的纹样？`,
-      });
-    }
-    if (mo1 && mo2) {
-      suggestions.push({
-        type: 'path',
-        label: `${mo1} ↔ ${mo2} 语义关联`,
-        source: mo1, target: mo2,
-        question: `在当前知识图谱中，「${mo1}」和「${mo2}」之间有哪些语义关联路径？`,
-      });
-    }
-    suggestions.push({
-      type: 'predict',
-      label: '缺失时代推理补全',
-      targetPredicate: 'period',
-      question: '当前图谱中有哪些未标注时代的器物可以通过关联规则和邻域证据高置信度推导出所属时代？给出规则和支撑证据。',
-    });
+    const suggestions = [
+      { question: '从商周青铜礼器到汉代漆器，云纹的用途可能发生了什么变化？哪些器物能支持这种解释？' },
+      { question: '鸟纹出现在唐代瓷器和壁画上时，器物用途与观看场景怎样影响我们对它的理解？' },
+      { question: '北朝的莲花纹有哪些可能的文化来路？怎样区分佛教图像的传播与本地工匠对题材的改造？' },
+      { question: '从新石器时代彩陶到战国器物，几何纹的相似性有多少可能来自材料和制作工艺？' },
+    ];
 
     return {
       title: kg.title,
@@ -1846,6 +1878,7 @@ export function createKGReasoner(rawData) {
     inferredTriples,
     resolveNode,
     findPaths,
+    inspectPath,
     compareEntities,
     runSparql,
     predictMissing,
