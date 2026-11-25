@@ -1,0 +1,40 @@
+.folio {
+  --ink:#302a25; --paper:#faf7ef; --mat:#e9e1d4; --rule:#ccc2b3; --clay:#843b2d;
+  --serif:"Songti SC","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  color:var(--ink);
+}
+.folio .folio-bar,.folio .folio-head,.folio .folio-controls,.folio .folio-foot,.folio .folio-caption {
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+}
+.folio .folio-head { margin:27px 0 18px;align-items:end; }
+.folio .folio-title { font:600 clamp(38px,5vw,66px)/1.12 var(--serif);letter-spacing:.06em;margin:0; }
+.folio .folio-sub { color:#67594e;font-size:13px;margin:4px 0; }
+.folio .folio-controls { border-top:2px solid var(--ink);padding:12px 0; }
+.folio .folio-controls h2 { margin:0;font:600 20px var(--serif); }
+.folio .switch { display:inline-flex;gap:0; }
+.folio button { cursor:pointer;font:inherit; }
+.folio .switch button,.folio .folio-link { color:var(--ink);background:transparent;font-size:13px;padding:6px 12px;border:1px solid var(--rule);border-radius:0; }
+.folio .switch button+button { border-left:0; }
+.folio .switch button[aria-pressed=true] { background:var(--ink);color:var(--paper); }
+.folio .folio-link { color:var(--clay); }
+.folio .folio-gallery { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(12px,2vw,28px); }
+.folio .folio-card { margin:0;min-width:0; }
+.folio .folio-mat { position:relative;background:var(--mat);height:clamp(180px,23vw,310px);display:grid;place-items:center;padding:16px;overflow:hidden; }
+.folio .folio-mat img,.folio .folio-mat canvas { display:block;width:100%;height:100%;min-width:0;min-height:0;object-fit:contain; }
+.folio .folio-mat [hidden] { display:none; }
+.folio .folio-caption { align-items:start;gap:6px;border-bottom:1px solid var(--rule);padding:12px 0; }
+.folio .folio-caption h3 { font:600 clamp(17px,2vw,25px)/1.4 var(--serif);margin:0; }
+.folio .folio-note { margin:7px 0 0;font-size:14px;color:#53463d; }
+.folio :focus-visible { outline:3px solid #a95033;outline-offset:2px; }
+.folio .folio-mat .folio-zoom { position:absolute;bottom:8px;right:8px;background:#fffcf4ed;color:var(--ink);border:1px solid #ae9e8d;padding:5px 10px;font-size:12px; }
+.folio dialog { box-sizing:border-box;background:var(--paper);color:var(--ink);border:1px solid var(--rule);width:min(940px,94vw);max-height:94vh;padding:15px; }
+.folio dialog::backdrop { background:#17120ddb; }
+.folio dialog img { width:100%;height:min(66vh,700px);object-fit:contain;display:block;background:var(--mat);margin:12px 0; }
+@media(max-width:650px) {
+  .folio .folio-mat { height:clamp(135px,36vw,210px);padding:5px; }
+  .folio .folio-gallery { gap:10px; }
+  .folio .folio-note { font-size:13px; }
+  .folio .folio-caption { display:block; }
+  .folio .folio-caption button { margin-top:6px; }
+  .folio .folio-head { margin:20px 0 14px; }
+}

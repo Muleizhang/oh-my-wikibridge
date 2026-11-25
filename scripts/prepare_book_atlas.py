@@ -27,6 +27,15 @@ PLATES = [
 ]
 
 
+# Visual observations describe only the displayed crop, independently of catalog assertions.
+OBSERVATIONS = {
+    (4, 4): '宽阔的黑彩围出浅色花瓣，花瓣之间可见细线。',
+    (7, 2): '红色底上，尖瓣内各有一道深色细线，在中央交会。',
+    (5, 1): '从器口上方看，四组旋线环绕中央开口。',
+    (5, 4): '瓶腹上的弧线向圆心收拢，圆心内还有一枚深色小点。',
+}
+
+
 def jpg(im, max_side=None):
     im = im.copy()
     if max_side:
@@ -87,6 +96,7 @@ def build(pdf, out):
                 qualifiers=[{'text':'据图版分期'}] if pred=='period' else [], regions=None,
                 regionBoxes={'artifact': normalized(plate), 'motif': normalized(detail), 'caption': normalized(caption)},
                 imageUrl=figure, detailUrl=closeup, captionUrl=caption_image,
+                findspot=note.split('；')[-1].removesuffix('出土'), observation=OBSERVATIONS[(page,item)],
                 detailLabel='俯视图' if (page,item)==(5,1) else '纹样局部'))
     evidence.append({**evidence[0], 'id':'book1:section','ordinal':3,'locator':'PDF 第 3 页 · 图版分期标题',
         'previewUrl':'book-sample/p3.jpg','captionUrl':'book-sample/section.jpg','text':'新石器时代',
@@ -95,7 +105,7 @@ def build(pdf, out):
     (out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
     template = (ROOT/'scripts/book_atlas.html').read_text()
     inline = json.dumps(dict(manifest=manifest,images=assets),ensure_ascii=False).replace('<','\\u003c')
-    (out/'index.html').write_text(template.replace('__BOOK_DATA__',inline).replace('__DRAW_NETWORK__',(ROOT/'src/motif-network.js').read_text().replace('export function','function',1)))
+    (out/'index.html').write_text(template.replace('__FOLIO_CSS__',(ROOT/'src/folio.css').read_text()).replace('__BOOK_DATA__',inline).replace('__DRAW_NETWORK__',(ROOT/'src/motif-network.js').read_text().replace('export function','function',1)))
     return manifest
 
 

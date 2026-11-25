@@ -5,7 +5,7 @@ export type MotifRow = {
   artifactId: string; artifact: string; item: number; page: number;
   predicate: 'decorated_with' | 'period' | 'made_of' | 'uses_technique';
   objectId: string; object: string; quote: string; evidenceId: string;
-  proofLocator?: string; locator?: string; imageUrl?: string; detailUrl?: string; detailLabel?: string;
+  findspot?: string; observation?: string; proofLocator?: string; locator?: string; imageUrl?: string; detailUrl?: string; detailLabel?: string;
   qualifiers: { text: string }[]; regions: Regions | null;
 };
 export const relations = { decorated_with: '饰有纹样', period: '所属时代', made_of: '材质', uses_technique: '制作工艺' };

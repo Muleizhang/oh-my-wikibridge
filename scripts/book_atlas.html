@@ -1,36 +1,128 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>纹样图录 · 中国纹样全集</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f2f0e8;color:#203d31;font:16px/1.55 system-ui,"Microsoft YaHei",sans-serif}header{background:#153e33;color:#fcf8eb;padding:15px max(calc((100vw - 1180px)/2),4vw);border-bottom:3px solid #bba273}header b{font:600 22px Georgia,serif}header span{margin-left:16px;font-size:14px}main{max-width:1180px;margin:auto;padding:26px 20px 50px}h1,h2{font-family:"Noto Serif CJK SC","Songti SC",serif}h1{font-size:clamp(34px,5vw,52px);margin:6px 0}h2{font-size:22px;margin:0 0 12px}h3{margin:0}p{margin:8px 0}.head,.toolbar,.tabs,.views{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.head{justify-content:space-between}.toolbar{justify-content:space-between;margin:10px 0 20px}.sub,figcaption,small{font-size:13px;color:#52665b}.columns{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start}.panel{min-width:0;padding:20px;background:#fffdf6;border:1px solid #d8dcca;border-radius:12px}.source{margin-top:18px}.tabs button,button,select{font:inherit;font-size:14px;border:1px solid #a6b6a7;border-radius:6px;padding:7px 12px;background:#fffdf6;color:#214637;cursor:pointer}button[aria-pressed=true],button.active{background:#224e3f;color:white}.views{align-items:stretch;flex-wrap:nowrap}.views figure{flex:1;min-width:0;margin:0}.views img{width:100%;height:160px;object-fit:contain;background:#f0ede1}.network{background:#f4f5ec;padding:6px;overflow:auto}.network svg{display:block;width:100%;min-width:480px}blockquote{margin:8px 0;padding:5px 12px;border-left:3px solid #b88b51}.scan{max-width:100%;max-height:120px;display:block;margin:10px 0}.page{position:relative;max-width:640px;margin:10px auto}.page img{width:100%;display:block}.box{position:absolute;border:2px solid #a64226;background:#ffce3720}.tabs{margin-top:12px}.artifact{display:block;text-align:left;margin:6px 0;width:100%}.artifact small{display:block}.artifact.active small{color:#dfebde}.result{margin-top:16px}summary{cursor:pointer}footer{margin-top:25px}button:focus-visible,select:focus-visible{outline:3px solid #bd8847}@media(max-width:800px){.columns{grid-template-columns:1fr}.views img{height:145px}.panel{padding:14px}main{padding:16px 12px}}
-</style><header><b>WikiBridge</b><span>纹样知识图谱</span></header><main>
-<div class="head"><div><small id="book"></small><h1 id="heading"></h1></div><label>选择纹样　<select id="motifs"></select></label></div>
-<div class="toolbar"><span id="count"></span><button id="ask">查询器物与出处</button></div>
-<div class="columns"><section class="panel"><h2>纹样与器物</h2><div class="network"><svg id="network"></svg></div><div id="objects"></div></section>
-<section class="panel"><h2 id="selected"></h2><p class="sub" id="locator"></p><div class="views"><figure><img id="detail"><figcaption id="detailLabel"></figcaption></figure><figure><img id="whole"><figcaption>器物全图</figcaption></figure></div><div class="tabs" id="edges"></div></section></div>
-<section class="panel source"><h2>原页证据</h2><strong id="claim"></strong><blockquote id="quote"></blockquote><img class="scan" id="caption" alt="原书文字区域"><details id="source"><summary id="proofLocator"></summary><div class="page"><img id="page" alt="完整原页"><div class="box" id="box"></div></div></details></section>
-<section class="panel result" id="answer" hidden><h2>器物与出处</h2><div id="lines"></div></section><footer class="sub">吴山编著《中国纹样全集》第一册。四个图版条目经扫描图核读。时代依据所属图版分期，材质据器名中的“陶”字。</footer>
-</main><script id="data" type="application/json">__BOOK_DATA__</script><script>
+__FOLIO_CSS__
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:#faf7ef;font:16px/1.55 system-ui,"Microsoft YaHei",sans-serif}.wrap{width:min(1160px,92%);margin:auto}
+.mast{background:#292521;color:#f8f0e3;border-bottom:4px solid #984d36}.mast .wrap{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:13px 0}.mast strong{font:600 22px var(--serif);letter-spacing:.09em}.mast span{font-size:13px;color:#dccfbf}
+nav{display:flex;flex-wrap:wrap;gap:8px}.motif-tab{display:inline-flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border:1px solid var(--rule);background:transparent;color:var(--ink)}.motif-tab img{width:37px;height:31px;object-fit:cover}.motif-tab[aria-pressed=true]{border-color:var(--clay);box-shadow:inset 0 -2px var(--clay);color:var(--clay)}
+.section-title{font:600 27px var(--serif);margin:0}.columns{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);column-gap:26px;margin-top:28px;border-top:2px solid var(--ink);padding-top:18px}.network{overflow:auto;margin-top:12px}.network svg{display:block;width:100%;min-width:460px}.proof{border-left:1px solid var(--rule);padding-left:20px;min-width:0}.proof h3{font:600 21px var(--serif);margin:5px 0}.proof p{margin:5px 0}.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.tabs button,.result button{background:transparent;color:var(--ink);border:1px solid var(--rule);padding:4px 7px;font-size:13px}.tabs [aria-pressed=true]{background:var(--clay);color:white}.proof blockquote{margin:10px 0;padding-left:10px;border-left:2px solid var(--clay)}.scan{display:block;max-width:100%;max-height:100px;margin:10px 0}summary{cursor:pointer;color:var(--clay)}.page{position:relative;margin-top:8px}.page img{display:block;width:100%}.box{position:absolute;border:2px solid #b33821;background:#ffce3725}.result{margin-top:20px}.result button{margin:4px}.footnote{border-top:1px solid var(--rule);margin:26px 0 0;padding:16px 0 28px;font-size:12px;color:#66594c}.folio .folio-sub strong{font-weight:600;color:var(--clay)}.folio .folio-controls small{font:normal 13px system-ui;color:#695e52;margin-left:6px}
+@media(max-width:760px){.columns{grid-template-columns:1fr;gap:16px}.proof{border-left:0;border-top:1px solid var(--rule);padding:15px 0}.mast span{max-width:60%;text-align:right}.network svg{min-width:440px}}
+</style></head><body class="folio">
+<header class="mast"><div class="wrap"><strong>纹样图录</strong><span>吴山编著《中国纹样全集》第一册</span></div></header>
+<main class="wrap"><header class="folio-head"><div><p class="folio-sub" id="period"></p><h1 class="folio-title" id="heading"></h1></div><nav id="motifs" aria-label="选择纹样"></nav></header>
+<section aria-labelledby="compare"><div class="folio-controls"><h2 id="compare">图版对读<small id="count"></small></h2>
+<div class="switch" aria-label="图版视图"><button id="detail" type="button">纹样局部</button><button id="whole" type="button">器物全图</button></div></div>
+<div class="folio-gallery" id="plates"></div></section>
+<div class="columns"><section><div class="folio-bar"><h2 class="section-title">知识图谱</h2><button class="folio-link" id="ask">查询器物与出处</button></div>
+<div class="network"><svg id="network"></svg></div></section>
+<section class="proof" id="proof" tabindex="-1"><h2 class="section-title">原页证据</h2><h3 id="selected"></h3><p class="folio-sub" id="locator"></p><div class="tabs" id="edges"></div><strong id="claim"></strong><blockquote id="quote"></blockquote><img class="scan" id="caption" alt="原书文字区域"><details id="source"><summary id="proofLocator"></summary><div class="page"><img id="page" alt="完整原页"><div class="box" id="box"></div></div></details></section></div>
+<section class="result" id="answer" hidden><h2 class="section-title">器物与出处</h2><div id="lines"></div></section>
+<footer class="footnote">本选录收录四个图版条目。图像观察据扫描图，材质据器名，时代据原书图版分期。</footer></main>
+<dialog id="zoom" aria-labelledby="zoomTitle"><div class="folio-bar"><strong id="zoomTitle"></strong><button type="button" class="folio-link" id="closeZoom">关闭</button></div><img id="zoomImage" alt=""><p class="folio-sub" id="zoomLocator"></p></dialog>
+<script id="data" type="application/json">__BOOK_DATA__</script><script>
 __DRAW_NETWORK__
-const {manifest,images}=JSON.parse(document.getElementById('data').textContent);
-const $=id=>document.getElementById(id), img=url=>images[url.split('/').pop()];
-const titles={decorated_with:'饰有纹样',period:'所属时代',made_of:'材质',uses_technique:'工艺'};
-const rows=manifest.rows, links=rows.filter(r=>r.predicate==='decorated_with');
-const refs=new Map(manifest.evidence.map(e=>[e.id,e]));
-let groups=[], selected;
-function button(parent,label,action,active=false){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=action;b.setAttribute('aria-pressed',String(active));parent.append(b);return b}
-function show(id){
- selected=id;const r=rows.find(r=>r.id===id), g=groups.find(g=>g[0].artifactId===r.artifactId), item=g[0], e=refs.get(r.evidenceId);
- drawNetwork($('network'),groups,id,show);
- $('selected').textContent=item.artifact;$('locator').textContent=item.locator;
- $('detail').src=img(item.detailUrl);$('detail').alt=item.object+' · '+item.detailLabel;$('whole').src=img(item.imageUrl);$('whole').alt=item.artifact;$('detailLabel').textContent=item.detailLabel;
- $('objects').replaceChildren();for(const group of groups){const o=group[0];button($('objects'),o.artifact+'　·　'+o.locator,()=>show(o.id),o.artifactId===item.artifactId).classList.add('artifact')}
- $('edges').replaceChildren();for(const edge of g)button($('edges'),titles[edge.predicate]+' · '+edge.object,()=>show(edge.id),edge.id===id);
- $('claim').textContent=r.artifact+' → '+titles[r.predicate]+' → '+r.object;$('quote').textContent=e.text;
- $('proofLocator').textContent='打开原页 · '+e.locator;$('caption').src=img(e.captionUrl);$('page').src=img(e.previewUrl);
- const [x,y,x2,y2]=e.bbox;Object.assign($('box').style,{left:x*100+'%',top:y*100+'%',width:(x2-x)*100+'%',height:(y2-y)*100+'%'});
+const $ = id => document.getElementById(id);
+const {manifest, images} = JSON.parse($('data').textContent);
+const img = url => images[url.split('/').pop()];
+const titles = {decorated_with:'饰有纹样',period:'所属时代',made_of:'材质',uses_technique:'工艺'};
+const links = manifest.rows.filter(r => r.predicate === 'decorated_with');
+const refs = new Map(manifest.evidence.map(e => [e.id,e]));
+let groups = [], view = 'detail';
+function add(parent, tag, value, name) {
+  const el = document.createElement(tag);
+  if (value) el.textContent = value;
+  if (name) el.className = name;
+  parent.append(el);
+  return el;
 }
-function change(){const name=$('motifs').value;groups=links.filter(r=>r.object===name).map(l=>rows.filter(r=>r.artifactId===l.artifactId));
- $('heading').textContent=name;$('count').textContent=groups.length+' 件器物 · 点击图中关系可核对图版和出处';$('answer').hidden=true;$('source').open=false;show(groups[0][0].id)}
-$('ask').onclick=()=>{$('answer').hidden=false;$('lines').replaceChildren();for(const g of groups){const p=document.createElement('p');p.textContent=g[0].artifact+'（'+g[0].locator+'）　';$('lines').append(p);for(const r of g)button(p,titles[r.predicate]+' · '+r.object,()=>{show(r.id);$('source').open=true;$('claim').scrollIntoView()})}$('answer').scrollIntoView()};
-$('book').textContent=manifest.title;for(const n of new Set(links.map(r=>r.object)))$('motifs').add(new Option(n,n));$('motifs').onchange=change;change();
-</script></html>
+function button(parent, label, action, name) {
+  const el = add(parent,'button',label,name);
+  el.type = 'button'; el.onclick = action;
+  return el;
+}
+function pressed(el,state) { el.setAttribute('aria-pressed',String(state)); }
+function picture(row) {
+  return view === 'whole' ? [row.imageUrl,'器物全图'] : [row.detailUrl,row.detailLabel];
+}
+function zoom(row) {
+  const [url,label] = picture(row);
+  $('zoomTitle').textContent = row.artifact+' · '+label;
+  $('zoomImage').src = img(url); $('zoomImage').alt = row.artifact+' · '+label;
+  $('zoomLocator').textContent = row.findspot+'出土　｜　'+row.locator;
+  $('zoom').showModal();
+}
+function selectProof(row) {
+  show(row.id); $('source').open = true; $('proof').focus(); $('proof').scrollIntoView({block:'start'});
+}
+function plates() {
+  $('plates').replaceChildren();
+  pressed($('detail'),view === 'detail'); pressed($('whole'),view === 'whole');
+  for (const [row] of groups) {
+    const [url,label] = picture(row);
+    const card = add($('plates'),'figure','','folio-card');
+    const mat = add(card,'div','','folio-mat');
+    const photo = add(mat,'img'); photo.src = img(url); photo.alt = row.artifact+' · '+label;
+    const enlarge = button(mat,'放大',()=>zoom(row),'folio-zoom');
+    enlarge.setAttribute('aria-label','放大'+row.findspot+'出土的'+row.artifact+' · '+label);
+    const caption = add(card,'figcaption');
+    const head = add(caption,'div','','folio-caption');
+    const labels = add(head,'div');
+    add(labels,'p',row.findspot+'出土 · '+label,'folio-sub');
+    add(labels,'h3',row.artifact);
+    const proof = button(head,'查看出处',()=>selectProof(row),'folio-link');
+    proof.setAttribute('aria-label','查看'+row.findspot+'出土的'+row.artifact+'的出处');
+    add(caption,'p','图像观察 · '+row.observation,'folio-note');
+  }
+}
+function show(id) {
+  const group = groups.find(g => g.some(row => row.id === id));
+  const r = group.find(row => row.id === id), e = refs.get(r.evidenceId);
+  drawNetwork($('network'),groups,id,show);
+  $('selected').textContent = r.artifact;
+  $('locator').textContent = r.findspot+'出土　｜　'+r.locator;
+  const edgeFocused = $('edges').contains(document.activeElement);
+  $('edges').replaceChildren();
+  for (const row of group) {
+    const b = button($('edges'),titles[row.predicate]+' · '+row.object,()=>show(row.id));
+    pressed(b,row.id === id);
+    if (edgeFocused && row.id === id) b.focus();
+  }
+  $('claim').textContent = r.artifact+' → '+titles[r.predicate]+' → '+r.object;
+  $('quote').textContent = e.text;
+  $('proofLocator').textContent = '查看带标注的原页 · '+e.locator;
+  $('caption').src = img(e.captionUrl); $('page').src = img(e.previewUrl);
+  const [x,y,x2,y2] = e.bbox;
+  Object.assign($('box').style,{left:x*100+'%',top:y*100+'%',width:(x2-x)*100+'%',height:(y2-y)*100+'%'});
+}
+function change(name) {
+  groups = links.filter(r=>r.object===name).map(link=>manifest.rows.filter(r=>r.artifactId===link.artifactId));
+  for (const b of $('motifs').children) pressed(b,b.dataset.motif===name);
+  $('heading').textContent = name; $('count').textContent = groups.length+' 件器物';
+  $('period').textContent = [...new Set(groups.flat().filter(r=>r.predicate==='period').map(r=>r.object))].join('、')+' · 彩陶';
+  $('answer').hidden = true; $('source').open = false;
+  plates(); show(groups[0][0].id);
+}
+for (const name of new Set(links.map(r=>r.object))) {
+  const row = links.find(r=>r.object===name);
+  const b = button($('motifs'),'',()=>change(name),'motif-tab');
+  b.dataset.motif = name;
+  const thumb = add(b,'img'); thumb.src = img(row.detailUrl); thumb.alt = '';
+  add(b,'span',name);
+}
+$('detail').onclick = () => { view = 'detail'; plates(); };
+$('whole').onclick = () => { view = 'whole'; plates(); };
+$('closeZoom').onclick = () => $('zoom').close();
+$('zoom').onclick = event => { if(event.target === $('zoom')) { const r = event.target.getBoundingClientRect();
+    if(event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom) $('zoom').close(); }
+};
+$('ask').onclick = () => {
+  $('answer').hidden = false; $('lines').replaceChildren();
+  for (const g of groups) {
+    const p = add($('lines'),'p',g[0].artifact+'（'+g[0].findspot+' · '+g[0].locator+'） ');
+    for (const r of g) button(p,titles[r.predicate]+' · '+r.object,()=>selectProof(r));
+  }
+  $('answer').scrollIntoView();
+};
+change(links[0].object);
+</script></body></html>
