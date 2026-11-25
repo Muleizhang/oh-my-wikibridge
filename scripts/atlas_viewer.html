@@ -1,0 +1,3854 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>纹样星图</title>
+<style>
+:root {
+  --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-theme="dark"] {
+  --bg: #090b10;
+  --bg-elev: rgba(16, 19, 27, 0.78);
+  --bg-solid: #11141d;
+  --bg-card: rgba(20, 24, 34, 0.68);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --ink: #efece4;
+  --ink-2: #a8a397;
+  --ink-3: #6c685f;
+  --line: rgba(239, 236, 228, 0.11);
+  --line-strong: rgba(239, 236, 228, 0.22);
+  --accent: #d8b377;
+  --accent-soft: rgba(216, 179, 119, 0.15);
+  --accent-ink: #12100d;
+  --era-color: #d4a66a;
+  --mat-color: #7ca896;
+  --motif-color: #ce8264;
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  --canvas-bg: #090b10;
+  --canvas-glow: #141925;
+}
+
+html[data-theme="light"] {
+  --bg: #f8f6f1;
+  --bg-elev: rgba(252, 250, 245, 0.84);
+  --bg-solid: #fcfaf5;
+  --bg-card: rgba(255, 254, 250, 0.88);
+  --bg-hover: rgba(28, 26, 23, 0.05);
+  --ink: #1e1c19;
+  --ink-2: #625c53;
+  --ink-3: #968f84;
+  --line: rgba(30, 28, 25, 0.10);
+  --line-strong: rgba(30, 28, 25, 0.22);
+  --accent: #8f4e32;
+  --accent-soft: rgba(143, 78, 50, 0.10);
+  --accent-ink: #fcfaf5;
+  --era-color: #8b6830;
+  --mat-color: #3f6f5c;
+  --motif-color: #9b4b32;
+  --shadow: 0 18px 46px rgba(30, 26, 20, 0.12);
+  --canvas-bg: #f8f6f1;
+  --canvas-glow: #efeae0;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  transition: background 0.35s var(--ease), color 0.35s var(--ease);
+}
+
+button, input, select {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Top Floating Navigation ── */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 22px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: start;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: opacity 0.2s;
+}
+.brand:hover { opacity: 0.8; }
+.brand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+}
+.brand-name {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.nav-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+}
+.nav-tabs button {
+  padding: 5px 15px;
+  border-radius: 999px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  transition: all 0.22s var(--ease);
+}
+.nav-tabs button:hover { color: var(--ink); }
+.nav-tabs button[aria-current="page"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+
+.top-actions {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.icon-pill {
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  transition: all 0.2s var(--ease);
+}
+.icon-pill:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+.icon-pill kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+.icon-pill svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Main Stage Container ── */
+.stage-view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.canvas-layer:active { cursor: grabbing; }
+.canvas-layer.pointer { cursor: pointer; }
+
+/* ── River Homepage Overlay ── */
+.river-hero {
+  position: fixed;
+  top: 72px;
+  left: 28px;
+  z-index: 20;
+  pointer-events: none;
+  transition: opacity 0.4s var(--ease);
+}
+.river-hero h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+}
+.river-hero p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-2);
+  letter-spacing: 0.18em;
+}
+
+.river-dock {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: 18px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 16px;
+  border-radius: 16px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  flex-wrap: wrap;
+}
+.dock-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.dock-label {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.dock-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+  margin: 0 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: all 0.2s var(--ease);
+}
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+.chip[aria-pressed="true"], .chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.chip .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.chip .num {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.65;
+}
+
+/* ── Graph HUD Overlay ── */
+.graph-hud-top {
+  position: fixed;
+  top: 68px;
+  left: 22px;
+  right: 22px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+  flex-wrap: wrap;
+}
+.graph-hud-top > * { pointer-events: auto; }
+
+.focus-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 6px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.back-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  transition: all 0.18s;
+}
+.back-btn:hover { background: var(--bg-hover); color: var(--ink); }
+.back-btn:disabled { opacity: 0.3; cursor: default; }
+
+.focus-kind {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+.focus-kind.era { background: rgba(212, 166, 106, 0.18); color: var(--era-color); }
+.focus-kind.material { background: rgba(124, 168, 150, 0.18); color: var(--mat-color); }
+.focus-kind.motif { background: rgba(206, 130, 100, 0.18); color: var(--motif-color); }
+
+.focus-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 10px 2px 4px;
+  border-radius: 999px;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  transition: background 0.18s;
+}
+.focus-picker-btn:hover { background: var(--bg-hover); }
+.focus-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  padding-right: 6px;
+}
+
+.trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  max-width: 340px;
+  overflow: hidden;
+}
+.trail button {
+  font-size: 12px;
+  color: var(--ink-3);
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.trail button:hover { color: var(--ink); background: var(--bg-hover); }
+.trail span { font-size: 11px; color: var(--ink-3); opacity: 0.5; }
+
+.graph-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.seg {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.seg button {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ink-2);
+  transition: all 0.2s var(--ease);
+  white-space: nowrap;
+}
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+
+.graph-hud-bottom {
+  position: fixed;
+  left: 22px;
+  bottom: 18px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.graph-hud-bottom > * { pointer-events: auto; }
+.cluster-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100vw - 220px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+}
+.cluster-strip::-webkit-scrollbar { display: none; }
+
+.zoom-pad {
+  position: fixed;
+  right: 22px;
+  bottom: 18px;
+  z-index: 24;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+}
+.zoom-pad button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.zoom-pad button:hover { background: var(--bg-hover); color: var(--ink); }
+.zoom-pad .reset-btn { width: auto; padding: 0 10px; border-radius: 999px; font-size: 11px; }
+
+/* ── Entity Switcher Popover ── */
+.switcher-pop {
+  position: fixed;
+  top: 120px;
+  left: 22px;
+  width: min(390px, calc(100vw - 44px));
+  max-height: min(62vh, 500px);
+  z-index: 45;
+  border-radius: 16px;
+  background: var(--bg-solid);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.switcher-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--line);
+  padding: 6px;
+  gap: 4px;
+}
+.switcher-tabs button {
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.switcher-tabs button[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+.switcher-search {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  width: 100%;
+}
+.switcher-list {
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: start;
+}
+
+/* ── Floating Tooltip on Canvas ── */
+.canvas-tip {
+  position: fixed;
+  z-index: 35;
+  pointer-events: none;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  max-width: 260px;
+  transform: translate(14px, -50%);
+  transition: opacity 0.14s ease;
+}
+.canvas-tip strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.canvas-tip .tip-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.canvas-tip .tip-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.canvas-tip .tip-hint {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+/* ── Minimal Specimen & Evidence Slide-Over Drawer ── */
+.drawer {
+  position: fixed;
+  top: 66px;
+  right: 18px;
+  bottom: 18px;
+  width: min(370px, calc(100vw - 36px));
+  z-index: 42;
+  border-radius: 18px;
+  background: var(--bg-elev);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateX(0);
+  transition: transform 0.3s var(--ease), opacity 0.25s var(--ease);
+}
+.drawer.closed {
+  transform: translateX(calc(100% + 28px));
+  opacity: 0;
+  pointer-events: none;
+}
+.drawer-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.drawer-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.drawer-loc {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drawer-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+}
+.drawer-close:hover { background: var(--bg-hover); color: var(--ink); }
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.drawer-figure {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.08);
+  border: 1px solid var(--line);
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  cursor: zoom-in;
+}
+.drawer-figure img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+html[data-theme="dark"] .drawer-figure.mono img {
+  filter: invert(0.92) sepia(0.24) saturate(1.1) brightness(0.96) contrast(1.1);
+}
+html[data-theme="light"] .drawer-figure.mono img {
+  mix-blend-mode: multiply;
+  filter: contrast(1.12);
+}
+.drawer-fig-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+
+.rel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rel-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.rel-label {
+  font-size: 11px;
+  color: var(--ink-3);
+  width: 34px;
+  flex: none;
+}
+.rel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.jump-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  transition: all 0.18s var(--ease);
+}
+.jump-pill:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.jump-pill.era { border-color: rgba(212, 166, 106, 0.35); color: var(--era-color); }
+.jump-pill.material { border-color: rgba(124, 168, 150, 0.35); color: var(--mat-color); }
+.jump-pill.motif { border-color: rgba(206, 130, 100, 0.35); color: var(--motif-color); }
+.jump-pill::after {
+  content: "↗";
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.proof-box {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.proof-quote {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: pre-line;
+}
+.proof-caption-img {
+  max-width: 100%;
+  max-height: 76px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+html[data-theme="dark"] .proof-caption-img {
+  filter: invert(0.92) sepia(0.12) contrast(1.1);
+}
+.proof-page-wrap {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.proof-page-wrap img { display: block; width: 100%; }
+.bbox {
+  position: absolute;
+  border: 1.5px solid #e05a3f;
+  background: rgba(224, 90, 63, 0.14);
+  pointer-events: none;
+}
+.mini-link {
+  font-size: 12px;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.mini-link:hover { text-decoration: underline; }
+
+/* ── View 3: Catalog (MUSEO Morandi Grid) ── */
+.scroll-view {
+  position: fixed;
+  inset: 54px 0 0 0;
+  overflow-y: auto;
+  padding: 28px clamp(18px, 4vw, 52px) 64px;
+  background: var(--bg);
+}
+.view-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+.catalog-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.catalog-bar h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.entity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.entity-card {
+  position: relative;
+  text-align: left;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.24s var(--ease);
+  overflow: hidden;
+}
+.entity-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--card-tint, var(--accent));
+  opacity: 0.65;
+}
+.entity-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+.entity-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.entity-card h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.entity-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.entity-thumbs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 44px;
+}
+.entity-thumbs img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--bg-solid);
+  margin-left: -8px;
+  background: var(--bg-solid);
+}
+.entity-thumbs img:first-child { margin-left: 0; }
+.entity-subchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.entity-subchips span {
+  font-size: 11px;
+  color: var(--ink-2);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+}
+.entity-cta {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-3);
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.entity-card:hover .entity-cta { color: var(--accent); }
+
+.specimen-section {
+  margin-top: 34px;
+}
+.specimen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.specimen-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.specimen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  gap: 12px;
+}
+.spec-card {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s var(--ease);
+}
+.spec-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+}
+.spec-img-wrap {
+  aspect-ratio: 1 / 1;
+  background: rgba(128, 128, 128, 0.06);
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.spec-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.spec-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.spec-title {
+  font-family: var(--serif);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.spec-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.spec-tags button {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  transition: all 0.16s;
+}
+.spec-tags button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── View 4: Original PDF Pages ── */
+.pages-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 28px;
+  align-items: start;
+}
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.page-toolbar h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+}
+.page-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.page-nav input {
+  width: 62px;
+  text-align: center;
+  padding: 4px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.scan-frame {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.scan-frame img { display: block; width: 100%; }
+.page-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page-item-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.18s;
+}
+.page-item-card:hover, .page-item-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.page-item-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.page-item-title strong {
+  font-family: var(--serif);
+  font-size: 15px;
+}
+.page-item-title small {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* ── Command Palette (⌘K Search) ── */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(5, 7, 11, 0.56);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: start center;
+  padding-top: min(14vh, 110px);
+}
+.palette {
+  width: min(560px, calc(100vw - 32px));
+  max-height: 70vh;
+  border-radius: 18px;
+  background: var(--bg-solid);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.palette input {
+  padding: 15px 18px;
+  font-size: 15px;
+  border-bottom: 1px solid var(--line);
+  width: 100%;
+}
+.palette-results {
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.palette-group {
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.1em;
+  padding: 8px 10px 4px;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background 0.15s;
+}
+.palette-item:hover, .palette-item.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.palette-item small {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* ── Lightbox Modal ── */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(6, 7, 10, 0.88);
+  backdrop-filter: blur(12px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  cursor: zoom-out;
+}
+.lightbox-inner {
+  max-width: min(94vw, 1080px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: default;
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+}
+.lightbox-cap {
+  color: #e8e4dc;
+  font-family: var(--serif);
+  font-size: 14px;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 820px) {
+  .topbar { grid-template-columns: auto 1fr auto; padding: 0 12px; }
+  .brand-sub, .icon-pill kbd, .trail { display: none; }
+  .nav-tabs button { padding: 5px 10px; font-size: 12px; }
+  .river-hero { top: 64px; left: 16px; }
+  .river-dock { left: 10px; right: 10px; bottom: 10px; padding: 8px 10px; gap: 8px; }
+  .graph-hud-top { left: 10px; right: 10px; top: 62px; }
+  .cluster-strip { max-width: calc(100vw - 140px); }
+  .pages-layout { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <button type="button" class="brand" id="brandHome" title="返回历史长河">
+    <span class="brand-dot"></span>
+    <span class="brand-name" id="brandTitle">纹样星图</span>
+    <span class="brand-sub" id="brandSub"></span>
+  </button>
+
+  <nav class="nav-tabs" aria-label="主视图">
+    <button type="button" data-view="river">历史长河</button>
+    <button type="button" data-view="graph">聚类图谱</button>
+    <button type="button" data-view="catalog">图录</button>
+    <button type="button" data-view="pages">原页</button>
+  </nav>
+
+  <div class="top-actions">
+    <button type="button" class="icon-pill" id="openSearch" aria-label="快速跳转">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <span>跳转</span>
+      <kbd>/</kbd>
+    </button>
+    <button type="button" class="icon-pill" id="themeToggle" aria-label="切换明暗主题">
+      <svg id="themeIcon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <span id="themeLabel">深空</span>
+    </button>
+  </div>
+</header>
+
+<!-- View 1: Full-Bleed Historical River Homepage -->
+<section class="stage-view" id="view-river">
+  <canvas class="canvas-layer" id="riverCanvas"></canvas>
+  <div class="river-hero" id="riverHero">
+    <h1 id="riverHeading">纹样长河</h1>
+    <p id="riverSub">时代 · 材质 · 纹样</p>
+  </div>
+  <div class="river-dock">
+    <div class="dock-group" id="riverEras"></div>
+    <span class="dock-sep"></span>
+    <div class="dock-group" id="riverMats"></div>
+    <div class="dock-group" style="margin-left:auto">
+      <button type="button" class="chip" id="riverDatedToggle" aria-pressed="false" title="仅显示带有明确时代标注的条目">仅已定代</button>
+    </div>
+  </div>
+</section>
+
+<!-- View 2: Clustered 2D / 3D Knowledge Graph -->
+<section class="stage-view" id="view-graph" hidden>
+  <canvas class="canvas-layer" id="graphCanvas"></canvas>
+
+  <div class="graph-hud-top">
+    <div class="focus-bar">
+      <button type="button" class="back-btn" id="graphBack" title="返回上一节点" aria-label="返回">←</button>
+      <span class="focus-kind" id="focusKind">时代</span>
+      <button type="button" class="focus-picker-btn" id="openSwitcher">
+        <span id="focusLabel"></span>
+        <span style="font-size:11px;opacity:.55">▾</span>
+      </button>
+      <span class="focus-meta" id="focusMeta"></span>
+      <div class="trail" id="graphTrail"></div>
+    </div>
+
+    <div class="graph-controls">
+      <div class="seg" id="clusterSwitch" aria-label="聚类维度"></div>
+      <div class="seg" id="dimSwitch" aria-label="维度模式">
+        <button type="button" data-dim="2d">2D 星图</button>
+        <button type="button" data-dim="3d">3D 星轨</button>
+      </div>
+      <button type="button" class="icon-pill" id="toggleUnlabeled" aria-pressed="true" title="显示或隐藏未标注聚类项">含待补项</button>
+    </div>
+  </div>
+
+  <div class="graph-hud-bottom">
+    <div class="cluster-strip" id="clusterStrip"></div>
+  </div>
+
+  <div class="zoom-pad">
+    <button type="button" id="zoomOut" aria-label="缩小">−</button>
+    <button type="button" id="zoomIn" aria-label="放大">＋</button>
+    <button type="button" class="reset-btn" id="zoomReset">复位</button>
+  </div>
+</section>
+
+<!-- Entity Switcher Popover -->
+<div class="switcher-pop" id="switcherPop" hidden>
+  <div class="switcher-tabs" id="switcherTabs">
+    <button type="button" data-kind="era">时代</button>
+    <button type="button" data-kind="material">材质</button>
+    <button type="button" data-kind="motif">纹样</button>
+  </div>
+  <input type="search" class="switcher-search" id="switcherSearch" placeholder="筛选时代、材质或纹样…">
+  <div class="switcher-list" id="switcherList"></div>
+</div>
+
+<!-- View 3: Morandi Grid Catalog -->
+<section class="scroll-view" id="view-catalog" hidden>
+  <div class="view-inner">
+    <div class="catalog-bar">
+      <h1 id="catalogTitle">图录索引</h1>
+      <div class="seg" id="catalogTabs">
+        <button type="button" data-cat="era">按时代</button>
+        <button type="button" data-cat="material">按材质</button>
+        <button type="button" data-cat="motif">按纹样</button>
+      </div>
+    </div>
+    <div class="entity-grid" id="catalogGrid"></div>
+    <div class="specimen-section" id="catalogSpecimens">
+      <div class="specimen-head">
+        <h2 id="specimenHeading">全部条目</h2>
+        <div class="dock-group" id="specimenPager"></div>
+      </div>
+      <div class="specimen-grid" id="specimenGrid"></div>
+    </div>
+  </div>
+</section>
+
+<!-- View 4: Original PDF Pages -->
+<section class="scroll-view" id="view-pages" hidden>
+  <div class="view-inner">
+    <div class="page-toolbar">
+      <h1 id="pageTitle">原页核读</h1>
+      <form class="page-nav" id="pageForm">
+        <button type="button" class="icon-pill" id="prevPage">上一页</button>
+        <input type="number" id="pageInput" min="1" value="1" aria-label="页码">
+        <span id="pageTotal" style="font-size:12px;color:var(--ink-3)"></span>
+        <button type="submit" class="icon-pill">跳转</button>
+        <button type="button" class="icon-pill" id="nextPage">下一页</button>
+      </form>
+    </div>
+    <div class="pages-layout">
+      <div class="scan-frame">
+        <img id="pageScan" alt="原页扫描">
+        <div class="bbox" id="pageBbox" hidden></div>
+      </div>
+      <div class="page-items" id="pageItems"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Canvas Hover Tooltip -->
+<div class="canvas-tip" id="canvasTip" hidden></div>
+
+<!-- Minimal Specimen & Proof Slide-Over Drawer -->
+<aside class="drawer closed" id="drawer" aria-label="器物与证据">
+  <div class="drawer-head">
+    <div>
+      <h2 id="drawerTitle"></h2>
+      <div class="drawer-loc">
+        <span id="drawerLoc"></span>
+        <button type="button" class="mini-link" id="drawerGotoPage">原页 ↗</button>
+      </div>
+    </div>
+    <button type="button" class="drawer-close" id="drawerClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-figure" id="drawerFig" title="点击放大">
+      <img id="drawerImg" alt="">
+      <span class="drawer-fig-badge" id="drawerFigBadge">点击放大</span>
+    </div>
+    <div class="rel-section" id="drawerRels"></div>
+    <div class="proof-box" id="drawerProof">
+      <blockquote class="proof-quote" id="drawerQuote"></blockquote>
+      <img class="proof-caption-img" id="drawerCapImg" alt="原书图注">
+      <div class="proof-page-wrap" id="drawerPageWrap" title="前往原页视图">
+        <img id="drawerPageImg" alt="原页定位">
+        <div class="bbox" id="drawerBbox"></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- Quick Jump Command Palette -->
+<div class="palette-backdrop" id="paletteBackdrop" hidden>
+  <div class="palette" role="dialog" aria-label="快速跳转">
+    <input type="search" id="paletteInput" placeholder="搜索纹样、时代、材质、器物或页码…">
+    <div class="palette-results" id="paletteResults"></div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" hidden>
+  <div class="lightbox-inner">
+    <img id="lightboxImg" alt="">
+    <div class="lightbox-cap" id="lightboxCap"></div>
+  </div>
+</div>
+
+<script id="data" type="application/json">__MANIFEST_JSON__</script>
+<script>
+(() => {
+  'use strict';
+
+  /* ═══════════════════════════════════════════════════════════════
+     1. Generic Knowledge Graph Engine (Zero Book-Specific Rules)
+     ═══════════════════════════════════════════════════════════════ */
+
+  // Universal Chinese historical chronology table (works across Vol 1, 2, 3 & any future volume)
+  const DYNASTY_TABLE = [
+    { group: '新石器时代', re: /新石器|原始社会|仰韶|半坡|庙底沟|马家窑|半山|马厂|河姆渡|良渚|龙山|大汶口|红山|裴李岗|磁山|屈家岭|马家浜|大溪/ },
+    { group: '夏代', re: /夏代|二里头|夏文化/ },
+    { group: '商代', re: /商|殷/ },
+    { group: '西周', re: /西周/ },
+    { group: '东周', re: /东周/ },
+    { group: '春秋', re: /春秋/ },
+    { group: '战国', re: /战国/ },
+    { group: '秦代', re: /秦/ },
+    { group: '汉代', re: /西汉|东汉|两汉|汉/ },
+    { group: '三国', re: /三国|曹魏|蜀汉|孙吴/ },
+    { group: '魏晋南北朝', re: /魏晋|两晋|西晋|东晋|南北朝|北朝|南朝|十六国|北魏|东魏|西魏|北齐|北周/ },
+    { group: '隋代', re: /隋/ },
+    { group: '唐代', re: /唐/ },
+    { group: '五代', re: /五代|十国/ },
+    { group: '宋代', re: /北宋|南宋|宋|辽|金|西夏/ },
+    { group: '元代', re: /元/ },
+    { group: '明代', re: /明/ },
+    { group: '清代', re: /清/ },
+    { group: '近现代', re: /民国|近代|现代|当代/ },
+  ];
+
+  function eraChronology(label) {
+    if (!label) return { order: 999, group: '未标时代', sub: 5 };
+    let idx = DYNASTY_TABLE.findIndex(d => d.re.test(label));
+    const group = idx >= 0 ? DYNASTY_TABLE[idx].group : label;
+    if (idx < 0) idx = 500 + hashStr(label) % 100;
+    let sub = 4;
+    if (/初|早|前/.test(label)) sub = 1;
+    else if (/中/.test(label)) sub = 4;
+    else if (/后/.test(label)) sub = 7;
+    else if (/晚|末/.test(label)) sub = 9;
+    // Place 东周 seamlessly between 西周 and 春秋
+    return { order: idx * 10 + sub, group, sub };
+  }
+
+  function hashStr(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  // Generic mineral / Morandi color resolver for ANY material, era, or motif name
+  const MATERIAL_HUES = [
+    { re: /彩陶|红陶/, dark: '#D47F5B', light: '#A64D2C' },
+    { re: /白陶|瓷|青瓷/, dark: '#C7C1B2', light: '#6F6A5F' },
+    { re: /黑陶|灰陶/, dark: '#9A968F', light: '#524F4A' },
+    { re: /陶/, dark: '#C29B74', light: '#825F3E' },
+    { re: /青铜|铜/, dark: '#77A894', light: '#356B57' },
+    { re: /玉|翠|玛瑙/, dark: '#93B9A3', light: '#47725B' },
+    { re: /金/, dark: '#E0BE74', light: '#997428' },
+    { re: /银|锡/, dark: '#B6C0CC', light: '#5B6775' },
+    { re: /铁/, dark: '#8C94A0', light: '#4A515C' },
+    { re: /漆|朱/, dark: '#CD6D64', light: '#973831' },
+    { re: /木|竹/, dark: '#B48E65', light: '#785735' },
+    { re: /丝|锦|绣|绢|织|布|帛|罗|绫/, dark: '#A894C4', light: '#624E82' },
+    { re: /象牙|骨|角|牙|贝|蚌/, dark: '#D6C6A4', light: '#81704C' },
+    { re: /石|砖|瓦|壁画/, dark: '#93A3B8', light: '#4E5F75' },
+  ];
+
+  const MORANDI_PALETTE_DARK = [
+    '#D49B6A', '#7EA897', '#C97B63', '#8E9FC4', '#B79BC2',
+    '#CBB679', '#7FA5B5', '#C28A8E', '#97B08A', '#B89B82',
+  ];
+  const MORANDI_PALETTE_LIGHT = [
+    '#9A5C32', '#3B6E5B', '#9E4B35', '#475B82', '#6F507C',
+    '#8A7130', '#3E687A', '#8B4D54', '#4F6E44', '#7C6047',
+  ];
+
+  function colorFor(kind, name, theme = currentTheme()) {
+    if (!name || name.startsWith('未标')) return theme === 'dark' ? '#6D717C' : '#969189';
+    if (kind === 'material') {
+      const m = MATERIAL_HUES.find(r => r.re.test(name));
+      if (m) return theme === 'dark' ? m.dark : m.light;
+    }
+    const pal = theme === 'dark' ? MORANDI_PALETTE_DARK : MORANDI_PALETTE_LIGHT;
+    const idx = kind === 'era'
+      ? Math.max(0, DYNASTY_TABLE.findIndex(d => d.group === eraChronology(name).group))
+      : hashStr(kind + ':' + name);
+    return pal[idx % pal.length];
+  }
+
+  function hexAlpha(hex, a) {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+
+  function currentTheme() {
+    return document.documentElement.getAttribute('data-theme') || 'dark';
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     2. Build Normalized In-Memory Graph from Pure manifest.json
+     ═══════════════════════════════════════════════════════════════ */
+  function buildGraphModel(manifest) {
+    const evMap = new Map((manifest.evidence || []).map(e => [e.id, e]));
+    const rowsByArt = new Map();
+    for (const r of (manifest.rows || [])) {
+      if (!rowsByArt.has(r.artifactId)) rowsByArt.set(r.artifactId, []);
+      rowsByArt.get(r.artifactId).push(r);
+    }
+
+    // Build complete artifact list from manifest.items (fallback to unique rows if items absent)
+    const rawItems = (manifest.items && manifest.items.length)
+      ? manifest.items
+      : [...new Map((manifest.rows || []).map(r => [r.artifactId, r])).values()];
+
+    const items = rawItems.map((it, idx) => {
+      const rs = rowsByArt.get(it.artifactId) || [];
+      const periods = [...new Set(rs.filter(r => r.predicate === 'period').map(r => r.object))];
+      const materials = [...new Set(rs.filter(r => r.predicate === 'made_of').map(r => r.object))];
+      const motifs = [...new Set(rs.filter(r => r.predicate === 'decorated_with').map(r => r.object))];
+      const techniques = [...new Set(rs.filter(r => r.predicate === 'uses_technique').map(r => r.object))];
+      const eraGroups = [...new Set(periods.map(p => eraChronology(p).group))];
+      const ev = evMap.get(it.evidenceId) || {};
+      const thumbUrl = it.detailUrl || it.imageUrl || ev.previewUrl || '';
+      const plateUrl = it.imageUrl || it.detailUrl || ev.previewUrl || '';
+      return {
+        idx,
+        id: it.artifactId,
+        title: it.artifact || it.item || it.artifactId,
+        page: Number(it.page || ev.ordinal || 1),
+        locator: it.locator || ev.locator || '',
+        status: it.status || '',
+        findspot: it.findspot || '',
+        observation: it.observation || '',
+        quote: ev.text || it.quote || '',
+        periods,
+        eraGroups,
+        materials,
+        motifs,
+        techniques,
+        rows: rs,
+        thumbUrl,
+        plateUrl,
+        captionUrl: it.captionUrl || ev.captionUrl || '',
+        pageUrl: ev.previewUrl || '',
+        bbox: ev.bbox || null,
+        hasPeriod: periods.length > 0,
+        hasRelation: periods.length > 0 || materials.length > 0 || motifs.length > 0,
+      };
+    });
+
+    // Aggregate canonical Era entries (grouped cleanly by dynasty family, preserving raw sub-periods)
+    const eraMap = new Map();
+    for (const it of items) {
+      for (const p of it.periods) {
+        const ch = eraChronology(p);
+        if (!eraMap.has(ch.group)) {
+          eraMap.set(ch.group, { id: ch.group, name: ch.group, order: ch.order, subPeriods: new Set(), items: [] });
+        }
+        const entry = eraMap.get(ch.group);
+        entry.subPeriods.add(p);
+        if (!entry.items.includes(it)) entry.items.push(it);
+        entry.order = Math.min(entry.order, ch.order);
+      }
+    }
+    const eras = [...eraMap.values()]
+      .sort((a, b) => a.order - b.order)
+      .map(e => ({ ...e, subPeriods: [...e.subPeriods].sort((a, b) => eraChronology(a).order - eraChronology(b).order), count: e.items.length }));
+
+    // Aggregate Materials (exact manifest values)
+    const matMap = new Map();
+    for (const it of items) {
+      for (const m of it.materials) {
+        if (!matMap.has(m)) matMap.set(m, { id: m, name: m, items: [] });
+        matMap.get(m).items.push(it);
+      }
+    }
+    const materials = [...matMap.values()]
+      .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, 'zh-Hans'))
+      .map(m => ({ ...m, count: m.items.length }));
+
+    // Aggregate Motifs (exact manifest values)
+    const motifMap = new Map();
+    for (const it of items) {
+      for (const mo of it.motifs) {
+        if (!motifMap.has(mo)) motifMap.set(mo, { id: mo, name: mo, items: [] });
+        motifMap.get(mo).items.push(it);
+      }
+    }
+    const motifs = [...motifMap.values()]
+      .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, 'zh-Hans'))
+      .map(m => ({ ...m, count: m.items.length }));
+
+    // Compute era timeline position [0.05..0.95] for each item (generic, no book hardcoding!)
+    const eraPos = new Map();
+    if (eras.length === 1) {
+      eraPos.set(eras[0].name, [0.15, 0.85]);
+    } else if (eras.length > 1) {
+      // Proportional allocation with clean minimum width per era so every era breathes
+      const weights = eras.map(e => Math.max(0.75, Math.pow(e.count, 0.42)));
+      const totalW = weights.reduce((s, w) => s + w, 0);
+      let cursor = 0.04;
+      const span = 0.92;
+      eras.forEach((e, i) => {
+        const w = (weights[i] / totalW) * span;
+        eraPos.set(e.name, [cursor, cursor + w]);
+        e.t0 = cursor;
+        e.t1 = cursor + w;
+        e.tMid = cursor + w * 0.5;
+        cursor += w;
+      });
+    }
+
+    // Compute affinity timeline center for each motif & material from dated items (purely for ambient drift layout)
+    const motifTime = new Map();
+    for (const mo of motifs) {
+      const ts = mo.items.filter(i => i.eraGroups.length).map(i => eraPos.get(i.eraGroups[0])?.[0] + (eraPos.get(i.eraGroups[0])?.[1] - eraPos.get(i.eraGroups[0])?.[0]) * 0.5).filter(Number.isFinite);
+      if (ts.length) motifTime.set(mo.name, ts.reduce((a, b) => a + b, 0) / ts.length);
+    }
+    const matTime = new Map();
+    for (const ma of materials) {
+      const ts = ma.items.filter(i => i.eraGroups.length).map(i => {
+        const seg = eraPos.get(i.eraGroups[0]);
+        return seg ? (seg[0] + seg[1]) * 0.5 : NaN;
+      }).filter(Number.isFinite);
+      if (ts.length) matTime.set(ma.name, ts.reduce((a, b) => a + b, 0) / ts.length);
+    }
+
+    for (const it of items) {
+      const r1 = (hashStr(it.id + ':x') % 10000) / 10000;
+      const r2 = (hashStr(it.id + ':y') % 10000) / 10000;
+      if (it.eraGroups.length && eraPos.has(it.eraGroups[0])) {
+        const [t0, t1] = eraPos.get(it.eraGroups[0]);
+        const ch = eraChronology(it.periods[0]);
+        // Slight sub-period progression inside the era band
+        const subBias = (ch.sub / 10) * 0.45 + r1 * 0.55;
+        it.riverT = t0 + (t1 - t0) * (0.1 + 0.8 * subBias);
+        it.riverLane = (r2 - 0.5) * 2; // [-1, 1] central river band
+      } else {
+        // Ambient undated item: drift gently across canvas (biased softly toward motif/material affinity if present, else golden spread)
+        let anchor = (it.idx * 0.6180339887) % 1;
+        for (const mo of it.motifs) { if (motifTime.has(mo)) { anchor = motifTime.get(mo) + (r1 - 0.5) * 0.24; break; } }
+        if (it.motifs.length === 0) {
+          for (const ma of it.materials) { if (matTime.has(ma)) { anchor = matTime.get(ma) + (r1 - 0.5) * 0.34; break; } }
+        }
+        it.riverT = Math.max(0.03, Math.min(0.97, anchor));
+        // Spread richly above and below the main river spine to fill the full screen
+        const side = (hashStr(it.id + ':side') % 2 === 0) ? 1 : -1;
+        it.riverLane = side * (0.28 + r2 * 0.68);
+      }
+    }
+
+    const pages = (manifest.pages && manifest.pages.length)
+      ? manifest.pages
+      : [...new Set(items.map(i => i.page))].sort((a, b) => a - b).map(p => ({
+          page: p,
+          previewUrl: items.find(i => i.page === p)?.pageUrl || '',
+          entries: items.filter(i => i.page === p).length,
+        }));
+
+    return {
+      title: manifest.title || '纹样知识图谱',
+      items,
+      itemById: new Map(items.map(i => [i.id, i])),
+      eras,
+      eraById: new Map(eras.map(e => [e.id, e])),
+      materials,
+      matById: new Map(materials.map(m => [m.id, m])),
+      motifs,
+      motifById: new Map(motifs.map(m => [m.id, m])),
+      pages,
+      evMap,
+    };
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     3. Smart Generic Circular Sprite Cache (Auto Color vs Ink)
+     ═══════════════════════════════════════════════════════════════ */
+  const spriteCache = new Map();
+  let onSpriteReady = () => {};
+
+  function getSprite(url) {
+    if (!url) return null;
+    let rec = spriteCache.get(url);
+    if (rec) return rec;
+    rec = { status: 'loading', isMono: false, dark: null, light: null };
+    spriteCache.set(url, rec);
+
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      try {
+        bakeMedallionSprites(img, rec);
+        rec.status = 'ready';
+      } catch {
+        rec.status = 'error';
+      }
+      onSpriteReady();
+    };
+    img.onerror = () => { rec.status = 'error'; };
+    img.src = url;
+    return rec;
+  }
+
+  function bakeMedallionSprites(img, rec) {
+    const sw = img.naturalWidth || img.width;
+    const sh = img.naturalHeight || img.height;
+    if (!sw || !sh) return;
+
+    // 1) Fast 64x64 analysis to auto-detect monochrome ink drawing vs color photograph
+    const aSize = 64;
+    const ac = document.createElement('canvas');
+    ac.width = aSize;
+    ac.height = aSize;
+    const actx = ac.getContext('2d', { willReadFrequently: true });
+    actx.drawImage(img, 0, 0, aSize, aSize);
+    const data = actx.getImageData(0, 0, aSize, aSize).data;
+
+    let satSum = 0, whiteCount = 0;
+    let minX = aSize, minY = aSize, maxX = 0, maxY = 0, inkCount = 0;
+    const total = aSize * aSize;
+
+    for (let y = 0; y < aSize; y++) {
+      for (let x = 0; x < aSize; x++) {
+        const i = (y * aSize + x) * 4;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        satSum += (mx - mn);
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (lum > 218) whiteCount++;
+        if (lum < 195 && x > 1 && x < aSize - 2 && y > 1 && y < aSize - 2) {
+          inkCount++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
+    const avgSat = satSum / total;
+    const whiteRatio = whiteCount / total;
+    const isMono = avgSat < 18 && whiteRatio > 0.30;
+    rec.isMono = isMono;
+
+    // Determine crisp source crop rectangle
+    let sx = 0, sy = 0, cw = sw, ch = sh;
+    if (isMono && inkCount > 25 && (maxX - minX) >= 8 && (maxY - minY) >= 8) {
+      // Tight crop around ink motif with balanced square framing
+      const pad = 3;
+      const bx1 = Math.max(0, minX - pad) / aSize * sw;
+      const by1 = Math.max(0, minY - pad) / aSize * sh;
+      const bx2 = Math.min(aSize, maxX + pad + 1) / aSize * sw;
+      const by2 = Math.min(aSize, maxY + pad + 1) / aSize * sh;
+      sx = bx1; sy = by1; cw = bx2 - bx1; ch = by2 - by1;
+    } else {
+      // Center square cover for color plates
+      const side = Math.min(sw, sh);
+      sx = (sw - side) * 0.5;
+      sy = (sh - side) * 0.5;
+      cw = side;
+      ch = side;
+    }
+
+    const sz = 128;
+    const rad = sz * 0.5;
+
+    if (!isMono) {
+      // Rich natural color circular medallion (used in both Dark & Light modes)
+      const c = document.createElement('canvas');
+      c.width = sz; c.height = sz;
+      const ctx = c.getContext('2d');
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(rad, rad, rad - 1, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, sx, sy, cw, ch, 0, 0, sz, sz);
+      // Gentle archival edge vignette
+      const vig = ctx.createRadialGradient(rad, rad, rad * 0.55, rad, rad, rad);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.22)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, sz, sz);
+      ctx.restore();
+      rec.dark = c;
+      rec.light = c;
+    } else {
+      // Render monochrome ink drawing onto clean buffer, then tint into Dark Gold-Ink & Light Sumi-Ink!
+      const raw = document.createElement('canvas');
+      raw.width = sz; raw.height = sz;
+      const rctx = raw.getContext('2d', { willReadFrequently: true });
+      rctx.fillStyle = '#ffffff';
+      rctx.fillRect(0, 0, sz, sz);
+      const scale = Math.min((sz - 20) / cw, (sz - 20) / ch);
+      const dw = cw * scale, dh = ch * scale;
+      rctx.drawImage(img, sx, sy, cw, ch, (sz - dw) * 0.5, (sz - dh) * 0.5, dw, dh);
+      const px = rctx.getImageData(0, 0, sz, sz).data;
+
+      // Dark sprite: obsidian disc (#141822) + glowing warm antique ivory/gold ink (#E7D2AE)
+      const dc = document.createElement('canvas');
+      dc.width = sz; dc.height = sz;
+      const dctx = dc.getContext('2d');
+      const dImg = dctx.createImageData(sz, sz);
+
+      // Light sprite: pure cotton paper (#FAF8F3) + crisp sumi charcoal ink (#221E1A)
+      const lc = document.createElement('canvas');
+      lc.width = sz; lc.height = sz;
+      const lctx = lc.getContext('2d');
+      const lImg = lctx.createImageData(sz, sz);
+
+      const rr = (rad - 1) * (rad - 1);
+      for (let y = 0; y < sz; y++) {
+        for (let x = 0; x < sz; x++) {
+          const dx = x - rad + 0.5, dy = y - rad + 0.5;
+          const dist2 = dx * dx + dy * dy;
+          const o = (y * sz + x) * 4;
+          if (dist2 > rr) {
+            dImg.data[o + 3] = 0;
+            lImg.data[o + 3] = 0;
+            continue;
+          }
+          const lum = 0.299 * px[o] + 0.587 * px[o + 1] + 0.114 * px[o + 2];
+          // Map ink intensity [0..1], cleanly suppressing paper bleed-through > 212
+          const ink = Math.max(0, Math.min(1, (214 - lum) / 168));
+          const edgeAlpha = dist2 > (rad - 2.5) * (rad - 2.5)
+            ? Math.max(0, Math.min(1, (rad - 1 - Math.sqrt(dist2)) / 1.5)) * 255
+            : 255;
+
+          // Dark medallion: interpolate obsidian (20,24,34) -> luminous warm gold-ivory (236,214,174)
+          dImg.data[o] = Math.round(20 + ink * 216);
+          dImg.data[o + 1] = Math.round(24 + ink * 190);
+          dImg.data[o + 2] = Math.round(34 + ink * 140);
+          dImg.data[o + 3] = Math.round(edgeAlpha);
+
+          // Light medallion: interpolate paper (250,248,243) -> sumi ink (34,30,26)
+          lImg.data[o] = Math.round(250 - ink * 216);
+          lImg.data[o + 1] = Math.round(248 - ink * 218);
+          lImg.data[o + 2] = Math.round(243 - ink * 217);
+          lImg.data[o + 3] = Math.round(edgeAlpha);
+        }
+      }
+      dctx.putImageData(dImg, 0, 0);
+      lctx.putImageData(lImg, 0, 0);
+      rec.dark = dc;
+      rec.light = lc;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     4. Application State & Router
+     ═══════════════════════════════════════════════════════════════ */
+  let G = null;
+
+  const state = {
+    view: 'river', // 'river' | 'graph' | 'catalog' | 'pages'
+    // River state
+    riverDatedOnly: false,
+    riverHighlightEra: null,
+    riverHighlightMat: null,
+    // Graph state
+    focusKind: 'era',      // 'era' | 'material' | 'motif'
+    focusId: '',
+    clusterBy: 'material', // 'era' | 'material' | 'motif'
+    dim: '2d',             // '2d' | '3d'
+    showUnlabeled: true,
+    history: [],           // navigation trail [{kind, id, clusterBy}]
+    // Catalog state
+    catalogTab: 'era',
+    catalogPage: 0,
+    // Pages state
+    currentPage: 1,
+    activePageItemId: null,
+    // Drawer
+    drawerItemId: null,
+  };
+
+  function defaultClusterFor(kind) {
+    if (kind === 'era') return 'material';   // 查看某时代的纹样 → 默认按材质聚类
+    if (kind === 'material') return 'motif'; // 查看某材质的纹样 → 默认按纹样聚类
+    return 'era';                            // 查看某纹样 → 默认按时代聚类
+  }
+
+  function clusterOptionsFor(kind) {
+    if (kind === 'era') return [['material', '按材质'], ['motif', '按纹样']];
+    if (kind === 'material') return [['motif', '按纹样'], ['era', '按时代']];
+    return [['era', '按时代'], ['material', '按材质']];
+  }
+
+  const KIND_LABEL = { era: '时代', material: '材质', motif: '纹样' };
+
+  const $ = id => document.getElementById(id);
+
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('atlas-theme', theme); } catch {}
+    $('themeLabel').textContent = theme === 'dark' ? '深空' : '宣纸';
+    $('themeIcon').innerHTML = theme === 'dark'
+      ? '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'
+      : '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4l1.4-1.4"/>';
+    if (G) {
+      renderRiverDock();
+      if (state.view === 'graph') renderGraphHud();
+      if (state.view === 'catalog') renderCatalog();
+    }
+  }
+
+  function openGraph(kind, id, opts = {}) {
+    // Normalize era sub-period to macro-era group if needed
+    if (kind === 'era' && !G.eraById.has(id)) {
+      const grp = eraChronology(id).group;
+      if (G.eraById.has(grp)) id = grp;
+    }
+    // Validate entity exists, fallback gracefully
+    if (kind === 'era' && !G.eraById.has(id)) id = G.eras[0]?.id || '';
+    if (kind === 'material' && !G.matById.has(id)) id = G.materials[0]?.id || '';
+    if (kind === 'motif' && !G.motifById.has(id)) id = G.motifs[0]?.id || '';
+    if (!id) {
+      // Fallback to whichever taxonomy has entries
+      if (G.eras.length) { kind = 'era'; id = G.eras[0].id; }
+      else if (G.materials.length) { kind = 'material'; id = G.materials[0].id; }
+      else if (G.motifs.length) { kind = 'motif'; id = G.motifs[0].id; }
+    }
+
+    const pushHistory = opts.pushHistory !== false;
+    if (pushHistory && state.view === 'graph' && (state.focusKind !== kind || state.focusId !== id)) {
+      state.history.push({ kind: state.focusKind, id: state.focusId, clusterBy: state.clusterBy });
+      if (state.history.length > 16) state.history.shift();
+    }
+
+    state.focusKind = kind;
+    state.focusId = id;
+    state.clusterBy = opts.clusterBy || defaultClusterFor(kind);
+    if (opts.dim) state.dim = opts.dim;
+    closeSwitcher();
+    switchView('graph', false);
+    rebuildGraphScene(true);
+    renderGraphHud();
+    syncHash();
+  }
+
+  function switchView(view, updateHash = true) {
+    state.view = view;
+    $('view-river').hidden = view !== 'river';
+    $('view-graph').hidden = view !== 'graph';
+    $('view-catalog').hidden = view !== 'catalog';
+    $('view-pages').hidden = view !== 'pages';
+    hideTip();
+    closeSwitcher();
+
+    document.querySelectorAll('.nav-tabs button').forEach(btn => {
+      if (btn.dataset.view === view) btn.setAttribute('aria-current', 'page');
+      else btn.removeAttribute('aria-current');
+    });
+
+    if (view === 'river') {
+      resizeRiver();
+    } else if (view === 'graph') {
+      if (!state.focusId) {
+        const defaultKind = G.eras.length ? 'era' : (G.materials.length ? 'material' : 'motif');
+        const defaultId = (defaultKind === 'era' ? G.eras[0]?.id : defaultKind === 'material' ? G.materials[0]?.id : G.motifs[0]?.id) || '';
+        state.focusKind = defaultKind;
+        state.focusId = defaultId;
+        state.clusterBy = defaultClusterFor(defaultKind);
+      }
+      resizeGraph();
+      rebuildGraphScene(false);
+      renderGraphHud();
+    } else if (view === 'catalog') {
+      renderCatalog();
+    } else if (view === 'pages') {
+      renderPage(state.currentPage);
+    }
+
+    if (updateHash) syncHash();
+  }
+
+  function syncHash() {
+    let next = '#river';
+    if (state.view === 'graph' && state.focusId) {
+      next = `#graph/${state.focusKind}/${encodeURIComponent(state.focusId)}?by=${state.clusterBy}&dim=${state.dim}`;
+    } else if (state.view === 'catalog') {
+      next = `#catalog/${state.catalogTab}`;
+    } else if (state.view === 'pages') {
+      next = `#page/${state.currentPage}`;
+    }
+    if (location.hash !== next) history.replaceState(null, '', next);
+  }
+
+  function applyHash() {
+    const raw = location.hash.slice(1);
+    if (!raw || raw === 'river') { switchView('river', false); return; }
+    const [path, qs] = raw.split('?');
+    const parts = path.split('/');
+    const params = new URLSearchParams(qs || '');
+    if (parts[0] === 'graph' && parts[1] && parts[2]) {
+      openGraph(parts[1], decodeURIComponent(parts[2]), {
+        clusterBy: params.get('by') || undefined,
+        dim: params.get('dim') === '3d' ? '3d' : (params.get('dim') === '2d' ? '2d' : undefined),
+        pushHistory: false,
+      });
+    } else if (parts[0] === 'catalog') {
+      state.catalogTab = ['era', 'material', 'motif'].includes(parts[1]) ? parts[1] : 'era';
+      switchView('catalog', false);
+    } else if (parts[0] === 'page') {
+      state.currentPage = Math.max(1, Math.min(G.pages.length, Number(parts[1]) || 1));
+      switchView('pages', false);
+    } else {
+      switchView('river', false);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     5. VIEW 1 — Full-Bleed Historical River Canvas Engine
+     ═══════════════════════════════════════════════════════════════ */
+  const river = {
+    canvas: null, ctx: null, w: 0, h: 0, dpr: 1,
+    panX: 0, panY: 0, zoom: 1,
+    targetPanX: 0, targetPanY: 0, targetZoom: 1,
+    mouseX: -9999, mouseY: -9999,
+    dragging: false, dragMoved: false, dragSX: 0, dragSY: 0,
+    hoveredItem: null, hoveredEra: null,
+    stars: [],
+    nodes: [],
+    lastTap: 0, lastTapId: null,
+  };
+
+  function initRiver() {
+    river.canvas = $('riverCanvas');
+    river.ctx = river.canvas.getContext('2d');
+    // Subtle ambient starfield
+    river.stars = Array.from({ length: 140 }, (_, i) => ({
+      x: ((i * 7919) % 10000) / 10000,
+      y: ((i * 104729) % 10000) / 10000,
+      r: 0.5 + (i % 5) * 0.28,
+      p: (i * 1.37) % (Math.PI * 2),
+      a: 0.08 + (i % 7) * 0.032,
+    }));
+
+    // Build river nodes
+    river.nodes = G.items.map((it, i) => ({
+      item: it,
+      baseR: it.hasPeriod ? (17 + (i % 4) * 3) : (12 + (i % 4) * 2.5),
+      phase: ((hashStr(it.id + ':ph') % 628) / 100),
+      ampY: 2.5 + (i % 5) * 1.1,
+      ampX: 1.5 + (i % 3) * 0.9,
+      sx: 0, sy: 0, sr: 14,
+    }));
+
+    // Pre-warm visible sprites cleanly
+    G.items.slice(0, 60).forEach(it => getSprite(it.thumbUrl));
+    setTimeout(() => G.items.slice(60).forEach(it => getSprite(it.thumbUrl)), 350);
+
+    renderRiverDock();
+    bindRiverEvents();
+    resizeRiver();
+  }
+
+  function renderRiverDock() {
+    const erasEl = $('riverEras');
+    erasEl.replaceChildren();
+    const eraLbl = document.createElement('span');
+    eraLbl.className = 'dock-label';
+    eraLbl.textContent = '时代';
+    erasEl.append(eraLbl);
+    for (const e of G.eras) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      const col = colorFor('era', e.name);
+      b.innerHTML = `<span class="dot" style="background:${col}"></span><span>${esc(e.name)}</span><span class="num">${e.count}</span>`;
+      b.onmouseenter = () => { river.hoveredEra = e.name; state.riverHighlightEra = e.name; };
+      b.onmouseleave = () => { river.hoveredEra = null; state.riverHighlightEra = null; };
+      b.onclick = () => openGraph('era', e.id);
+      erasEl.append(b);
+    }
+
+    const matsEl = $('riverMats');
+    matsEl.replaceChildren();
+    const matLbl = document.createElement('span');
+    matLbl.className = 'dock-label';
+    matLbl.textContent = '材质';
+    matsEl.append(matLbl);
+    for (const m of G.materials.slice(0, 8)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      const col = colorFor('material', m.name);
+      b.innerHTML = `<span class="dot" style="background:${col}"></span><span>${esc(m.name)}</span><span class="num">${m.count}</span>`;
+      b.onmouseenter = () => { state.riverHighlightMat = m.name; };
+      b.onmouseleave = () => { state.riverHighlightMat = null; };
+      b.onclick = () => openGraph('material', m.id);
+      matsEl.append(b);
+    }
+    if (G.materials.length > 8) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'chip';
+      more.textContent = `+${G.materials.length - 8}`;
+      more.onclick = () => { state.catalogTab = 'material'; switchView('catalog'); };
+      matsEl.append(more);
+    }
+  }
+
+  function resizeRiver() {
+    if (!river.canvas) return;
+    river.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    river.w = window.innerWidth;
+    river.h = window.innerHeight;
+    river.canvas.width = Math.round(river.w * river.dpr);
+    river.canvas.height = Math.round(river.h * river.dpr);
+  }
+
+  // Smooth river spine curve across full viewport width
+  function riverSpineY(t, h) {
+    const mid = h * 0.51;
+    const amp = Math.min(68, h * 0.085);
+    return mid + Math.sin(t * Math.PI * 2.1 - 0.55) * amp + Math.cos(t * Math.PI * 1.1) * (amp * 0.32);
+  }
+
+  function bindRiverEvents() {
+    const c = river.canvas;
+    c.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      river.dragging = true;
+      river.dragMoved = false;
+      river.dragSX = e.clientX;
+      river.dragSY = e.clientY;
+      c.setPointerCapture(e.pointerId);
+    });
+    c.addEventListener('pointermove', e => {
+      river.mouseX = e.clientX;
+      river.mouseY = e.clientY;
+      if (river.dragging) {
+        const dx = e.clientX - river.dragSX;
+        const dy = e.clientY - river.dragSY;
+        if (Math.hypot(dx, dy) > 4) river.dragMoved = true;
+        river.targetPanX += dx;
+        river.targetPanY += dy;
+        river.dragSX = e.clientX;
+        river.dragSY = e.clientY;
+        hideTip();
+        return;
+      }
+      hitTestRiver(e.clientX, e.clientY);
+    });
+    c.addEventListener('pointerup', e => {
+      if (!river.dragging) return;
+      river.dragging = false;
+      if (!river.dragMoved) {
+        hitTestRiver(e.clientX, e.clientY);
+        if (river.hoveredItem) {
+          const it = river.hoveredItem.item;
+          const now = performance.now();
+          if (river.lastTapId === it.id && now - river.lastTap < 360) {
+            // Double-click jumps directly to its clustered graph!
+            if (it.motifs.length) openGraph('motif', it.motifs[0]);
+            else if (it.materials.length) openGraph('material', it.materials[0]);
+            else if (it.eraGroups.length) openGraph('era', it.eraGroups[0]);
+          } else {
+            openDrawer(it.id);
+          }
+          river.lastTap = now;
+          river.lastTapId = it.id;
+        } else if (river.hoveredEra) {
+          openGraph('era', river.hoveredEra);
+        } else {
+          closeDrawer();
+        }
+      }
+    });
+    c.addEventListener('pointerleave', () => {
+      river.mouseX = -9999; river.mouseY = -9999;
+      river.hoveredItem = null; river.hoveredEra = null;
+      hideTip();
+    });
+    c.addEventListener('wheel', e => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      const nextZ = Math.max(0.75, Math.min(2.6, river.targetZoom * factor));
+      const ratio = nextZ / river.targetZoom;
+      const cx = e.clientX - river.w * 0.5;
+      const cy = e.clientY - river.h * 0.5;
+      river.targetPanX = cx - (cx - river.targetPanX) * ratio;
+      river.targetPanY = cy - (cy - river.targetPanY) * ratio;
+      river.targetZoom = nextZ;
+    }, { passive: false });
+    c.addEventListener('dblclick', e => {
+      if (!river.hoveredItem && !river.hoveredEra) {
+        river.targetPanX = 0; river.targetPanY = 0; river.targetZoom = 1;
+      }
+    });
+  }
+
+  function hitTestRiver(mx, my) {
+    let best = null, bestD = Infinity;
+    for (let i = river.nodes.length - 1; i >= 0; i--) {
+      const n = river.nodes[i];
+      if (state.riverDatedOnly && !n.item.hasPeriod) continue;
+      const d = Math.hypot(mx - n.sx, my - n.sy);
+      if (d <= n.sr + 5 && d < bestD) { best = n; bestD = d; }
+    }
+    river.hoveredItem = best;
+
+    // Also check clickable era header pills on the river canvas
+    let eraHit = null;
+    if (!best) {
+      for (const e of G.eras) {
+        if (e._hitBox) {
+          const [x1, y1, x2, y2] = e._hitBox;
+          if (mx >= x1 && mx <= x2 && my >= y1 && my <= y2) { eraHit = e.name; break; }
+        }
+      }
+    }
+    river.hoveredEra = eraHit;
+    river.canvas.classList.toggle('pointer', Boolean(best || eraHit));
+
+    if (best) {
+      const it = best.item;
+      const tags = [
+        ...it.periods.map(p => `<span class="tip-tag">${esc(p)}</span>`),
+        ...it.materials.map(m => `<span class="tip-tag">${esc(m)}</span>`),
+        ...it.motifs.slice(0, 3).map(m => `<span class="tip-tag">${esc(m)}</span>`),
+      ];
+      if (!tags.length) tags.push('<span class="tip-tag">未标关系</span>');
+      showTip(mx, my, `<strong>${esc(it.title)}</strong><div class="tip-tags">${tags.join('')}</div><div class="tip-hint">点击查看关系与出处 · 双击进入图谱</div>`);
+    } else if (eraHit) {
+      const eObj = G.eraById.get(eraHit);
+      showTip(mx, my, `<strong>${esc(eraHit)}</strong><div class="tip-tags"><span class="tip-tag">${eObj.count} 条图录</span><span class="tip-tag">默认按材质聚类</span></div><div class="tip-hint">点击进入时代 2D/3D 聚类图谱 →</div>`);
+    } else {
+      hideTip();
+    }
+  }
+
+  function drawRiver(timeSec) {
+    const { ctx, w, h, dpr } = river;
+    if (!w || !h) return;
+
+    // Smooth camera damping
+    river.panX += (river.targetPanX - river.panX) * 0.14;
+    river.panY += (river.targetPanY - river.panY) * 0.14;
+    river.zoom += (river.targetZoom - river.zoom) * 0.14;
+
+    const dark = currentTheme() === 'dark';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // 1) Rich Atmospheric Background
+    const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.48, 40, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
+    if (dark) {
+      bgGrad.addColorStop(0, '#131722');
+      bgGrad.addColorStop(0.55, '#0b0d14');
+      bgGrad.addColorStop(1, '#07080c');
+    } else {
+      bgGrad.addColorStop(0, '#fcfaf5');
+      bgGrad.addColorStop(0.65, '#f6f3eb');
+      bgGrad.addColorStop(1, '#eee9de');
+    }
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2) Starfield / Paper Grain Dots
+    for (const s of river.stars) {
+      const tw = 0.65 + 0.35 * Math.sin(timeSec * 0.9 + s.p);
+      ctx.fillStyle = dark
+        ? `rgba(232, 222, 200, ${(s.a * tw).toFixed(3)})`
+        : `rgba(60, 52, 42, ${(s.a * 0.45 * tw).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // World transform helper
+    const marginX = Math.max(48, w * 0.045);
+    const spanW = w - marginX * 2;
+    const toScreen = (wx, wy) => ({
+      x: w * 0.5 + (wx - w * 0.5) * river.zoom + river.panX,
+      y: h * 0.5 + (wy - h * 0.5) * river.zoom + river.panY,
+    });
+
+    // 3) Soft Era Nebula Washes along the Historical River
+    const activeEra = state.riverHighlightEra || river.hoveredEra;
+    for (const e of G.eras) {
+      const col = colorFor('era', e.name);
+      const wx = marginX + e.tMid * spanW;
+      const wy = riverSpineY(e.tMid, h);
+      const p = toScreen(wx, wy);
+      const rad = Math.max(130, (e.t1 - e.t0) * spanW * 0.68) * river.zoom;
+      const boost = activeEra === e.name ? 1.85 : 1.0;
+      const ng = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, rad);
+      ng.addColorStop(0, hexAlpha(col, (dark ? 0.14 : 0.09) * boost));
+      ng.addColorStop(0.55, hexAlpha(col, (dark ? 0.05 : 0.03) * boost));
+      ng.addColorStop(1, hexAlpha(col, 0));
+      ctx.fillStyle = ng;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4) Sweeping Multi-Strand River Stream Lines (Historical Current)
+    const strands = [-28, -10, 0, 11, 30];
+    strands.forEach((off, si) => {
+      ctx.beginPath();
+      const steps = 64;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const wx = marginX + t * spanW;
+        const wave = Math.sin(t * 7 + timeSec * 0.35 + si) * (si === 2 ? 2 : 5);
+        const wy = riverSpineY(t, h) + off + wave;
+        const p = toScreen(wx, wy);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = si === 2
+        ? (dark ? 'rgba(216,179,119,0.28)' : 'rgba(130,85,48,0.24)')
+        : (dark ? 'rgba(239,236,228,0.065)' : 'rgba(40,35,28,0.06)');
+      ctx.lineWidth = si === 2 ? 1.4 : 0.8;
+      ctx.setLineDash(si === 0 || si === 4 ? [3, 6] : []);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // 5) Compute live positions for all floating medallions
+    const verticalSpread = Math.min(h * 0.36, 270);
+    const hoveredMotifs = new Set(river.hoveredItem?.item.motifs || []);
+    const hoveredId = river.hoveredItem?.item.id || state.drawerItemId;
+    const activeMat = state.riverHighlightMat;
+
+    for (const n of river.nodes) {
+      const it = n.item;
+      const wx = marginX + it.riverT * spanW + Math.cos(timeSec * 0.42 + n.phase) * n.ampX;
+      const spine = riverSpineY(it.riverT, h);
+      const laneH = it.hasPeriod ? verticalSpread * 0.56 : verticalSpread * 0.96;
+      const wy = spine + it.riverLane * laneH + Math.sin(timeSec * 0.55 + n.phase) * n.ampY;
+      const p = toScreen(wx, wy);
+      n.sx = p.x;
+      n.sy = p.y;
+      n.sr = n.baseR * Math.pow(river.zoom, 0.72);
+    }
+
+    // 6) Motif Lineage Filaments across the River (subtle ambient + glowing on hover!)
+    if (hoveredMotifs.size > 0 && river.hoveredItem) {
+      const src = river.hoveredItem;
+      ctx.lineWidth = 1.25;
+      for (const n of river.nodes) {
+        if (n === src) continue;
+        if (state.riverDatedOnly && !n.item.hasPeriod) continue;
+        if (n.item.motifs.some(m => hoveredMotifs.has(m))) {
+          const col = colorFor('motif', n.item.motifs.find(m => hoveredMotifs.has(m)));
+          ctx.beginPath();
+          const mx = (src.sx + n.sx) * 0.5;
+          const my = (src.sy + n.sy) * 0.5 - Math.min(70, Math.abs(src.sx - n.sx) * 0.16);
+          ctx.moveTo(src.sx, src.sy);
+          ctx.quadraticCurveTo(mx, my, n.sx, n.sy);
+          ctx.strokeStyle = hexAlpha(col, dark ? 0.55 : 0.48);
+          ctx.stroke();
+        }
+      }
+    } else {
+      // Gentle constellation threads connecting same-era or same-motif neighbors along the stream
+      ctx.lineWidth = 0.65;
+      ctx.strokeStyle = dark ? 'rgba(216,179,119,0.08)' : 'rgba(60,52,42,0.07)';
+      for (const e of G.eras) {
+        const datedNodes = river.nodes.filter(n => n.item.eraGroups[0] === e.name).sort((a, b) => a.sx - b.sx);
+        if (datedNodes.length < 2) continue;
+        ctx.beginPath();
+        for (let i = 0; i < datedNodes.length - 1; i++) {
+          const a = datedNodes[i], b = datedNodes[i + 1];
+          if (Math.hypot(a.sx - b.sx, a.sy - b.sy) < 160 * river.zoom) {
+            ctx.moveTo(a.sx, a.sy);
+            ctx.lineTo(b.sx, b.sy);
+          }
+        }
+        ctx.stroke();
+      }
+    }
+
+    // 7) Draw Floating Pattern Medallions (ambient first, dated & highlighted on top!)
+    const ordered = [...river.nodes].sort((a, b) => {
+      const ah = a.item.id === hoveredId ? 2 : (a.item.hasPeriod ? 1 : 0);
+      const bh = b.item.id === hoveredId ? 2 : (b.item.hasPeriod ? 1 : 0);
+      return ah - bh;
+    });
+
+    for (const n of ordered) {
+      const it = n.item;
+      if (state.riverDatedOnly && !it.hasPeriod) continue;
+      if (n.sx < -40 || n.sx > w + 40 || n.sy < -40 || n.sy > h + 40) continue;
+
+      const isFocus = it.id === hoveredId;
+      const motifMatch = hoveredMotifs.size > 0 && it.motifs.some(m => hoveredMotifs.has(m));
+      const eraMatch = activeEra && it.eraGroups.includes(activeEra);
+      const matMatch = activeMat && it.materials.includes(activeMat);
+      const filtering = Boolean(activeEra || activeMat || hoveredMotifs.size > 0);
+      const highlighted = isFocus || motifMatch || eraMatch || matMatch;
+
+      let alpha = it.hasPeriod ? 0.94 : 0.62;
+      if (filtering) alpha = highlighted ? 1 : 0.14;
+
+      const r = isFocus ? n.sr * 1.28 : (highlighted && filtering ? n.sr * 1.1 : n.sr);
+      const ringCol = it.materials.length
+        ? colorFor('material', it.materials[0])
+        : (it.eraGroups.length ? colorFor('era', it.eraGroups[0]) : (dark ? '#9c9588' : '#7a7266'));
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // Soft outer halo on highlighted or dated nodes
+      if (highlighted || (dark && it.hasPeriod)) {
+        const glow = ctx.createRadialGradient(n.sx, n.sy, r * 0.7, n.sx, n.sy, r * (isFocus ? 2.1 : 1.55));
+        glow.addColorStop(0, hexAlpha(ringCol, isFocus ? 0.42 : (highlighted ? 0.28 : 0.14)));
+        glow.addColorStop(1, hexAlpha(ringCol, 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(n.sx, n.sy, r * (isFocus ? 2.1 : 1.55), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const sp = getSprite(it.thumbUrl);
+      const bmp = sp?.status === 'ready' ? (dark ? sp.dark : sp.light) : null;
+      if (bmp) {
+        ctx.drawImage(bmp, n.sx - r, n.sy - r, r * 2, r * 2);
+      } else {
+        ctx.fillStyle = dark ? '#191d28' : '#ebe6dc';
+        ctx.beginPath();
+        ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Crisp hairline ring
+      ctx.beginPath();
+      ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = isFocus
+        ? (dark ? '#f6dfb2' : '#8f4e32')
+        : hexAlpha(ringCol, highlighted ? 0.95 : (dark ? 0.55 : 0.48));
+      ctx.lineWidth = isFocus ? 2.2 : (highlighted ? 1.5 : 1.0);
+      ctx.stroke();
+
+      // Show short motif label directly below prominent nodes when zoomed in or highlighted
+      if ((isFocus || (highlighted && filtering) || (river.zoom > 1.35 && it.hasPeriod)) && (it.motifs[0] || it.title)) {
+        const lbl = it.motifs[0] || it.title.slice(0, 8);
+        ctx.font = `500 11px ${getComputedStyle(document.body).fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = dark ? 'rgba(239,236,228,0.92)' : 'rgba(30,28,25,0.88)';
+        ctx.fillText(lbl, n.sx, n.sy + r + 14);
+      }
+      ctx.restore();
+    }
+
+    // 8) Clickable Era Gate Markers along the River Horizon
+    for (const e of G.eras) {
+      const wx = marginX + e.tMid * spanW;
+      const wy = riverSpineY(e.tMid, h);
+      const p = toScreen(wx, wy);
+      const isHov = activeEra === e.name;
+      const col = colorFor('era', e.name);
+      const labelY = Math.max(108, p.y - Math.min(h * 0.25, 165) * Math.min(1.15, river.zoom));
+
+      // Delicate vertical time hairline dropping from Era header into the river spine
+      ctx.beginPath();
+      ctx.moveTo(p.x, labelY + 18);
+      ctx.lineTo(p.x, p.y);
+      ctx.strokeStyle = hexAlpha(col, isHov ? 0.55 : 0.20);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // River anchor diamond
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, isHov ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Serif Era Title Badge (clickable!)
+      ctx.font = `600 15px "Noto Serif SC","Songti SC",serif`;
+      const tw = ctx.measureText(e.name).width;
+      const padX = 14, bh = 28;
+      const bx = p.x - tw * 0.5 - padX;
+      const by = labelY - bh * 0.5;
+      e._hitBox = [bx, by, bx + tw + padX * 2, by + bh];
+
+      ctx.fillStyle = isHov
+        ? hexAlpha(col, dark ? 0.24 : 0.16)
+        : (dark ? 'rgba(13,16,24,0.72)' : 'rgba(252,250,245,0.82)');
+      roundRect(ctx, bx, by, tw + padX * 2, bh, 14);
+      ctx.fill();
+      ctx.strokeStyle = hexAlpha(col, isHov ? 0.88 : 0.36);
+      ctx.lineWidth = isHov ? 1.3 : 1;
+      ctx.stroke();
+
+      ctx.fillStyle = isHov ? (dark ? '#fff6e4' : col) : (dark ? '#efece4' : '#1e1c19');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(e.name, p.x, labelY + 0.5);
+      ctx.textBaseline = 'alphabetic';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     6. VIEW 2 — Clustered 2D / 3D Knowledge Graph Engine
+     ═══════════════════════════════════════════════════════════════ */
+  const graph = {
+    canvas: null, ctx: null, w: 0, h: 0, dpr: 1,
+    // 2D camera
+    panX: 0, panY: 0, zoom: 1,
+    targetPanX: 0, targetPanY: 0, targetZoom: 1,
+    // 3D camera
+    yaw: -0.32, pitch: 0.24, targetYaw: -0.32, targetPitch: 0.24,
+    velYaw: 0, velPitch: 0,
+    // Scene graph
+    core: null,
+    clusters: [],   // { id, name, kind, isUnlabeled, color, items, tx,ty,tz, x,y,z, r, sr, sx,sy,sz }
+    nodes: [],      // { item, cluster, tx,ty,tz, x,y,z, baseR, sx,sy,sz, sr }
+    hoveredNode: null,
+    hoveredCluster: null,
+    dragging: false, dragMoved: false, dragSX: 0, dragSY: 0,
+    stars: [],
+    morphT: 1,
+  };
+
+  function initGraph() {
+    graph.canvas = $('graphCanvas');
+    graph.ctx = graph.canvas.getContext('2d');
+    graph.stars = Array.from({ length: 110 }, (_, i) => ({
+      x: ((i * 6271) % 10000) / 10000,
+      y: ((i * 93563) % 10000) / 10000,
+      r: 0.5 + (i % 4) * 0.3,
+      a: 0.06 + (i % 6) * 0.025,
+    }));
+    bindGraphEvents();
+    resizeGraph();
+  }
+
+  function resizeGraph() {
+    if (!graph.canvas) return;
+    graph.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    graph.w = window.innerWidth;
+    graph.h = window.innerHeight;
+    graph.canvas.width = Math.round(graph.w * graph.dpr);
+    graph.canvas.height = Math.round(graph.h * graph.dpr);
+  }
+
+  function getFocalItems(kind, id) {
+    if (kind === 'era') return G.eraById.get(id)?.items || [];
+    if (kind === 'material') return G.matById.get(id)?.items || [];
+    if (kind === 'motif') return G.motifById.get(id)?.items || [];
+    return [];
+  }
+
+  function clusterKeysOf(item, clusterBy) {
+    if (clusterBy === 'era') return item.eraGroups.length ? item.eraGroups : ['未标时代'];
+    if (clusterBy === 'material') return item.materials.length ? item.materials : ['未标材质'];
+    return item.motifs.length ? item.motifs : ['未标纹样'];
+  }
+
+  function rebuildGraphScene(resetCamera = true) {
+    const items = getFocalItems(state.focusKind, state.focusId);
+    const groupMap = new Map();
+
+    for (const it of items) {
+      const keys = clusterKeysOf(it, state.clusterBy);
+      for (const k of keys) {
+        const isUnlabeled = k.startsWith('未标');
+        if (isUnlabeled && !state.showUnlabeled) continue;
+        if (!groupMap.has(k)) {
+          groupMap.set(k, { id: k, name: k, kind: state.clusterBy, isUnlabeled, items: [] });
+        }
+        const grp = groupMap.get(k);
+        if (!grp.items.includes(it)) grp.items.push(it);
+      }
+    }
+
+    let clusters = [...groupMap.values()];
+    if (state.clusterBy === 'era') {
+      clusters.sort((a, b) => {
+        if (a.isUnlabeled !== b.isUnlabeled) return a.isUnlabeled ? 1 : -1;
+        return eraChronology(a.name).order - eraChronology(b.name).order;
+      });
+    } else {
+      clusters.sort((a, b) => {
+        if (a.isUnlabeled !== b.isUnlabeled) return a.isUnlabeled ? 1 : -1;
+        return b.items.length - a.items.length || a.name.localeCompare(b.name, 'zh-Hans');
+      });
+    }
+
+    // Previous node coordinates for silky spring transitions
+    const prevNodePos = new Map(graph.nodes.map(n => [n.item.id + '|' + n.cluster.id, [n.x, n.y, n.z]]));
+    const prevClusPos = new Map(graph.clusters.map(c => [c.id, [c.x, c.y, c.z]]));
+
+    // Representative thumbnail for the focal center core
+    const repImg = items[0]?.thumbUrl || '';
+    graph.core = {
+      id: state.focusId,
+      name: state.focusId,
+      kind: state.focusKind,
+      count: items.length,
+      thumbUrl: repImg,
+      x: 0, y: 0, z: 0, r: 44, sx: 0, sy: 0, sr: 44,
+    };
+
+    // Compute clean, mathematically non-overlapping orbital constellation layout (2D & 3D!)
+    const is3D = state.dim === '3d';
+    const maxVisibleInCluster = c => c.isUnlabeled ? Math.min(c.items.length, 18) : c.items.length;
+
+    // Step A: size each cluster halo based on visible specimen count
+    for (const c of clusters) {
+      const cnt = maxVisibleInCluster(c);
+      c.shownItems = c.items.slice(0, cnt);
+      c.hiddenCount = c.items.length - cnt;
+      c.haloR = cnt <= 1 ? 52 : Math.min(138, 44 + 17.5 * Math.sqrt(cnt));
+      c.hubR = c.isUnlabeled ? 16 : 20;
+    }
+
+    // Step B: Partition into 1 or 2 concentric rings when there are many clusters so ZERO halos overlap!
+    const rings = [];
+    if (clusters.length <= 8) {
+      rings.push(clusters);
+    } else {
+      // Primary inner ring: top major clusters (up to 7); outer ring: remaining clusters
+      const innerCount = Math.min(7, Math.max(5, clusters.filter(c => !c.isUnlabeled && c.items.length >= 2).length));
+      rings.push(clusters.slice(0, innerCount));
+      rings.push(clusters.slice(innerCount));
+    }
+
+    let prevRingOuter = 82;
+    rings.forEach((ring, rIdx) => {
+      if (!ring.length) return;
+      const gap = 28;
+      const circumferenceNeeded = ring.reduce((s, c) => s + c.haloR * 2 + gap, 0);
+      const maxHalo = Math.max(...ring.map(c => c.haloR));
+      const minRadiusByCircum = ring.length === 1 ? 185 : circumferenceNeeded / (Math.PI * 2);
+      const ringRadius = Math.max(prevRingOuter + maxHalo + 36, minRadiusByCircum);
+      prevRingOuter = ringRadius + maxHalo;
+
+      // Allocate angular spans proportional to each cluster's haloR
+      const totalSpan = ring.reduce((s, c) => s + c.haloR + gap * 0.5, 0);
+      let angle = -Math.PI * 0.5 + (rIdx * 0.35);
+
+      ring.forEach((c, ci) => {
+        const wedge = ((c.haloR + gap * 0.5) / totalSpan) * Math.PI * 2;
+        const midA = angle + wedge * 0.5;
+        angle += wedge;
+
+        c.orbitR = ringRadius;
+        c.orbitAngle = midA;
+        if (is3D) {
+          // Graceful 3D tilted celestial shells
+          const elev = Math.sin(midA * 2 + rIdx * 1.4) * 0.42 + (rIdx === 1 ? (ci % 2 === 0 ? 0.32 : -0.32) : 0);
+          c.tx = ringRadius * Math.cos(midA) * Math.cos(elev);
+          c.ty = ringRadius * Math.sin(midA) * 0.78 + ringRadius * Math.sin(elev) * 0.42;
+          c.tz = ringRadius * Math.sin(midA) * Math.sin(elev) * 0.85 + ringRadius * Math.cos(midA * 2 + rIdx) * 0.36;
+        } else {
+          c.tx = ringRadius * Math.cos(midA);
+          c.ty = ringRadius * Math.sin(midA);
+          c.tz = 0;
+        }
+
+        const prev = prevClusPos.get(c.id);
+        c.x = prev ? prev[0] : c.tx * 0.25;
+        c.y = prev ? prev[1] : c.ty * 0.25;
+        c.z = prev ? prev[2] : c.tz * 0.25;
+      });
+    });
+
+    // Step C: Pack specimen medallions cleanly inside each cluster halo (phyllotaxis / clean ring!)
+    const nodes = [];
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (const c of clusters) {
+      const list = c.shownItems;
+      const cnt = list.length;
+      const nodeR = cnt <= 4 ? 19 : (cnt <= 10 ? 16 : 13.5);
+      list.forEach((it, i) => {
+        let lx, ly, lz = 0;
+        if (cnt === 1) {
+          const a = c.orbitAngle;
+          lx = Math.cos(a) * 34;
+          ly = Math.sin(a) * 34;
+        } else if (cnt <= 6) {
+          const a = c.orbitAngle + (i / cnt) * Math.PI * 2;
+          const dist = Math.max(36, c.haloR * 0.58);
+          lx = Math.cos(a) * dist;
+          ly = Math.sin(a) * dist;
+        } else {
+          const frac = (i + 0.6) / cnt;
+          const dist = 30 + Math.sqrt(frac) * (c.haloR - nodeR - 26);
+          const a = i * golden + c.orbitAngle;
+          lx = Math.cos(a) * dist;
+          ly = Math.sin(a) * dist;
+        }
+        if (is3D) {
+          const phi = (i / Math.max(1, cnt)) * Math.PI * 2 + c.orbitAngle;
+          lz = Math.sin(phi * 1.5) * Math.min(48, c.haloR * 0.45);
+        }
+        const tx = c.tx + lx, ty = c.ty + ly, tz = c.tz + lz;
+        const prev = prevNodePos.get(it.id + '|' + c.id);
+        nodes.push({
+          item: it,
+          cluster: c,
+          tx, ty, tz,
+          x: prev ? prev[0] : c.tx * 0.35,
+          y: prev ? prev[1] : c.ty * 0.35,
+          z: prev ? prev[2] : c.tz * 0.35,
+          baseR: nodeR,
+          sx: 0, sy: 0, sz: 0, sr: nodeR,
+        });
+        getSprite(it.thumbUrl);
+      });
+    }
+
+    graph.clusters = clusters;
+    graph.nodes = nodes;
+
+    if (resetCamera) {
+      fitGraphCamera(prevRingOuter + 40);
+    }
+  }
+
+  function fitGraphCamera(extentRadius) {
+    const availW = Math.max(360, graph.w - 80);
+    const availH = Math.max(320, graph.h - 170);
+    const span = Math.max(240, extentRadius * 2);
+    const z = Math.max(0.36, Math.min(1.18, Math.min(availW / span, availH / span)));
+    graph.targetPanX = 0;
+    graph.targetPanY = 10;
+    graph.targetZoom = z;
+    if (state.dim === '3d') {
+      graph.targetYaw = -0.32;
+      graph.targetPitch = 0.24;
+    }
+  }
+
+  function renderGraphHud() {
+    const kindEl = $('focusKind');
+    kindEl.textContent = KIND_LABEL[state.focusKind];
+    kindEl.className = 'focus-kind ' + state.focusKind;
+    $('focusLabel').textContent = state.focusId;
+    const totalItems = getFocalItems(state.focusKind, state.focusId).length;
+    $('focusMeta').textContent = `${totalItems} 条 · ${graph.clusters.length} 簇`;
+    $('graphBack').disabled = state.history.length === 0;
+
+    // Breadcrumb trail (last 3 steps)
+    const trailEl = $('graphTrail');
+    trailEl.replaceChildren();
+    const recent = state.history.slice(-3);
+    recent.forEach((step, idx) => {
+      const sep = document.createElement('span');
+      sep.textContent = '›';
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = step.id;
+      b.onclick = () => {
+        const cut = state.history.length - recent.length + idx;
+        state.history = state.history.slice(0, cut);
+        openGraph(step.kind, step.id, { clusterBy: step.clusterBy, pushHistory: false });
+      };
+      trailEl.append(sep, b);
+    });
+
+    // ClusterBy toggle buttons
+    const cs = $('clusterSwitch');
+    cs.replaceChildren();
+    for (const [val, lbl] of clusterOptionsFor(state.focusKind)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = lbl;
+      b.setAttribute('aria-pressed', String(state.clusterBy === val));
+      b.onclick = () => {
+        if (state.clusterBy === val) return;
+        state.clusterBy = val;
+        rebuildGraphScene(true);
+        renderGraphHud();
+        syncHash();
+      };
+      cs.append(b);
+    }
+
+    // 2D / 3D toggle
+    $('dimSwitch').querySelectorAll('button').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.dim === state.dim));
+    });
+
+    $('toggleUnlabeled').setAttribute('aria-pressed', String(state.showUnlabeled));
+
+    // Bottom quick cluster chips (click to pivot directly into that cluster's graph!)
+    const strip = $('clusterStrip');
+    strip.replaceChildren();
+    const stripLbl = document.createElement('span');
+    stripLbl.className = 'dock-label';
+    stripLbl.textContent = KIND_LABEL[state.clusterBy] + '簇';
+    strip.append(stripLbl);
+
+    for (const c of graph.clusters) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      const col = colorFor(c.kind, c.name);
+      b.innerHTML = `<span class="dot" style="background:${col}"></span><span>${esc(c.name)}</span><span class="num">${c.items.length}</span>`;
+      b.onmouseenter = () => { graph.hoveredCluster = c; };
+      b.onmouseleave = () => { if (graph.hoveredCluster === c) graph.hoveredCluster = null; };
+      b.onclick = () => {
+        if (!c.isUnlabeled) openGraph(c.kind, c.id);
+      };
+      if (c.isUnlabeled) b.style.opacity = '0.62';
+      strip.append(b);
+    }
+  }
+
+  function projectPoint(x, y, z) {
+    const cx = graph.w * 0.5 + graph.panX;
+    const cy = graph.h * 0.52 + graph.panY;
+    if (state.dim === '2d') {
+      return { x: cx + x * graph.zoom, y: cy + y * graph.zoom, z: 0, k: graph.zoom };
+    }
+    const cyaw = Math.cos(graph.yaw), syaw = Math.sin(graph.yaw);
+    const cp = Math.cos(graph.pitch), sp = Math.sin(graph.pitch);
+    const rx = x * cyaw + z * syaw;
+    const rz1 = z * cyaw - x * syaw;
+    const ry = y * cp - rz1 * sp;
+    const depth = y * sp + rz1 * cp;
+    const camD = 980;
+    const persp = camD / Math.max(180, camD - depth);
+    const k = graph.zoom * persp;
+    return { x: cx + rx * k, y: cy + ry * k, z: depth, k };
+  }
+
+  function bindGraphEvents() {
+    const c = graph.canvas;
+    c.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      graph.dragging = true;
+      graph.dragMoved = false;
+      graph.dragSX = e.clientX;
+      graph.dragSY = e.clientY;
+      graph.velYaw = 0; graph.velPitch = 0;
+      c.setPointerCapture(e.pointerId);
+    });
+    c.addEventListener('pointermove', e => {
+      if (graph.dragging) {
+        const dx = e.clientX - graph.dragSX;
+        const dy = e.clientY - graph.dragSY;
+        if (Math.hypot(dx, dy) > 4) graph.dragMoved = true;
+        if (state.dim === '3d') {
+          graph.targetYaw += dx * 0.0065;
+          graph.targetPitch = Math.max(-1.15, Math.min(1.15, graph.targetPitch - dy * 0.006));
+          graph.velYaw = dx * 0.002;
+          graph.velPitch = -dy * 0.0018;
+        } else {
+          graph.targetPanX += dx;
+          graph.targetPanY += dy;
+        }
+        graph.dragSX = e.clientX;
+        graph.dragSY = e.clientY;
+        hideTip();
+        return;
+      }
+      hitTestGraph(e.clientX, e.clientY);
+    });
+    c.addEventListener('pointerup', e => {
+      if (!graph.dragging) return;
+      graph.dragging = false;
+      if (!graph.dragMoved) {
+        hitTestGraph(e.clientX, e.clientY);
+        if (graph.hoveredNode) {
+          openDrawer(graph.hoveredNode.item.id);
+        } else if (graph.hoveredCluster && !graph.hoveredCluster.isUnlabeled) {
+          // One-click pivot from any cluster hub into its own clustered 2D/3D graph!
+          openGraph(graph.hoveredCluster.kind, graph.hoveredCluster.id);
+        } else {
+          closeDrawer();
+        }
+      }
+    });
+    c.addEventListener('pointerleave', () => {
+      graph.hoveredNode = null;
+      graph.hoveredCluster = null;
+      hideTip();
+    });
+    c.addEventListener('wheel', e => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      graph.targetZoom = Math.max(0.28, Math.min(3.2, graph.targetZoom * factor));
+    }, { passive: false });
+    c.addEventListener('dblclick', () => {
+      if (!graph.hoveredNode && !graph.hoveredCluster) {
+        const maxR = Math.max(240, ...graph.clusters.map(cl => (cl.orbitR || 200) + cl.haloR));
+        fitGraphCamera(maxR + 30);
+      }
+    });
+  }
+
+  function hitTestGraph(mx, my) {
+    // 1) Check specimen nodes front-to-back (highest z first)
+    let hitNode = null, bestZ = -Infinity;
+    for (const n of graph.nodes) {
+      const d = Math.hypot(mx - n.sx, my - n.sy);
+      if (d <= n.sr + 4 && n.sz >= bestZ) { hitNode = n; bestZ = n.sz; }
+    }
+    graph.hoveredNode = hitNode;
+
+    // 2) Check cluster hubs & clickable cluster label pills
+    let hitCluster = null;
+    if (!hitNode) {
+      let bestCZ = -Infinity;
+      for (const c of graph.clusters) {
+        const dHub = Math.hypot(mx - c.sx, my - c.sy);
+        const inPill = c._labelBox && mx >= c._labelBox[0] && mx <= c._labelBox[2] && my >= c._labelBox[1] && my <= c._labelBox[3];
+        if ((dHub <= c.sr + 6 || inPill) && c.sz >= bestCZ) {
+          hitCluster = c; bestCZ = c.sz;
+        }
+      }
+    }
+    graph.hoveredCluster = hitCluster;
+    graph.canvas.classList.toggle('pointer', Boolean(hitNode || (hitCluster && !hitCluster.isUnlabeled)));
+
+    if (hitNode) {
+      const it = hitNode.item;
+      const tags = [
+        ...it.periods.map(p => `<span class="tip-tag">${esc(p)}</span>`),
+        ...it.materials.map(m => `<span class="tip-tag">${esc(m)}</span>`),
+        ...it.motifs.slice(0, 3).map(m => `<span class="tip-tag">${esc(m)}</span>`),
+      ];
+      showTip(mx, my, `<strong>${esc(it.title)}</strong><div class="tip-tags">${tags.join('')}</div><div class="tip-hint">点击查看详情、原页证据与快捷跳转</div>`);
+    } else if (hitCluster) {
+      const nextDefault = defaultClusterFor(hitCluster.kind);
+      const hint = hitCluster.isUnlabeled
+        ? '该条目在原数据中尚未标注此属性'
+        : `点击进入「${esc(hitCluster.name)}」图谱（默认按${KIND_LABEL[nextDefault]}聚类）→`;
+      showTip(mx, my, `<strong>${esc(hitCluster.name)}</strong><div class="tip-tags"><span class="tip-tag">${KIND_LABEL[hitCluster.kind]}聚类</span><span class="tip-tag">${hitCluster.items.length} 条</span></div><div class="tip-hint">${hint}</div>`);
+    } else {
+      hideTip();
+    }
+  }
+
+  function drawGraph(timeSec) {
+    const { ctx, w, h, dpr } = graph;
+    if (!w || !h || !graph.core) return;
+
+    // Smooth camera & inertia
+    graph.panX += (graph.targetPanX - graph.panX) * 0.14;
+    graph.panY += (graph.targetPanY - graph.panY) * 0.14;
+    graph.zoom += (graph.targetZoom - graph.zoom) * 0.14;
+    if (state.dim === '3d') {
+      if (!graph.dragging) {
+        graph.targetYaw += graph.velYaw;
+        graph.targetPitch = Math.max(-1.15, Math.min(1.15, graph.targetPitch + graph.velPitch));
+        graph.velYaw *= 0.92;
+        graph.velPitch *= 0.92;
+        // Very subtle celestial drift when idle
+        if (Math.abs(graph.velYaw) < 0.0002 && !graph.hoveredNode && !graph.hoveredCluster) {
+          graph.targetYaw += 0.00065;
+        }
+      }
+      graph.yaw += (graph.targetYaw - graph.yaw) * 0.14;
+      graph.pitch += (graph.targetPitch - graph.pitch) * 0.14;
+    }
+
+    // Spring-morph cluster and node coordinates
+    for (const c of graph.clusters) {
+      c.x += (c.tx - c.x) * 0.15;
+      c.y += (c.ty - c.y) * 0.15;
+      c.z += (c.tz - c.z) * 0.15;
+    }
+    for (const n of graph.nodes) {
+      n.x += (n.tx - n.x) * 0.15;
+      n.y += (n.ty - n.y) * 0.15;
+      n.z += (n.tz - n.z) * 0.15;
+    }
+
+    const dark = currentTheme() === 'dark';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // 1) Backdrop
+    const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.52, 20, w * 0.5, h * 0.52, Math.max(w, h) * 0.68);
+    if (dark) {
+      bgGrad.addColorStop(0, '#141824');
+      bgGrad.addColorStop(0.6, '#0b0d13');
+      bgGrad.addColorStop(1, '#07090d');
+    } else {
+      bgGrad.addColorStop(0, '#fdfcf9');
+      bgGrad.addColorStop(0.65, '#f6f4ee');
+      bgGrad.addColorStop(1, '#ede8dd');
+    }
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle background starfield / academic chart dots
+    for (const s of graph.stars) {
+      ctx.fillStyle = dark ? `rgba(232,224,205,${s.a})` : `rgba(50,45,38,${s.a * 0.45})`;
+      ctx.beginPath();
+      ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 2) Project core, clusters, and nodes
+    const coreP = projectPoint(0, 0, 0);
+    graph.core.sx = coreP.x; graph.core.sy = coreP.y; graph.core.sr = graph.core.r * coreP.k;
+
+    const ringRadii = [...new Set(graph.clusters.map(c => Math.round(c.orbitR || 0)))].filter(Boolean);
+
+    // 3) Subtle Celestial Orbital Guide Rings
+    for (const rr of ringRadii) {
+      ctx.beginPath();
+      const segs = 90;
+      for (let i = 0; i <= segs; i++) {
+        const a = (i / segs) * Math.PI * 2;
+        const p = projectPoint(Math.cos(a) * rr, Math.sin(a) * rr, 0);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = dark ? 'rgba(239,236,228,0.065)' : 'rgba(30,28,25,0.075)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 7]);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    const activeCluster = graph.hoveredCluster || graph.hoveredNode?.cluster || null;
+    const selectedItemId = graph.hoveredNode?.item.id || state.drawerItemId;
+    const coreCol = colorFor(graph.core.kind, graph.core.name);
+
+    for (const c of graph.clusters) {
+      const p = projectPoint(c.x, c.y, c.z);
+      c.sx = p.x; c.sy = p.y; c.sz = p.z; c.sk = p.k;
+      c.sr = c.hubR * p.k;
+      c.haloSr = c.haloR * p.k;
+    }
+
+    // 4) Cluster Halos & Core-to-Cluster Spokes (depth-ordered)
+    const sortedClusters = [...graph.clusters].sort((a, b) => a.sz - b.sz);
+    for (const c of sortedClusters) {
+      const col = colorFor(c.kind, c.name);
+      const isAct = activeCluster === c;
+      const dimAlpha = activeCluster && !isAct ? 0.30 : 1.0;
+      const depthFade = state.dim === '3d' ? Math.max(0.32, Math.min(1, (c.sz + 520) / 720)) : 1;
+      const a = dimAlpha * depthFade;
+
+      // Translucent cluster constellation halo
+      const hg = ctx.createRadialGradient(c.sx, c.sy, c.sr * 0.5, c.sx, c.sy, c.haloSr);
+      hg.addColorStop(0, hexAlpha(col, (dark ? 0.14 : 0.09) * a * (isAct ? 1.55 : 1)));
+      hg.addColorStop(0.75, hexAlpha(col, (dark ? 0.045 : 0.03) * a));
+      hg.addColorStop(1, hexAlpha(col, 0));
+      ctx.fillStyle = hg;
+      ctx.beginPath();
+      ctx.arc(c.sx, c.sy, c.haloSr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Delicate dashed perimeter enclosing the cluster
+      ctx.beginPath();
+      ctx.arc(c.sx, c.sy, c.haloSr, 0, Math.PI * 2);
+      ctx.strokeStyle = hexAlpha(col, (isAct ? 0.55 : 0.22) * a);
+      ctx.lineWidth = isAct ? 1.3 : 0.85;
+      ctx.setLineDash(c.isUnlabeled ? [2, 5] : [4, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Curved filament connecting Center Core -> Cluster Hub
+      ctx.beginPath();
+      const mx = (coreP.x + c.sx) * 0.5 - (c.sy - coreP.y) * 0.09;
+      const my = (coreP.y + c.sy) * 0.5 + (c.sx - coreP.x) * 0.09;
+      ctx.moveTo(coreP.x, coreP.y);
+      ctx.quadraticCurveTo(mx, my, c.sx, c.sy);
+      ctx.strokeStyle = hexAlpha(col, (isAct ? 0.72 : 0.28) * a);
+      ctx.lineWidth = isAct ? 1.65 : 1.0;
+      ctx.stroke();
+    }
+
+    // 5) Project all specimen nodes & draw intra-cluster constellation filaments
+    for (const n of graph.nodes) {
+      const p = projectPoint(n.x, n.y, n.z);
+      n.sx = p.x; n.sy = p.y; n.sz = p.z; n.sk = p.k;
+      n.sr = n.baseR * p.k;
+
+      const c = n.cluster;
+      const col = colorFor(c.kind, c.name);
+      const isAct = activeCluster === c || n.item.id === selectedItemId;
+      const dimAlpha = activeCluster && !isAct ? 0.22 : 1;
+      const depthFade = state.dim === '3d' ? Math.max(0.28, Math.min(1, (n.sz + 520) / 720)) : 1;
+
+      ctx.beginPath();
+      ctx.moveTo(c.sx, c.sy);
+      ctx.lineTo(n.sx, n.sy);
+      ctx.strokeStyle = hexAlpha(col, (isAct ? 0.45 : 0.18) * dimAlpha * depthFade);
+      ctx.lineWidth = isAct ? 1.15 : 0.75;
+      ctx.stroke();
+    }
+
+    // Cross-cluster co-occurrence arcs when hovering a specimen node!
+    if (graph.hoveredNode) {
+      const hn = graph.hoveredNode;
+      const hMotifs = new Set(hn.item.motifs);
+      for (const n of graph.nodes) {
+        if (n === hn || n.cluster === hn.cluster) continue;
+        const shared = n.item.id === hn.item.id || (hMotifs.size && n.item.motifs.some(m => hMotifs.has(m)));
+        if (shared) {
+          ctx.beginPath();
+          ctx.moveTo(hn.sx, hn.sy);
+          ctx.quadraticCurveTo(coreP.x, coreP.y, n.sx, n.sy);
+          ctx.strokeStyle = dark ? 'rgba(216,179,119,0.48)' : 'rgba(143,78,50,0.42)';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([3, 4]);
+          ctx.stroke();
+        }
+      }
+      ctx.setLineDash([]);
+    }
+
+    // 6) Depth-sorted paint pass: Core + Cluster Hubs + Specimen Medallions
+    const drawables = [];
+    drawables.push({ type: 'core', z: coreP.z });
+    for (const c of graph.clusters) drawables.push({ type: 'cluster', z: c.sz + 0.5, obj: c });
+    for (const n of graph.nodes) drawables.push({ type: 'node', z: n.sz + (n.item.id === selectedItemId ? 40 : 0), obj: n });
+    drawables.sort((a, b) => a.z - b.z);
+
+    for (const d of drawables) {
+      if (d.type === 'core') {
+        drawCoreHub(ctx, graph.core, coreCol, dark, timeSec);
+      } else if (d.type === 'cluster') {
+        drawClusterHub(ctx, d.obj, activeCluster, dark);
+      } else {
+        drawSpecimenNode(ctx, d.obj, activeCluster, selectedItemId, dark);
+      }
+    }
+  }
+
+  function drawCoreHub(ctx, core, col, dark, timeSec) {
+    const r = core.sr;
+    const pulse = 1 + 0.04 * Math.sin(timeSec * 1.8);
+
+    // Majestic outer celestial aura
+    const glow = ctx.createRadialGradient(core.sx, core.sy, r * 0.6, core.sx, core.sy, r * 2.5 * pulse);
+    glow.addColorStop(0, hexAlpha(col, dark ? 0.34 : 0.20));
+    glow.addColorStop(0.5, hexAlpha(col, dark ? 0.10 : 0.06));
+    glow.addColorStop(1, hexAlpha(col, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(core.sx, core.sy, r * 2.5 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Decorative outer astronomical ring
+    ctx.beginPath();
+    ctx.arc(core.sx, core.sy, r + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = hexAlpha(col, 0.45);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Core disc
+    const sp = getSprite(core.thumbUrl);
+    const bmp = sp?.status === 'ready' ? (dark ? sp.dark : sp.light) : null;
+    if (bmp && core.kind === 'motif') {
+      ctx.drawImage(bmp, core.sx - r, core.sy - r, r * 2, r * 2);
+      ctx.fillStyle = dark ? 'rgba(9,11,16,0.45)' : 'rgba(250,248,243,0.48)';
+      ctx.beginPath();
+      ctx.arc(core.sx, core.sy, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      const dg = ctx.createRadialGradient(core.sx - r * 0.25, core.sy - r * 0.25, 2, core.sx, core.sy, r);
+      if (dark) {
+        dg.addColorStop(0, hexAlpha(col, 0.36));
+        dg.addColorStop(1, '#12151f');
+      } else {
+        dg.addColorStop(0, '#ffffff');
+        dg.addColorStop(1, hexAlpha(col, 0.16));
+      }
+      ctx.fillStyle = dg;
+      ctx.beginPath();
+      ctx.arc(core.sx, core.sy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(core.sx, core.sy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Core serif label inside disc
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const fs = Math.max(12, Math.min(18, r * 0.38));
+    ctx.font = `600 ${fs}px "Noto Serif SC","Songti SC",serif`;
+    ctx.fillStyle = dark ? '#faf5ea' : '#1e1c19';
+    const shortName = core.name.length > 6 ? core.name.slice(0, 6) + '…' : core.name;
+    ctx.fillText(shortName, core.sx, core.sy - 4);
+    ctx.font = `500 ${Math.max(9, fs * 0.58)}px ui-monospace,monospace`;
+    ctx.fillStyle = col;
+    ctx.fillText(`${KIND_LABEL[core.kind]} · ${core.count}`, core.sx, core.sy + fs * 0.72);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawClusterHub(ctx, c, activeCluster, dark) {
+    const col = colorFor(c.kind, c.name);
+    const isAct = activeCluster === c;
+    const dimAlpha = activeCluster && !isAct ? 0.32 : 1;
+    const depthFade = state.dim === '3d' ? Math.max(0.32, Math.min(1, (c.sz + 520) / 720)) : 1;
+    const alpha = dimAlpha * depthFade;
+    const r = Math.max(8, c.sr * (isAct ? 1.16 : 1));
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Hub glow
+    if (isAct || dark) {
+      const g = ctx.createRadialGradient(c.sx, c.sy, 2, c.sx, c.sy, r * 2.1);
+      g.addColorStop(0, hexAlpha(col, isAct ? 0.45 : 0.22));
+      g.addColorStop(1, hexAlpha(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(c.sx, c.sy, r * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Hub medallion circle
+    ctx.fillStyle = dark ? '#131722' : '#fcfaf5';
+    ctx.beginPath();
+    ctx.arc(c.sx, c.sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = isAct ? 2.2 : 1.5;
+    ctx.stroke();
+
+    // Count inside hub
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${Math.max(10, Math.min(13, r * 0.62))}px ui-monospace,monospace`;
+    ctx.fillStyle = col;
+    ctx.fillText(String(c.items.length), c.sx, c.sy + 0.5);
+
+    // Clean clickable Cluster Label Pill outside top edge of cluster halo
+    const labelText = c.name + (c.hiddenCount > 0 ? ` (+${c.hiddenCount})` : '');
+    const ly = c.sy - c.haloSr - 12;
+    ctx.font = `600 12.5px "Noto Serif SC","Songti SC",serif`;
+    const tw = ctx.measureText(labelText).width;
+    const pw = tw + 18, ph = 22;
+    const px = c.sx - pw * 0.5, py = ly - ph * 0.5;
+    c._labelBox = [px, py, px + pw, py + ph];
+
+    ctx.fillStyle = isAct
+      ? hexAlpha(col, dark ? 0.28 : 0.16)
+      : (dark ? 'rgba(13,16,24,0.82)' : 'rgba(252,250,245,0.92)');
+    roundRect(ctx, px, py, pw, ph, 11);
+    ctx.fill();
+    ctx.strokeStyle = hexAlpha(col, isAct ? 0.92 : 0.42);
+    ctx.lineWidth = isAct ? 1.3 : 0.9;
+    ctx.stroke();
+
+    ctx.fillStyle = isAct ? (dark ? '#fff7e8' : col) : (dark ? '#efece4' : '#211e1a');
+    ctx.fillText(labelText, c.sx, ly + 0.5);
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+  }
+
+  function drawSpecimenNode(ctx, n, activeCluster, selectedItemId, dark) {
+    const it = n.item;
+    const col = colorFor(n.cluster.kind, n.cluster.name);
+    const isSel = it.id === selectedItemId;
+    const isAct = isSel || activeCluster === n.cluster;
+    const dimAlpha = activeCluster && !isAct ? 0.24 : 1;
+    const depthFade = state.dim === '3d' ? Math.max(0.28, Math.min(1, (n.sz + 520) / 720)) : 1;
+    const r = Math.max(5, n.sr * (isSel ? 1.24 : 1));
+
+    ctx.save();
+    ctx.globalAlpha = dimAlpha * depthFade;
+
+    if (isSel) {
+      const g = ctx.createRadialGradient(n.sx, n.sy, r * 0.6, n.sx, n.sy, r * 2.1);
+      g.addColorStop(0, hexAlpha(col, 0.48));
+      g.addColorStop(1, hexAlpha(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(n.sx, n.sy, r * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const sp = getSprite(it.thumbUrl);
+    const bmp = sp?.status === 'ready' ? (dark ? sp.dark : sp.light) : null;
+    if (bmp) {
+      ctx.drawImage(bmp, n.sx - r, n.sy - r, r * 2, r * 2);
+    } else {
+      ctx.fillStyle = dark ? '#1a1f2c' : '#ece7dc';
+      ctx.beginPath();
+      ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = isSel ? (dark ? '#f7e1b5' : '#8f4e32') : hexAlpha(col, isAct ? 0.82 : 0.50);
+    ctx.lineWidth = isSel ? 2.2 : 1.15;
+    ctx.stroke();
+
+    // Concise label beneath node only when selected, hovered cluster, or zoomed closely
+    if (isSel || (activeCluster === n.cluster && r >= 13) || r >= 22) {
+      const lbl = (it.motifs[0] && state.clusterBy !== 'motif' && state.focusKind !== 'motif')
+        ? it.motifs[0]
+        : (it.title.length > 9 ? it.title.slice(0, 8) + '…' : it.title);
+      ctx.font = `500 10.5px ${getComputedStyle(document.body).fontFamily}`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = dark ? 'rgba(239,236,228,0.88)' : 'rgba(30,28,25,0.85)';
+      ctx.fillText(lbl, n.sx, n.sy + r + 13);
+    }
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     7. VIEW 3 — MUSEO Morandi Grid Catalog
+     ═══════════════════════════════════════════════════════════════ */
+  function renderCatalog() {
+    $('catalogTabs').querySelectorAll('button').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.cat === state.catalogTab));
+    });
+
+    const list = state.catalogTab === 'era' ? G.eras
+      : (state.catalogTab === 'material' ? G.materials : G.motifs);
+    const nextClusterLabel = KIND_LABEL[defaultClusterFor(state.catalogTab)];
+    $('catalogTitle').textContent = `${KIND_LABEL[state.catalogTab]}图录`;
+
+    const grid = $('catalogGrid');
+    grid.replaceChildren();
+
+    for (const ent of list) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'entity-card';
+      const col = colorFor(state.catalogTab, ent.name);
+      card.style.setProperty('--card-tint', col);
+
+      // Compute top sub-attribute summary chips (e.g. top materials inside an era, top motifs inside a material)
+      const subCounts = new Map();
+      const subKind = defaultClusterFor(state.catalogTab);
+      for (const it of ent.items) {
+        const vals = subKind === 'material' ? it.materials : (subKind === 'motif' ? it.motifs : it.eraGroups);
+        for (const v of vals) subCounts.set(v, (subCounts.get(v) || 0) + 1);
+      }
+      const topSubs = [...subCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+      const thumbsHtml = ent.items.slice(0, 4).map(it =>
+        `<img src="${esc(it.thumbUrl)}" alt="" loading="lazy">`
+      ).join('');
+
+      card.innerHTML = `
+        <div class="entity-card-top">
+          <h3>${esc(ent.name)}</h3>
+          <span class="entity-count">${ent.count}</span>
+        </div>
+        <div class="entity-thumbs">${thumbsHtml}</div>
+        <div class="entity-subchips">${topSubs.map(([k, v]) => `<span>${esc(k)} ${v}</span>`).join('') || '<span>图录条目</span>'}</div>
+        <div class="entity-cta">
+          <span>按${nextClusterLabel}聚类查看</span>
+          <span>2D / 3D ↗</span>
+        </div>
+      `;
+      card.onclick = () => openGraph(state.catalogTab, ent.id);
+      grid.append(card);
+    }
+
+    renderSpecimenGrid();
+  }
+
+  function renderSpecimenGrid() {
+    const pageSize = 24;
+    const total = G.items.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    state.catalogPage = Math.max(0, Math.min(totalPages - 1, state.catalogPage));
+    const slice = G.items.slice(state.catalogPage * pageSize, (state.catalogPage + 1) * pageSize);
+
+    $('specimenHeading').textContent = `全部条目 · ${total}`;
+    const pager = $('specimenPager');
+    pager.replaceChildren();
+    if (totalPages > 1) {
+      const prev = document.createElement('button');
+      prev.type = 'button'; prev.className = 'chip'; prev.textContent = '‹';
+      prev.disabled = state.catalogPage === 0;
+      prev.onclick = () => { state.catalogPage--; renderSpecimenGrid(); };
+      const info = document.createElement('span');
+      info.className = 'dock-label';
+      info.textContent = `${state.catalogPage + 1} / ${totalPages}`;
+      const next = document.createElement('button');
+      next.type = 'button'; next.className = 'chip'; next.textContent = '›';
+      next.disabled = state.catalogPage >= totalPages - 1;
+      next.onclick = () => { state.catalogPage++; renderSpecimenGrid(); };
+      pager.append(prev, info, next);
+    }
+
+    const sg = $('specimenGrid');
+    sg.replaceChildren();
+    for (const it of slice) {
+      const card = document.createElement('article');
+      card.className = 'spec-card';
+
+      const wrap = document.createElement('div');
+      wrap.className = 'spec-img-wrap';
+      wrap.onclick = () => openDrawer(it.id);
+      const im = document.createElement('img');
+      im.src = it.thumbUrl;
+      im.alt = it.title;
+      im.loading = 'lazy';
+      wrap.append(im);
+
+      const body = document.createElement('div');
+      body.className = 'spec-body';
+      const title = document.createElement('div');
+      title.className = 'spec-title';
+      title.textContent = it.title;
+      title.onclick = () => openDrawer(it.id);
+
+      const tags = document.createElement('div');
+      tags.className = 'spec-tags';
+      for (const e of it.eraGroups.slice(0, 1)) {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = e;
+        b.onclick = () => openGraph('era', e);
+        tags.append(b);
+      }
+      for (const m of it.materials.slice(0, 1)) {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = m;
+        b.onclick = () => openGraph('material', m);
+        tags.append(b);
+      }
+      for (const mo of it.motifs.slice(0, 2)) {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = mo;
+        b.onclick = () => openGraph('motif', mo);
+        tags.append(b);
+      }
+      body.append(title, tags);
+      card.append(wrap, body);
+      sg.append(card);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     8. VIEW 4 — Original PDF Pages with BBox & Graph Jumps
+     ═══════════════════════════════════════════════════════════════ */
+  function renderPage(num, focusItemId = null) {
+    const total = G.pages.length;
+    state.currentPage = Math.max(1, Math.min(total, Number(num) || 1));
+    const pageObj = G.pages[state.currentPage - 1];
+    $('pageTitle').textContent = `原页 · 第 ${state.currentPage} 页`;
+    $('pageInput').value = state.currentPage;
+    $('pageInput').max = total;
+    $('pageTotal').textContent = `/ ${total}`;
+    $('prevPage').disabled = state.currentPage <= 1;
+    $('nextPage').disabled = state.currentPage >= total;
+    $('pageScan').src = pageObj?.previewUrl || '';
+    $('pageBbox').hidden = true;
+
+    const list = G.items.filter(it => it.page === state.currentPage);
+    const box = $('pageItems');
+    box.replaceChildren();
+
+    if (!list.length) {
+      const empty = document.createElement('p');
+      empty.style.color = 'var(--ink-3)';
+      empty.textContent = '本页暂无提取条目';
+      box.append(empty);
+      return;
+    }
+
+    const selectItem = (it, cardEl) => {
+      state.activePageItemId = it.id;
+      box.querySelectorAll('.page-item-card').forEach(el => el.classList.toggle('active', el === cardEl));
+      if (it.bbox) {
+        const [x1, y1, x2, y2] = it.bbox;
+        Object.assign($('pageBbox').style, {
+          left: (x1 * 100) + '%', top: (y1 * 100) + '%',
+          width: ((x2 - x1) * 100) + '%', height: ((y2 - y1) * 100) + '%',
+        });
+        $('pageBbox').hidden = false;
+      } else {
+        $('pageBbox').hidden = true;
+      }
+    };
+
+    list.forEach((it, idx) => {
+      const card = document.createElement('div');
+      card.className = 'page-item-card';
+      card.onclick = () => selectItem(it, card);
+
+      const head = document.createElement('div');
+      head.className = 'page-item-title';
+      head.innerHTML = `<strong>${esc(it.title)}</strong><small>${esc(it.status || it.locator)}</small>`;
+      card.append(head);
+
+      if (it.quote) {
+        const q = document.createElement('blockquote');
+        q.className = 'proof-quote';
+        q.textContent = it.quote;
+        card.append(q);
+      }
+
+      const chips = document.createElement('div');
+      chips.className = 'rel-chips';
+      for (const e of it.eraGroups) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'jump-pill era'; b.textContent = e;
+        b.onclick = ev => { ev.stopPropagation(); openGraph('era', e); };
+        chips.append(b);
+      }
+      for (const m of it.materials) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'jump-pill material'; b.textContent = m;
+        b.onclick = ev => { ev.stopPropagation(); openGraph('material', m); };
+        chips.append(b);
+      }
+      for (const mo of it.motifs) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'jump-pill motif'; b.textContent = mo;
+        b.onclick = ev => { ev.stopPropagation(); openGraph('motif', mo); };
+        chips.append(b);
+      }
+      if (chips.childElementCount) card.append(chips);
+      box.append(card);
+
+      if ((focusItemId && it.id === focusItemId) || (!focusItemId && idx === 0)) {
+        selectItem(it, card);
+      }
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     9. Specimen & Proof Drawer + Entity Switcher + Command Palette
+     ═══════════════════════════════════════════════════════════════ */
+  function openDrawer(itemId) {
+    const it = G.itemById.get(itemId);
+    if (!it) return;
+    state.drawerItemId = itemId;
+
+    $('drawerTitle').textContent = it.title;
+    $('drawerLoc').textContent = [it.locator, it.findspot ? it.findspot + '出土' : ''].filter(Boolean).join(' · ');
+    $('drawerGotoPage').onclick = () => {
+      state.currentPage = it.page;
+      closeDrawer();
+      switchView('pages');
+      renderPage(it.page, it.id);
+    };
+
+    const sp = getSprite(it.thumbUrl);
+    $('drawerFig').classList.toggle('mono', Boolean(sp?.isMono));
+    $('drawerImg').src = it.plateUrl;
+    $('drawerImg').alt = it.title;
+    $('drawerFig').onclick = () => openLightbox(it.plateUrl, `${it.title} · ${it.locator}`);
+
+    // Clickable relation jump pills (Era -> Material -> Motif)
+    const rels = $('drawerRels');
+    rels.replaceChildren();
+    const addRelRow = (label, kind, values) => {
+      if (!values.length) return;
+      const row = document.createElement('div');
+      row.className = 'rel-row';
+      const l = document.createElement('span');
+      l.className = 'rel-label'; l.textContent = label;
+      const wrap = document.createElement('div');
+      wrap.className = 'rel-chips';
+      for (const v of values) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'jump-pill ' + kind;
+        b.textContent = v;
+        b.onclick = () => openGraph(kind, v);
+        wrap.append(b);
+      }
+      row.append(l, wrap);
+      rels.append(row);
+    };
+    addRelRow('时代', 'era', it.periods);
+    addRelRow('材质', 'material', it.materials);
+    addRelRow('纹样', 'motif', it.motifs);
+    if (!rels.childElementCount) {
+      const p = document.createElement('div');
+      p.style.fontSize = '12px'; p.style.color = 'var(--ink-3)';
+      p.textContent = '暂无已标注的时代、材质或纹样关系';
+      rels.append(p);
+    }
+
+    $('drawerQuote').textContent = it.quote || '';
+    $('drawerQuote').hidden = !it.quote;
+    $('drawerCapImg').src = it.captionUrl || '';
+    $('drawerCapImg').hidden = !it.captionUrl;
+    $('drawerPageImg').src = it.pageUrl || '';
+    $('drawerPageWrap').hidden = !it.pageUrl;
+    if (it.bbox) {
+      const [x1, y1, x2, y2] = it.bbox;
+      Object.assign($('drawerBbox').style, {
+        left: (x1 * 100) + '%', top: (y1 * 100) + '%',
+        width: ((x2 - x1) * 100) + '%', height: ((y2 - y1) * 100) + '%',
+      });
+      $('drawerBbox').hidden = false;
+    } else {
+      $('drawerBbox').hidden = true;
+    }
+    $('drawerPageWrap').onclick = () => {
+      state.currentPage = it.page;
+      closeDrawer();
+      switchView('pages');
+      renderPage(it.page, it.id);
+    };
+
+    $('drawer').classList.remove('closed');
+  }
+
+  function closeDrawer() {
+    state.drawerItemId = null;
+    $('drawer').classList.add('closed');
+  }
+
+  // Entity Switcher Popover (inside Graph view)
+  let switcherKind = 'era';
+  function openSwitcher() {
+    const pop = $('switcherPop');
+    if (!pop.hidden) { closeSwitcher(); return; }
+    switcherKind = state.focusKind;
+    $('switcherSearch').value = '';
+    pop.hidden = false;
+    renderSwitcherList();
+    $('switcherSearch').focus();
+  }
+  function closeSwitcher() { $('switcherPop').hidden = true; }
+  function renderSwitcherList() {
+    $('switcherTabs').querySelectorAll('button').forEach(b => {
+      b.setAttribute('aria-selected', String(b.dataset.kind === switcherKind));
+    });
+    const q = $('switcherSearch').value.trim().toLowerCase();
+    const list = switcherKind === 'era' ? G.eras : (switcherKind === 'material' ? G.materials : G.motifs);
+    const el = $('switcherList');
+    el.replaceChildren();
+    for (const ent of list) {
+      if (q && !ent.name.toLowerCase().includes(q)) continue;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (state.focusKind === switcherKind && state.focusId === ent.id ? ' active' : '');
+      const col = colorFor(switcherKind, ent.name);
+      b.innerHTML = `<span class="dot" style="background:${col}"></span><span>${esc(ent.name)}</span><span class="num">${ent.count}</span>`;
+      b.onclick = () => openGraph(switcherKind, ent.id);
+      el.append(b);
+    }
+  }
+
+  // Quick Jump Command Palette
+  let palItems = [], palIndex = 0;
+  function openPalette() {
+    $('paletteBackdrop').hidden = false;
+    $('paletteInput').value = '';
+    renderPalette();
+    $('paletteInput').focus();
+  }
+  function closePalette() { $('paletteBackdrop').hidden = true; }
+  function renderPalette() {
+    const q = $('paletteInput').value.trim().toLowerCase();
+    const res = $('paletteResults');
+    res.replaceChildren();
+    palItems = [];
+    palIndex = 0;
+
+    const addGroup = (title, entries) => {
+      if (!entries.length) return;
+      const g = document.createElement('div');
+      g.className = 'palette-group';
+      g.textContent = title;
+      res.append(g);
+      for (const e of entries) {
+        const idx = palItems.length;
+        palItems.push(e);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'palette-item' + (idx === 0 ? ' selected' : '');
+        b.innerHTML = `<span>${esc(e.label)}</span><small>${esc(e.meta)}</small>`;
+        b.onclick = () => { closePalette(); e.action(); };
+        res.append(b);
+      }
+    };
+
+    const pageMatch = q.match(/^(\d+)$/);
+    if (pageMatch) {
+      const p = Number(pageMatch[1]);
+      if (p >= 1 && p <= G.pages.length) {
+        addGroup('原页', [{ label: `PDF 第 ${p} 页`, meta: '原页核读', action: () => { state.currentPage = p; switchView('pages'); } }]);
+      }
+    }
+
+    addGroup('时代 · 按材质聚类', G.eras.filter(e => !q || e.name.toLowerCase().includes(q)).slice(0, 8)
+      .map(e => ({ label: e.name, meta: `${e.count} 条`, action: () => openGraph('era', e.id) })));
+    addGroup('材质 · 按纹样聚类', G.materials.filter(m => !q || m.name.toLowerCase().includes(q)).slice(0, 8)
+      .map(m => ({ label: m.name, meta: `${m.count} 条`, action: () => openGraph('material', m.id) })));
+    addGroup('纹样 · 按时代聚类', G.motifs.filter(m => !q || m.name.toLowerCase().includes(q)).slice(0, 12)
+      .map(m => ({ label: m.name, meta: `${m.count} 条`, action: () => openGraph('motif', m.id) })));
+    if (q) {
+      addGroup('器物条目', G.items.filter(i => i.title.toLowerCase().includes(q)).slice(0, 10)
+        .map(i => ({ label: i.title, meta: `P.${i.page}`, action: () => openDrawer(i.id) })));
+    }
+  }
+
+  function openLightbox(src, cap) {
+    $('lightboxImg').src = src;
+    $('lightboxCap').textContent = cap || '';
+    $('lightbox').hidden = false;
+  }
+
+  function showTip(x, y, html) {
+    const tip = $('canvasTip');
+    tip.innerHTML = html;
+    tip.hidden = false;
+    const rightEdge = x + 280 > window.innerWidth;
+    tip.style.left = (rightEdge ? Math.max(12, x - 275) : x + 10) + 'px';
+    tip.style.top = Math.max(70, Math.min(window.innerHeight - 60, y)) + 'px';
+  }
+  function hideTip() { $('canvasTip').hidden = true; }
+
+  function esc(str) {
+    return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     10. Animation Loop & Initialization
+     ═══════════════════════════════════════════════════════════════ */
+  function tick(now) {
+    const t = now * 0.001;
+    if (G) {
+      if (state.view === 'river') drawRiver(t);
+      else if (state.view === 'graph') drawGraph(t);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  async function loadManifest() {
+    const inline = $('data')?.textContent?.trim();
+    if (inline && inline.startsWith('{')) return JSON.parse(inline);
+    const res = await fetch('manifest.json');
+    if (!res.ok) throw new Error('无法读取 manifest.json');
+    return res.json();
+  }
+
+  function bindGlobalUI() {
+    $('brandHome').onclick = () => switchView('river');
+    document.querySelectorAll('.nav-tabs button').forEach(b => {
+      b.onclick = () => switchView(b.dataset.view);
+    });
+    $('themeToggle').onclick = () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+    $('openSearch').onclick = openPalette;
+    $('drawerClose').onclick = closeDrawer;
+    $('lightbox').onclick = () => { $('lightbox').hidden = true; };
+
+    $('riverDatedToggle').onclick = () => {
+      state.riverDatedOnly = !state.riverDatedOnly;
+      $('riverDatedToggle').setAttribute('aria-pressed', String(state.riverDatedOnly));
+    };
+
+    $('graphBack').onclick = () => {
+      const prev = state.history.pop();
+      if (prev) openGraph(prev.kind, prev.id, { clusterBy: prev.clusterBy, pushHistory: false });
+    };
+    $('openSwitcher').onclick = openSwitcher;
+    $('switcherTabs').querySelectorAll('button').forEach(b => {
+      b.onclick = () => { switcherKind = b.dataset.kind; renderSwitcherList(); };
+    });
+    $('switcherSearch').oninput = renderSwitcherList;
+
+    $('dimSwitch').querySelectorAll('button').forEach(b => {
+      b.onclick = () => {
+        if (state.dim === b.dataset.dim) return;
+        state.dim = b.dataset.dim;
+        rebuildGraphScene(true);
+        renderGraphHud();
+        syncHash();
+      };
+    });
+    $('toggleUnlabeled').onclick = () => {
+      state.showUnlabeled = !state.showUnlabeled;
+      rebuildGraphScene(true);
+      renderGraphHud();
+    };
+    $('zoomIn').onclick = () => { graph.targetZoom = Math.min(3.2, graph.targetZoom * 1.2); };
+    $('zoomOut').onclick = () => { graph.targetZoom = Math.max(0.28, graph.targetZoom * 0.82); };
+    $('zoomReset').onclick = () => {
+      const maxR = Math.max(240, ...graph.clusters.map(cl => (cl.orbitR || 200) + cl.haloR));
+      fitGraphCamera(maxR + 30);
+    };
+
+    $('catalogTabs').querySelectorAll('button').forEach(b => {
+      b.onclick = () => { state.catalogTab = b.dataset.cat; renderCatalog(); syncHash(); };
+    });
+
+    $('prevPage').onclick = () => { renderPage(state.currentPage - 1); syncHash(); };
+    $('nextPage').onclick = () => { renderPage(state.currentPage + 1); syncHash(); };
+    $('pageForm').onsubmit = e => { e.preventDefault(); renderPage(Number($('pageInput').value)); syncHash(); };
+
+    $('paletteBackdrop').onclick = e => { if (e.target === $('paletteBackdrop')) closePalette(); };
+    $('paletteInput').oninput = renderPalette;
+    $('paletteInput').onkeydown = e => {
+      const btns = $('paletteResults').querySelectorAll('.palette-item');
+      if (e.key === 'ArrowDown' && btns.length) {
+        e.preventDefault(); palIndex = (palIndex + 1) % btns.length;
+        btns.forEach((b, i) => b.classList.toggle('selected', i === palIndex));
+        btns[palIndex].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp' && btns.length) {
+        e.preventDefault(); palIndex = (palIndex - 1 + btns.length) % btns.length;
+        btns.forEach((b, i) => b.classList.toggle('selected', i === palIndex));
+        btns[palIndex].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && palItems[palIndex]) {
+        e.preventDefault(); closePalette(); palItems[palIndex].action();
+      }
+    };
+
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        if (!$('lightbox').hidden) $('lightbox').hidden = true;
+        else if (!$('paletteBackdrop').hidden) closePalette();
+        else if (!$('switcherPop').hidden) closeSwitcher();
+        else closeDrawer();
+      } else if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && document.activeElement?.tagName !== 'INPUT')) {
+        e.preventDefault(); openPalette();
+      } else if (state.view === 'graph' && state.dim === '3d' && document.activeElement?.tagName !== 'INPUT') {
+        if (e.key === 'ArrowLeft') graph.targetYaw -= 0.16;
+        else if (e.key === 'ArrowRight') graph.targetYaw += 0.16;
+        else if (e.key === 'ArrowUp') graph.targetPitch = Math.max(-1.15, graph.targetPitch - 0.14);
+        else if (e.key === 'ArrowDown') graph.targetPitch = Math.min(1.15, graph.targetPitch + 0.14);
+      }
+    });
+
+    document.addEventListener('pointerdown', e => {
+      const pop = $('switcherPop');
+      if (!pop.hidden && !pop.contains(e.target) && !$('openSwitcher').contains(e.target)) {
+        closeSwitcher();
+      }
+    });
+
+    window.addEventListener('resize', () => { resizeRiver(); resizeGraph(); });
+    window.addEventListener('hashchange', applyHash);
+  }
+
+  async function boot() {
+    let savedTheme = 'dark';
+    try { savedTheme = localStorage.getItem('atlas-theme') || 'dark'; } catch {}
+    setTheme(savedTheme);
+
+    const manifest = await loadManifest();
+    G = buildGraphModel(manifest);
+
+    // Dynamic generic book title & minimal header metadata
+    const shortTitle = G.title.split('·')[0].trim() || '纹样星图';
+    document.title = `${shortTitle} · 纹样星图`;
+    $('brandTitle').textContent = shortTitle;
+    $('brandSub').textContent = `${G.pages.length} 页 · ${G.items.length} 条 · ${G.motifs.length} 纹样`;
+    $('riverHeading').textContent = shortTitle;
+    $('riverSub').textContent = `${G.eras.map(e => e.name).join(' · ') || '历史长河'}`;
+
+    bindGlobalUI();
+    initRiver();
+    initGraph();
+    applyHash();
+    requestAnimationFrame(tick);
+  }
+
+  boot().catch(err => {
+    document.body.innerHTML = `<div style="padding:48px;font-family:sans-serif;color:#c96a62">加载图谱失败：${esc(err?.message || err)}</div>`;
+  });
+})();
+</script>
+</body>
+</html>
