@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "atlas": "node server/atlas-server.ts",
+    "atlas": "node --use-env-proxy server/atlas-server.ts",
     "pipeline:reliable": "python3 scripts/reliable_pipeline.py",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

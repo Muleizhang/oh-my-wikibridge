@@ -9,12 +9,14 @@ Works generically across any number of volumes (e.g., vol1 + vol2 + vol3) with z
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import shutil
 from pathlib import Path
 from typing import Any
+from kg_v2.identity import normalize_name
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "scripts" / "atlas_viewer.html"
@@ -100,6 +102,7 @@ def ingest_manifest_volume(
 ) -> dict[str, Any]:
     raw = json.loads(data_path.read_text(encoding="utf-8"))
     vol_title = raw.get("title") or vol_label
+    source_name = raw.get('sourceName') or vol_title
     asset_cache: dict[str, str] = {}
 
     def map_url(url: str | None) -> str:
@@ -127,6 +130,7 @@ def ingest_manifest_volume(
             "page": new_p,
             "volume": vol_label,
             "volumeTitle": vol_title,
+            "sourceName": source_name,
             "volumePage": orig_p,
             "previewUrl": map_url(p.get("previewUrl")),
             "lines": p.get("lines", 0),
@@ -139,16 +143,24 @@ def ingest_manifest_volume(
             return page_num_map[op]
         return page_offset + op
 
+    def map_support(ev: dict[str, Any]) -> dict[str, Any]:
+        orig_p = int(ev.get('page') or ev.get('ordinal') or 1)
+        return {**ev, 'volume': vol_label, 'sourceName': source_name,
+                'page': map_page(orig_p), 'volumePage': orig_p,
+                'previewUrl': map_url(ev.get('previewUrl')),
+                'captionUrl': map_url(ev.get('captionUrl'))}
+
     evidence_out: list[dict[str, Any]] = []
     for ev in raw.get("evidence", []):
-        orig_p = int(ev.get("ordinal", 1))
+        orig_p = int(ev.get("ordinal") or ev.get('page') or 1)
         loc = ev.get("locator") or f"第 {orig_p} 页"
         evidence_out.append({
             **ev,
             "id": f"{prefix}:{ev['id']}",
             "volume": vol_label,
-            "sourceName": vol_title,
+            "sourceName": source_name,
             "ordinal": map_page(orig_p),
+            "page": map_page(orig_p),
             "volumePage": orig_p,
             "locator": f"{vol_label} · {loc}",
             "previewUrl": map_url(ev.get("previewUrl")),
@@ -161,14 +173,19 @@ def ingest_manifest_volume(
         orig_p = int(r.get("page", 1))
         loc = r.get("locator") or f"第 {orig_p} 页"
         proof_loc = r.get("proofLocator") or loc
+        object_label = normalize_name(str(r['object']))
+        binding = dict(r.get('binding') or {})
+        if binding.get('recordId'):
+            binding['recordId'] = f"{prefix}:{binding['recordId']}"
         rows_out.append({
             **r,
             "id": f"{prefix}:{r['id']}",
             "artifactId": f"{prefix}:{r['artifactId']}",
             "evidenceId": f"{prefix}:{r['evidenceId']}",
-            "objectId": f"merged:{r['predicate']}:{r['object']}",
+            "object": object_label,
+            "objectId": f"merged:{r['predicate']}:{object_label}",
             "volume": vol_label,
-            "sourceName": vol_title,
+            "sourceName": source_name,
             "page": map_page(orig_p),
             "volumePage": orig_p,
             "locator": f"{vol_label} · {loc}",
@@ -176,6 +193,8 @@ def ingest_manifest_volume(
             "imageUrl": map_url(r.get("imageUrl")),
             "detailUrl": map_url(r.get("detailUrl")),
             "captionUrl": map_url(r.get("captionUrl")),
+            "binding": binding,
+            "supportingEvidence": [map_support(ev) for ev in r.get('supportingEvidence', [])],
         })
 
     raw_items = raw.get("items") or list({r["artifactId"]: r for r in raw.get("rows", [])}.values())
@@ -188,7 +207,7 @@ def ingest_manifest_volume(
             "artifactId": f"{prefix}:{it['artifactId']}",
             "evidenceId": f"{prefix}:{it['evidenceId']}",
             "volume": vol_label,
-            "sourceName": vol_title,
+            "sourceName": source_name,
             "page": map_page(orig_p),
             "volumePage": orig_p,
             "locator": f"{vol_label} · {loc}",
@@ -201,6 +220,8 @@ def ingest_manifest_volume(
         "volume": vol_label,
         "title": vol_title,
         "format": "manifest",
+        "runId": raw.get('runId'),
+        "summary": raw.get('summary', {}),
         "pages": pages_out,
         "items": items_out,
         "rows": rows_out,
@@ -458,15 +479,26 @@ def merge_volumes(
             "pages": len(chunk["pages"]),
             "items": len(chunk["items"]),
             "rows": len(chunk["rows"]),
+            "runId": chunk.get('runId'),
+            "sourceRecords": chunk.get('summary', {}).get('sourceRecords', len(chunk['items'])),
         })
         page_offset += len(chunk["pages"])
 
     # Sanity checks: zero duplicate IDs across the merged corpus
     assert len({r["id"] for r in all_rows}) == len(all_rows), "Duplicate row ID detected in merged output"
     assert len({e["id"] for e in all_evidence}) == len(all_evidence), "Duplicate evidence ID detected in merged output"
+    assert len({it['artifactId'] for it in all_items}) == len(all_items), 'Duplicate artifact ID detected in merged output'
+    artifact_ids = {it['artifactId'] for it in all_items}
+    evidence_ids = {ev['id'] for ev in all_evidence}
+    assert all(r['artifactId'] in artifact_ids and r['evidenceId'] in evidence_ids for r in all_rows), 'Dangling merged reference'
 
     merged = {
         "title": title,
+        "status": "机器候选 · 尚未人工确认",
+        "runId": 'merged-' + hashlib.sha256(json.dumps([[v.get('runId') for v in volumes_meta],
+            [[r['id'], r['predicate'], r['object']] for r in all_rows]], ensure_ascii=False).encode()).hexdigest()[:20],
+        "summary": {"sourcePages": len(all_pages), "sourceRecords": sum(v['sourceRecords'] for v in volumes_meta),
+                    "graphItems": len(all_items), "graphEdges": len(all_rows), "volumes": len(volumes_meta)},
         "volumes": volumes_meta,
         "pages": all_pages,
         "items": all_items,
@@ -474,7 +506,7 @@ def merge_volumes(
         "evidence": all_evidence,
     }
     manifest_out = output_dir / "manifest.json"
-    manifest_text = json.dumps(merged, ensure_ascii=False, indent=2)
+    manifest_text = json.dumps(merged, ensure_ascii=False, separators=(',', ':'))
     manifest_out.write_text(manifest_text, encoding="utf-8")
 
     if build_html and TEMPLATE.is_file() and REASONER_JS.is_file():

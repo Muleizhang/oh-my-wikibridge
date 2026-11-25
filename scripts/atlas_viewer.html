@@ -226,6 +226,7 @@ button:focus-visible, input:focus-visible {
 }
 .canvas-layer:active { cursor: grabbing; }
 .canvas-layer.pointer { cursor: pointer; }
+.river-flow-layer { pointer-events: none; cursor: default; }
 
 /* ── River Homepage Overlay ── */
 .river-hero {
@@ -249,7 +250,24 @@ button:focus-visible, input:focus-visible {
   font-size: 12px;
   color: var(--ink-2);
   letter-spacing: 0.18em;
+  max-width: calc(100vw - 56px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.river-tools { position: fixed; top: 148px; left: 28px; z-index: 26; display: flex; gap: 6px; flex-wrap: wrap; }
+.river-status { color: var(--ink-3); font-size: 11px; align-self: center; margin-left: 4px; }
+.river-group { position: fixed; right: 22px; top: 130px; z-index: 42; width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 260px); display: flex; flex-direction: column; border: 1px solid var(--line-strong);
+  border-radius: 16px; background: var(--bg-solid); box-shadow: var(--shadow); overflow: hidden; }
+.river-group-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.river-group-head strong { flex: 1; font-size: 13px; }
+.river-group-list { overflow: auto; min-height: 0; padding: 6px; }
+.river-group-item { display: block; text-align: left; width: 100%; padding: 10px; border-radius: 10px; }
+.river-group-item:hover { background: var(--bg-hover); }
+.river-group-item span { display: block; font-size: 12px; }
+.river-group-item small { display: block; color: var(--ink-3); margin-top: 4px; font-size: 10px; }
+.river-group-foot { display: flex; gap: 8px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 11px; }
 
 .river-dock {
   position: fixed;
@@ -1027,7 +1045,7 @@ html[data-theme="dark"] .proof-caption-img {
   align-items: center;
   gap: 6px;
 }
-.page-nav input {
+.page-nav input, .page-nav select {
   width: 62px;
   text-align: center;
   padding: 4px 6px;
@@ -1453,6 +1471,11 @@ html[data-theme="dark"] .proof-caption-img {
 .r-card:hover, .r-card.active {
   border-color: var(--accent);
 }
+.r-path-card { cursor: pointer; }
+.r-path-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .r-card-head {
   display: flex;
   align-items: center;
@@ -1833,10 +1856,23 @@ html[data-theme="dark"] .proof-caption-img {
 <!-- View 1: Full-Bleed Historical River Homepage -->
 <section class="stage-view" id="view-river">
   <canvas class="canvas-layer" id="riverCanvas"></canvas>
+  <canvas class="canvas-layer river-flow-layer" id="riverFlowCanvas" aria-hidden="true"></canvas>
   <div class="river-hero" id="riverHero">
     <h1 id="riverHeading">纹样长河</h1>
     <p id="riverSub">时代 · 材质 · 纹样</p>
   </div>
+  <div class="river-tools">
+    <button type="button" class="chip" id="riverZoomOut" aria-label="缩小长河">−</button>
+    <button type="button" class="chip" id="riverReset">总览</button>
+    <button type="button" class="chip" id="riverZoomIn" aria-label="放大长河">＋</button>
+    <button type="button" class="chip" id="riverUndated" hidden></button>
+    <span class="river-status" id="riverDisplayStatus"></span>
+  </div>
+  <aside class="river-group" id="riverGroup" aria-label="聚合图录" hidden>
+    <div class="river-group-head"><strong id="riverGroupTitle"></strong><button class="chip" type="button" id="riverGroupZoom">放大展开</button><button class="chip" type="button" id="riverGroupClose" aria-label="关闭图录列表">×</button></div>
+    <div class="river-group-list" id="riverGroupList"></div>
+    <div class="river-group-foot" id="riverGroupFoot"></div>
+  </aside>
   <div class="river-dock">
     <div class="dock-group" id="riverEras"></div>
     <span class="dock-sep"></span>
@@ -1923,6 +1959,7 @@ html[data-theme="dark"] .proof-caption-img {
     <div class="page-toolbar">
       <h1 id="pageTitle">原页核读</h1>
       <form class="page-nav" id="pageForm">
+        <select id="pageVolume" aria-label="册数" hidden></select>
         <button type="button" class="icon-pill" id="prevPage">上一页</button>
         <input type="number" id="pageInput" min="1" value="1" aria-label="页码">
         <span id="pageTotal" style="font-size:12px;color:var(--ink-3)"></span>
@@ -2110,6 +2147,7 @@ __REASONER_JS__
     { group: '新石器时代', re: /新石器|原始社会|仰韶|半坡|庙底沟|马家窑|半山|马厂|河姆渡|良渚|龙山|大汶口|红山|裴李岗|磁山|屈家岭|马家浜|大溪/ },
     { group: '夏代', re: /夏代|二里头|夏文化/ },
     { group: '商代', re: /商|殷/ },
+    { group: '周代', re: /周代|周朝/ },
     { group: '西周', re: /西周/ },
     { group: '东周', re: /东周/ },
     { group: '春秋', re: /春秋/ },
@@ -2131,8 +2169,8 @@ __REASONER_JS__
   function eraChronology(label) {
     if (!label) return { order: 999, group: '未标时代', sub: 5 };
     let idx = DYNASTY_TABLE.findIndex(d => d.re.test(label));
-    const group = idx >= 0 ? DYNASTY_TABLE[idx].group : label;
-    if (idx < 0) idx = 500 + hashStr(label) % 100;
+    if (idx < 0) return { order: 9990, group: '待核时代', sub: 5 };
+    const group = DYNASTY_TABLE[idx].group;
     let sub = 4;
     if (/初|早|前/.test(label)) sub = 1;
     else if (/中/.test(label)) sub = 4;
@@ -2178,7 +2216,16 @@ __REASONER_JS__
     '#8A7130', '#3E687A', '#8B4D54', '#4F6E44', '#7C6047',
   ];
 
+  const colorCache = new Map();
   function colorFor(kind, name, theme = currentTheme()) {
+    const key = `${theme}:${kind}:${name}`;
+    if (colorCache.has(key)) return colorCache.get(key);
+    const value = resolveColor(kind, name, theme);
+    colorCache.set(key, value);
+    return value;
+  }
+
+  function resolveColor(kind, name, theme) {
     if (!name || name.startsWith('未标')) return theme === 'dark' ? '#6D717C' : '#969189';
     if (kind === 'material') {
       const m = MATERIAL_HUES.find(r => r.re.test(name));
@@ -2191,12 +2238,54 @@ __REASONER_JS__
     return pal[idx % pal.length];
   }
 
+  const rgbCache = new Map();
   function hexAlpha(hex, a) {
-    const h = hex.replace('#', '');
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    return `rgba(${r},${g},${b},${a})`;
+    let rgb = rgbCache.get(hex);
+    if (!rgb) {
+      const h = hex.replace('#', '');
+      rgb = `${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)}`;
+      rgbCache.set(hex, rgb);
+    }
+    return `rgba(${rgb},${a})`;
+  }
+
+  let canvasFontFamily = '';
+  function canvasFont() {
+    return canvasFontFamily || (canvasFontFamily = getComputedStyle(document.body).fontFamily);
+  }
+
+  function inViewport(x, y, radius, width, height) {
+    return x + radius >= 0 && y + radius >= 0 && x - radius <= width && y - radius <= height;
+  }
+
+  function lineInViewport(ax, ay, bx, by, width, height) {
+    return Math.max(ax, bx) >= -4 && Math.max(ay, by) >= -4
+      && Math.min(ax, bx) <= width + 4 && Math.min(ay, by) <= height + 4;
+  }
+
+  function paintBackdrop(ctx, view, dark, kind) {
+    const { w, h, dpr } = view;
+    const key = `${w}:${h}:${dpr}:${dark}:${kind}`;
+    if (view.backdropKey !== key) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      const bg = canvas.getContext('2d');
+      bg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const isRiver = kind === 'river';
+      const grad = bg.createRadialGradient(w * .5, h * (isRiver ? .48 : .52), isRiver ? 40 : 20,
+        w * .5, h * (isRiver ? .5 : .52), Math.max(w, h) * (isRiver ? .72 : .68));
+      const stops = isRiver
+        ? (dark ? [[0, '#131722'], [.55, '#0b0d14'], [1, '#07080c']] : [[0, '#fcfaf5'], [.65, '#f6f3eb'], [1, '#eee9de']])
+        : (dark ? [[0, '#141824'], [.6, '#0b0d13'], [1, '#07090d']] : [[0, '#fdfcf9'], [.65, '#f6f4ee'], [1, '#ede8dd']]);
+      for (const [offset, color] of stops) grad.addColorStop(offset, color);
+      bg.fillStyle = grad; bg.fillRect(0, 0, w, h);
+      for (const s of view.stars) {
+        bg.fillStyle = dark ? `rgba(232,224,205,${s.a})` : `rgba(50,45,38,${s.a * .45})`;
+        bg.beginPath(); bg.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2); bg.fill();
+      }
+      view.backdrop = canvas; view.backdropKey = key;
+    }
+    ctx.drawImage(view.backdrop, 0, 0, w, h);
   }
 
   function currentTheme() {
@@ -2234,11 +2323,14 @@ __REASONER_JS__
         id: it.artifactId,
         title: it.artifact || it.item || it.artifactId,
         page: Number(it.page || ev.ordinal || 1),
+        volume: it.volume || '',
+        volumePage: it.volumePage || ev.volumePage || it.page || ev.ordinal || 1,
+        sourceName: it.sourceName || ev.sourceName || '',
         locator: it.locator || ev.locator || '',
         status: it.status || '',
         findspot: it.findspot || '',
         observation: it.observation || '',
-        quote: ev.text || it.quote || '',
+        quote: it.quote || ev.text || '',
         periods,
         eraGroups,
         materials,
@@ -2265,7 +2357,8 @@ __REASONER_JS__
         }
         const entry = eraMap.get(ch.group);
         entry.subPeriods.add(p);
-        if (!entry.items.includes(it)) entry.items.push(it);
+        if (!entry.itemIds) entry.itemIds = new Set();
+        if (!entry.itemIds.has(it.id)) { entry.itemIds.add(it.id); entry.items.push(it); }
         entry.order = Math.min(entry.order, ch.order);
       }
     }
@@ -2297,63 +2390,19 @@ __REASONER_JS__
       .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, 'zh-Hans'))
       .map(m => ({ ...m, count: m.items.length }));
 
-    // Compute era timeline position [0.05..0.95] for each item (generic, no book hardcoding!)
+    // The river is an ordered period index, not a duration or popularity scale.
     const eraPos = new Map();
-    if (eras.length === 1) {
-      eraPos.set(eras[0].name, [0.15, 0.85]);
-    } else if (eras.length > 1) {
-      // Proportional allocation with clean minimum width per era so every era breathes
-      const weights = eras.map(e => Math.max(0.75, Math.pow(e.count, 0.42)));
-      const totalW = weights.reduce((s, w) => s + w, 0);
-      let cursor = 0.04;
-      const span = 0.92;
-      eras.forEach((e, i) => {
-        const w = (weights[i] / totalW) * span;
-        eraPos.set(e.name, [cursor, cursor + w]);
-        e.t0 = cursor;
-        e.t1 = cursor + w;
-        e.tMid = cursor + w * 0.5;
-        cursor += w;
-      });
-    }
-
-    // Compute affinity timeline center for each motif & material from dated items (purely for ambient drift layout)
-    const motifTime = new Map();
-    for (const mo of motifs) {
-      const ts = mo.items.filter(i => i.eraGroups.length).map(i => eraPos.get(i.eraGroups[0])?.[0] + (eraPos.get(i.eraGroups[0])?.[1] - eraPos.get(i.eraGroups[0])?.[0]) * 0.5).filter(Number.isFinite);
-      if (ts.length) motifTime.set(mo.name, ts.reduce((a, b) => a + b, 0) / ts.length);
-    }
-    const matTime = new Map();
-    for (const ma of materials) {
-      const ts = ma.items.filter(i => i.eraGroups.length).map(i => {
-        const seg = eraPos.get(i.eraGroups[0]);
-        return seg ? (seg[0] + seg[1]) * 0.5 : NaN;
-      }).filter(Number.isFinite);
-      if (ts.length) matTime.set(ma.name, ts.reduce((a, b) => a + b, 0) / ts.length);
-    }
-
+    eras.forEach((e, i) => {
+      e.t0 = 0.025 + i / eras.length * 0.95;
+      e.t1 = 0.025 + (i + 1) / eras.length * 0.95;
+      e.tMid = (e.t0 + e.t1) * 0.5;
+      eraPos.set(e.name, [e.t0, e.t1]);
+    });
     for (const it of items) {
+      const seg = eraPos.get(it.eraGroups[0]);
       const r1 = (hashStr(it.id + ':x') % 10000) / 10000;
-      const r2 = (hashStr(it.id + ':y') % 10000) / 10000;
-      if (it.eraGroups.length && eraPos.has(it.eraGroups[0])) {
-        const [t0, t1] = eraPos.get(it.eraGroups[0]);
-        const ch = eraChronology(it.periods[0]);
-        // Slight sub-period progression inside the era band
-        const subBias = (ch.sub / 10) * 0.45 + r1 * 0.55;
-        it.riverT = t0 + (t1 - t0) * (0.1 + 0.8 * subBias);
-        it.riverLane = (r2 - 0.5) * 2; // [-1, 1] central river band
-      } else {
-        // Ambient undated item: drift gently across canvas (biased softly toward motif/material affinity if present, else golden spread)
-        let anchor = (it.idx * 0.6180339887) % 1;
-        for (const mo of it.motifs) { if (motifTime.has(mo)) { anchor = motifTime.get(mo) + (r1 - 0.5) * 0.24; break; } }
-        if (it.motifs.length === 0) {
-          for (const ma of it.materials) { if (matTime.has(ma)) { anchor = matTime.get(ma) + (r1 - 0.5) * 0.34; break; } }
-        }
-        it.riverT = Math.max(0.03, Math.min(0.97, anchor));
-        // Spread richly above and below the main river spine to fill the full screen
-        const side = (hashStr(it.id + ':side') % 2 === 0) ? 1 : -1;
-        it.riverLane = side * (0.28 + r2 * 0.68);
-      }
+      it.riverT = seg ? seg[0] + (seg[1] - seg[0]) * (0.06 + r1 * 0.88) : null;
+      it.riverLane = ((hashStr(it.id + ':y') % 10000) / 10000 - 0.5) * 2;
     }
 
     const pages = (manifest.pages && manifest.pages.length)
@@ -2364,8 +2413,17 @@ __REASONER_JS__
           entries: items.filter(i => i.page === p).length,
         }));
 
+    const pagesByVolume = new Map();
+    for (const page of pages) {
+      const key = page.volume || '';
+      if (!pagesByVolume.has(key)) pagesByVolume.set(key, []);
+      pagesByVolume.get(key).push(page);
+    }
+
     return {
       title: manifest.title || '纹样知识图谱',
+      volumes: manifest.volumes || [],
+      pagesByVolume,
       items,
       itemById: new Map(items.map(i => [i.id, i])),
       eras,
@@ -2383,39 +2441,278 @@ __REASONER_JS__
      3. Smart Generic Circular Sprite Cache (Auto Color vs Ink)
      ═══════════════════════════════════════════════════════════════ */
   const spriteCache = new Map();
-  let onSpriteReady = () => {};
+  const spriteQueue = [];
+  const spriteBakeQueue = [];
+  const spriteWorkerBakeQueue = [];
+  const spriteWorkerJobs = new Map();
+  let activeSpriteJobs = 0;
+  let activeSpriteBakes = 0;
+  let lastSpriteTrim = 0;
+  let spriteFrameTime = 0;
+  let spriteWorkers = null;
+  let spriteWorkersDisabled = false;
+  let nextSpriteJob = 0;
+  let spriteBakeScheduled = false;
+  const spritePriorityIds = new Set();
+  let lastSpritePriorityHint = 0;
+  let spriteRevision = 0;
+  let onSpriteReady = () => { spriteRevision++; };
 
-  function getSprite(url) {
-    if (!url) return null;
-    let rec = spriteCache.get(url);
-    if (rec) return rec;
-    rec = { status: 'loading', isMono: false, dark: null, light: null };
-    spriteCache.set(url, rec);
+  function takeVisibleSpriteJob(queue) {
+    let best = 0;
+    for (let i = 1; i < queue.length; i++) {
+      if (queue[i].rec.lastUsed > queue[best].rec.lastUsed
+          || (queue[i].rec.lastUsed === queue[best].rec.lastUsed
+            && queue[i].rec.priority > queue[best].rec.priority)) best = i;
+    }
+    return queue.splice(best, 1)[0];
+  }
 
+  function finishSpriteJob() {
+    activeSpriteJobs--;
+    onSpriteReady();
+    pumpSprites();
+    const now = performance.now();
+    if (spriteCache.size > 256 && now - lastSpriteTrim > 5000) {
+      lastSpriteTrim = now;
+      for (const [key, rec] of spriteCache) {
+        if (rec.status !== 'loading' && !rec.bakePending && now - rec.lastUsed > 15000) {
+          if (rec.dark?.close) rec.dark.close();
+          if (rec.light !== rec.dark && rec.light?.close) rec.light.close();
+          spriteCache.delete(key);
+        }
+      }
+    }
+  }
+
+  function releaseSpriteBitmaps(rec) {
+    if (rec.dark?.close) rec.dark.close();
+    if (rec.light !== rec.dark && rec.light?.close) rec.light.close();
+  }
+
+  function disableSpriteWorkers() {
+    spriteWorkersDisabled = true;
+    for (const worker of spriteWorkers || []) worker.terminate();
+    spriteWorkers = null;
+    for (const job of spriteWorkerJobs.values()) {
+      if (job.kind === 'load') { activeSpriteJobs--; spriteQueue.push(job); }
+      else { activeSpriteBakes--; job.rec.bakePending = false; }
+    }
+    for (const job of spriteWorkerBakeQueue) job.rec.bakePending = false;
+    spriteWorkerBakeQueue.length = 0;
+    spriteWorkerJobs.clear();
+    pumpSprites();
+  }
+
+  function pumpWorkerSpriteBakes() {
+    if (!spriteWorkers) return;
+    while (spriteWorkerBakeQueue.length) {
+      const job = takeVisibleSpriteJob(spriteWorkerBakeQueue);
+      const id = ++nextSpriteJob;
+      activeSpriteBakes++;
+      job.rec.workerBakeId = id;
+      spriteWorkerJobs.set(id, { ...job, kind: 'bake' });
+      spriteWorkers[1 + id % 2].postMessage({ id, kind: 'bake', blob: job.blob });
+    }
+  }
+
+  function getSpriteWorkers() {
+    if (spriteWorkersDisabled || !window.Worker || !window.OffscreenCanvas || !window.createImageBitmap) return null;
+    if (spriteWorkers) return spriteWorkers;
+    try {
+      // Image fetching/decoding has its own worker. Expensive tinting cannot hold
+      // up the next thumbnail's first paint, even if the UI thread stays busy.
+      const source = bakeMedallionSprites.toString() + `
+        const pending = [];
+        let active = 0;
+        function drain() {
+          const limit = pending[0]?.kind === 'load' ? 12 : 1;
+          while (pending.length && active < limit) {
+            let best = 0;
+            for (let i=1; i<pending.length; i++) if ((pending[i].priority||0) > (pending[best].priority||0)) best=i;
+            const data = pending.splice(best, 1)[0];
+            active++;
+            process(data).finally(() => { active--; drain(); });
+          }
+        }
+        self.onmessage = ({ data }) => {
+          if (data.kind === 'priority') {
+            const ids = new Set(data.ids);
+            for (const job of pending) if (ids.has(job.id)) job.priority = data.stamp;
+          } else pending.push(data);
+          drain();
+        };
+        async function process(data) {
+          let image;
+          try {
+            let blob = data.blob;
+            if (data.kind === 'load') {
+              const response = await fetch(data.url);
+              if (!response.ok) throw new Error('Thumbnail HTTP ' + response.status);
+              blob = await response.blob();
+            }
+            image = await createImageBitmap(blob);
+            if (data.kind === 'load') {
+              const side = Math.min(image.width, image.height);
+              const preview = await createImageBitmap(image, (image.width-side)/2, (image.height-side)/2, side, side,
+                { resizeWidth: 96, resizeHeight: 96, resizeQuality: 'low' });
+              self.postMessage({ id: data.id, preview, blob }, [preview]);
+            } else {
+              const rec = {};
+              bakeMedallionSprites(image, rec, 128, () => new OffscreenCanvas(1, 1));
+              const dark = rec.dark.transferToImageBitmap();
+              const light = rec.light === rec.dark ? dark : rec.light.transferToImageBitmap();
+              self.postMessage({ id: data.id, dark, light, isMono: rec.isMono }, dark === light ? [dark] : [dark, light]);
+            }
+          } catch (error) {
+            self.postMessage({ id: data.id, error: String(error) });
+          } finally { if (image) image.close(); }
+        };`;
+      const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+      spriteWorkers = [];
+      for (let i = 0; i < 3; i++) {
+        const worker = new Worker(url);
+        spriteWorkers.push(worker);
+        worker.onerror = event => { event.preventDefault(); disableSpriteWorkers(); };
+        worker.onmessage = ({ data }) => {
+          const job = spriteWorkerJobs.get(data.id);
+          if (!job) {
+            data.preview?.close(); data.dark?.close(); if (data.light !== data.dark) data.light?.close();
+            return;
+          }
+          spriteWorkerJobs.delete(data.id);
+          if (job.kind === 'load') {
+            job.rec.workerLoadId = null;
+            if (data.error) { loadSpriteFallback(job); return; }
+            Object.assign(job.rec, { dark: data.preview, light: data.preview, preview: true,
+              rawPreview: true, status: 'preview', bakePending: true });
+            spriteWorkerBakeQueue.push({ url: job.url, rec: job.rec, blob: data.blob });
+            pumpWorkerSpriteBakes();
+            finishSpriteJob();
+          } else {
+            activeSpriteBakes--;
+            job.rec.workerBakeId = null;
+            job.rec.bakePending = false;
+            if (!data.error) {
+              releaseSpriteBitmaps(job.rec);
+              Object.assign(job.rec, { dark: data.dark, light: data.light, isMono: data.isMono,
+                status: 'ready', rawPreview: false, preview: false });
+            }
+            onSpriteReady();
+            pumpWorkerSpriteBakes();
+          }
+        };
+      }
+      URL.revokeObjectURL(url);
+      return spriteWorkers;
+    } catch { disableSpriteWorkers(); return null; }
+  }
+
+  function scheduleSpriteBake() {
+    if (spriteBakeScheduled || !spriteBakeQueue.length) return;
+    spriteBakeScheduled = true;
+    // This fallback never holds a network slot while waiting for idle time.
+    const run = () => {
+      spriteBakeScheduled = false;
+      const start = performance.now();
+      do {
+        const { rec, image } = takeVisibleSpriteJob(spriteBakeQueue);
+        try { bakeMedallionSprites(image, rec); rec.status = 'ready'; }
+        catch { rec.status = rec.dark ? 'preview' : 'error'; }
+        rec.bakePending = false;
+        onSpriteReady();
+      } while (spriteBakeQueue.length && performance.now() - start < 5);
+      scheduleSpriteBake();
+    };
+    if (window.requestIdleCallback) window.requestIdleCallback(run, { timeout: 50 });
+    else setTimeout(run, 0);
+  }
+
+  function loadSpriteFallback(job) {
+    const { url, rec } = job;
     const img = new Image();
     img.decoding = 'async';
     img.onload = () => {
       try {
-        bakeMedallionSprites(img, rec);
-        rec.status = 'ready';
-      } catch {
-        rec.status = 'error';
-      }
-      onSpriteReady();
+        const image = document.createElement('canvas');
+        const scale = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+        image.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        image.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        image.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, image.width, image.height);
+        releaseSpriteBitmaps(rec);
+        const preview = document.createElement('canvas');
+        preview.width = preview.height = 96;
+        const ctx = preview.getContext('2d');
+        const side = Math.min(image.width, image.height);
+        ctx.beginPath(); ctx.arc(48, 48, 47, 0, Math.PI*2); ctx.clip();
+        ctx.drawImage(image, (image.width-side)/2, (image.height-side)/2, side, side, 0, 0, 96, 96);
+        rec.dark = rec.light = preview;
+        rec.rawPreview = false;
+        rec.status = 'preview'; rec.preview = true; rec.bakePending = true;
+        spriteBakeQueue.push({ rec, image });
+        scheduleSpriteBake();
+      } catch { rec.status = 'error'; }
+      finishSpriteJob();
     };
-    img.onerror = () => { rec.status = 'error'; };
+    img.onerror = () => { rec.status = 'error'; finishSpriteJob(); };
     img.src = url;
+  }
+
+  function pumpSprites() {
+    const workers = getSpriteWorkers();
+    // Browsers and the loader worker bound actual network concurrency. Dispatch
+    // all visible requests now so a busy drawing frame cannot stall the queue.
+    while (spriteQueue.length) {
+      const job = takeVisibleSpriteJob(spriteQueue);
+      activeSpriteJobs++;
+      if (workers) {
+        const id = ++nextSpriteJob;
+        job.rec.workerLoadId = id;
+        spriteWorkerJobs.set(id, { ...job, kind: 'load' });
+        workers[0].postMessage({ id, kind: 'load', url: new URL(job.url, location.href).href });
+      } else loadSpriteFallback(job);
+    }
+  }
+
+  function getSprite(url, priority = 0) {
+    if (!url) return null;
+    const stamp = spriteFrameTime || performance.now();
+    let rec = spriteCache.get(url);
+    if (rec) {
+      rec.priority = rec.lastUsed === stamp ? Math.max(rec.priority, priority) : priority;
+      rec.lastUsed = stamp;
+      if (rec.workerLoadId) spritePriorityIds.add(rec.workerLoadId);
+      if (rec.workerBakeId) spritePriorityIds.add(rec.workerBakeId);
+      return rec;
+    }
+    rec = { status: 'loading', isMono: false, dark: null, light: null, lastUsed: stamp, priority };
+    spriteCache.set(url, rec);
+    spriteQueue.push({ url, rec });
+    pumpSprites();
     return rec;
   }
 
-  function bakeMedallionSprites(img, rec) {
+  function spriteBitmap(rec, dark) {
+    return rec ? (dark ? rec.dark : rec.light) : null;
+  }
+
+  function paintSprite(ctx, rec, bitmap, x, y, radius) {
+    if (rec.rawPreview) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip();
+    }
+    ctx.drawImage(bitmap, x-radius, y-radius, radius*2, radius*2);
+    if (rec.rawPreview) ctx.restore();
+  }
+
+  function bakeMedallionSprites(img, rec, sz = 128, makeCanvas = () => document.createElement('canvas')) {
     const sw = img.naturalWidth || img.width;
     const sh = img.naturalHeight || img.height;
-    if (!sw || !sh) return;
+    if (!sw || !sh) throw new Error('Empty thumbnail');
 
     // 1) Fast 64x64 analysis to auto-detect monochrome ink drawing vs color photograph
     const aSize = 64;
-    const ac = document.createElement('canvas');
+    const ac = makeCanvas();
     ac.width = aSize;
     ac.height = aSize;
     const actx = ac.getContext('2d', { willReadFrequently: true });
@@ -2468,12 +2765,11 @@ __REASONER_JS__
       ch = side;
     }
 
-    const sz = 128;
     const rad = sz * 0.5;
 
     if (!isMono) {
       // Rich natural color circular medallion (used in both Dark & Light modes)
-      const c = document.createElement('canvas');
+      const c = makeCanvas();
       c.width = sz; c.height = sz;
       const ctx = c.getContext('2d');
       ctx.save();
@@ -2492,7 +2788,7 @@ __REASONER_JS__
       rec.light = c;
     } else {
       // Render monochrome ink drawing onto clean buffer, then tint into Dark Gold-Ink & Light Sumi-Ink!
-      const raw = document.createElement('canvas');
+      const raw = makeCanvas();
       raw.width = sz; raw.height = sz;
       const rctx = raw.getContext('2d', { willReadFrequently: true });
       rctx.fillStyle = '#ffffff';
@@ -2503,13 +2799,13 @@ __REASONER_JS__
       const px = rctx.getImageData(0, 0, sz, sz).data;
 
       // Dark sprite: obsidian disc (#141822) + glowing warm antique ivory/gold ink (#E7D2AE)
-      const dc = document.createElement('canvas');
+      const dc = makeCanvas();
       dc.width = sz; dc.height = sz;
       const dctx = dc.getContext('2d');
       const dImg = dctx.createImageData(sz, sz);
 
       // Light sprite: pure cotton paper (#FAF8F3) + crisp sumi charcoal ink (#221E1A)
-      const lc = document.createElement('canvas');
+      const lc = makeCanvas();
       lc.width = sz; lc.height = sz;
       const lctx = lc.getContext('2d');
       const lImg = lctx.createImageData(sz, sz);
@@ -2596,6 +2892,10 @@ __REASONER_JS__
 
   const $ = id => document.getElementById(id);
 
+  function sourcePageLabel(item) {
+    return `${item.volume ? item.volume + ' · ' : ''}PDF 第 ${item.volumePage || item.page} 页`;
+  }
+
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     try { localStorage.setItem('atlas-theme', theme); } catch {}
@@ -2639,13 +2939,11 @@ __REASONER_JS__
     if (opts.dim) state.dim = opts.dim;
     if (!opts.keepOverlay && typeof clearStageOverlay === 'function') clearStageOverlay();
     closeSwitcher();
-    switchView('graph', false);
-    rebuildGraphScene(true);
-    renderGraphHud();
+    switchView('graph', false, true);
     syncHash();
   }
 
-  function switchView(view, updateHash = true) {
+  function switchView(view, updateHash = true, resetGraphCamera = false) {
     state.view = view;
     $('view-river').hidden = view !== 'river';
     $('view-graph').hidden = view !== 'graph';
@@ -2670,7 +2968,7 @@ __REASONER_JS__
         state.clusterBy = defaultClusterFor(defaultKind);
       }
       resizeGraph();
-      rebuildGraphScene(false);
+      rebuildGraphScene(resetGraphCamera);
       renderGraphHud();
     } else if (view === 'catalog') {
       renderCatalog();
@@ -2721,42 +3019,32 @@ __REASONER_JS__
      ═══════════════════════════════════════════════════════════════ */
   const river = {
     canvas: null, ctx: null, w: 0, h: 0, dpr: 1,
-    panX: 0, panY: 0, zoom: 1,
-    targetPanX: 0, targetPanY: 0, targetZoom: 1,
-    mouseX: -9999, mouseY: -9999,
-    dragging: false, dragMoved: false, dragSX: 0, dragSY: 0,
-    hoveredItem: null, hoveredEra: null,
-    stars: [],
-    nodes: [],
-    lastTap: 0, lastTapId: null,
+    panX: 0, panY: 0, zoom: 1, targetPanX: 0, targetPanY: 0, targetZoom: 1,
+    mouseX: -9999, mouseY: -9999, dragging: false, dragMoved: false,
+    dragSX: 0, dragSY: 0, hoveredItem: null, hoveredEra: null,
+    stars: [], nodes: [], groups: [], visibleNodes: [], layoutVersion: 0,
   };
 
   function initRiver() {
     river.canvas = $('riverCanvas');
     river.ctx = river.canvas.getContext('2d');
-    // Subtle ambient starfield
-    river.stars = Array.from({ length: 140 }, (_, i) => ({
-      x: ((i * 7919) % 10000) / 10000,
-      y: ((i * 104729) % 10000) / 10000,
-      r: 0.5 + (i % 5) * 0.28,
-      p: (i * 1.37) % (Math.PI * 2),
-      a: 0.08 + (i % 7) * 0.032,
+    river.flowCanvas = $('riverFlowCanvas');
+    river.flowCtx = river.flowCanvas.getContext('2d');
+    river.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    river.stars = Array.from({ length: 320 }, (_, i) => ({
+      x: ((i * 7919) % 10000) / 10000, y: ((i * 104729) % 10000) / 10000,
+      r: 0.5 + (i % 5) * 0.28, a: 0.08 + (i % 7) * 0.032,
     }));
-
-    // Build river nodes
-    river.nodes = G.items.map((it, i) => ({
-      item: it,
-      baseR: it.hasPeriod ? (17 + (i % 4) * 3) : (12 + (i % 4) * 2.5),
-      phase: ((hashStr(it.id + ':ph') % 628) / 100),
-      ampY: 2.5 + (i % 5) * 1.1,
-      ampX: 1.5 + (i % 3) * 0.9,
-      sx: 0, sy: 0, sr: 14,
-    }));
-
-    // Pre-warm visible sprites cleanly
-    G.items.slice(0, 60).forEach(it => getSprite(it.thumbUrl));
-    setTimeout(() => G.items.slice(60).forEach(it => getSprite(it.thumbUrl)), 350);
-
+    river.nodes = G.items.map(it => ({ item: it, baseR: 15, sx: NaN, sy: NaN, sr: 15,
+      seed: (hashStr(it.id + ':glimmer') % 10000) / 10000 }));
+    river.undated = river.nodes.filter(n => !n.item.hasPeriod);
+    $('riverUndated').textContent = `时代待定 · ${river.undated.length}`;
+    $('riverUndated').hidden = !river.undated.length;
+    $('riverUndated').onclick = () => openRiverGroup({ members: river.undated, count: river.undated.length, pending: true });
+    $('riverGroupClose').onclick = () => { $('riverGroup').hidden = true; };
+    $('riverZoomIn').onclick = () => zoomRiver(1.5);
+    $('riverZoomOut').onclick = () => zoomRiver(1 / 1.5);
+    $('riverReset').onclick = resetRiver;
     renderRiverDock();
     bindRiverEvents();
     resizeRiver();
@@ -2810,426 +3098,483 @@ __REASONER_JS__
 
   function resizeRiver() {
     if (!river.canvas) return;
-    river.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    river.w = window.innerWidth;
-    river.h = window.innerHeight;
-    river.canvas.width = Math.round(river.w * river.dpr);
-    river.canvas.height = Math.round(river.h * river.dpr);
+    const w = window.innerWidth, h = window.innerHeight;
+    const changed = river.w !== w || river.h !== h;
+    river.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    river.w = w; river.h = h;
+    for (const canvas of [river.canvas, river.flowCanvas]) {
+      canvas.width = Math.round(w * river.dpr);
+      canvas.height = Math.round(h * river.dpr);
+    }
+    river.lastRenderKey = null; river.lastFlowAt = 0;
+    if (!changed) return;
+    river.layoutVersion++;
+    buildRiverCurve();
+    const breadth = Math.min(105, Math.max(50, river.mapHeight * .2));
+    for (const n of river.nodes) {
+      if (n.item.riverT === null) { n.wx = NaN; n.wy = NaN; continue; }
+      const p = riverPoint(n.item.riverT), lane = n.item.riverLane;
+      // A dense current with sparse, wide banks. Seeded positions never shuffle on a redraw.
+      const envelope = .6 + .4 * Math.sin(n.item.riverT * 25 + 1.2) ** 2;
+      const bank = Math.sign(lane) * Math.pow(Math.abs(lane), 1.45);
+      const roomX = Math.max(8, Math.min(p.x - 24, w - 24 - p.x)) / Math.max(.15, Math.abs(p.nx));
+      const roomY = Math.max(8, Math.min(p.y - 195, river.mapBottom + 22 - p.y)) / Math.max(.15, Math.abs(p.ny));
+      const spread = Math.min(breadth * envelope, roomX, roomY);
+      const drift = (n.seed - .5) * 24;
+      n.wx = p.x + p.nx * bank * spread + p.tx * drift;
+      n.wy = p.y + p.ny * bank * spread + p.ty * drift;
+    }
+    placeRiverLabels();
   }
 
-  // Smooth river spine curve across full viewport width
-  function riverSpineY(t, h) {
-    const mid = h * 0.51;
-    const amp = Math.min(68, h * 0.085);
-    return mid + Math.sin(t * Math.PI * 2.1 - 0.55) * amp + Math.cos(t * Math.PI * 1.1) * (amp * 0.32);
+  function buildRiverCurve() {
+    const { w, h } = river;
+    const dockHeight = $('riverEras').closest('.river-dock').getBoundingClientRect().height;
+    const top = Math.min(230, h * .30), bottom = Math.max(top + 190, h - dockHeight - 58);
+    river.mapBottom = bottom; river.mapHeight = bottom - top;
+    const margin = Math.max(30, w * .035), span = w - margin * 2;
+    // Uneven meanders fold the long current back into the viewport. No straight lanes or circular turns.
+    const anchors = [
+      [.06,.17], [.22,.08], [.40,.21], [.61,.03], [.81,.10], [.94,.29],
+      [.79,.46], [.60,.39], [.43,.58], [.24,.43], [.07,.53], [.10,.77],
+      [.28,.91], [.48,.78], [.69,.94], [.92,.76],
+    ].map(([x, y]) => ({ x: margin + x * span, y: top + y * (bottom - top) }));
+    const points = [];
+    let distance = 0, previous = null;
+    for (let seg = 0; seg < anchors.length - 1; seg++) {
+      const p0 = anchors[Math.max(0, seg - 1)], p1 = anchors[seg];
+      const p2 = anchors[seg + 1], p3 = anchors[Math.min(anchors.length - 1, seg + 2)];
+      for (let step = seg ? 1 : 0; step <= 48; step++) {
+        const t = step / 48, t2 = t * t, t3 = t2 * t;
+        const at = axis => .5 * (2*p1[axis] + (-p0[axis]+p2[axis])*t
+          + (2*p0[axis]-5*p1[axis]+4*p2[axis]-p3[axis])*t2
+          + (-p0[axis]+3*p1[axis]-3*p2[axis]+p3[axis])*t3);
+        const x = at('x'), y = at('y');
+        if (previous) distance += Math.hypot(x - previous.x, y - previous.y);
+        const point = { x, y, distance };
+        points.push(point); previous = point;
+      }
+    }
+    points.forEach((p, i) => {
+      const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)];
+      const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      p.tx = (b.x - a.x) / length; p.ty = (b.y - a.y) / length;
+    });
+    river.curve = points; river.curveLength = distance;
+  }
+
+  // Sample the cached spline by distance so chronology progresses evenly through bends.
+  function riverPoint(t) {
+    const points = river.curve, distance = Math.max(0, Math.min(1, t)) * river.curveLength;
+    let lo = 0, hi = points.length - 1;
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (points[mid].distance < distance) lo = mid; else hi = mid;
+    }
+    const a = points[lo], b = points[hi];
+    const u = (distance - a.distance) / (b.distance - a.distance || 1);
+    const tx = a.tx + (b.tx - a.tx) * u, ty = a.ty + (b.ty - a.ty) * u;
+    const length = Math.hypot(tx, ty) || 1;
+    return { x: a.x + (b.x-a.x)*u, y: a.y + (b.y-a.y)*u,
+      tx: tx/length, ty: ty/length, nx: -ty/length, ny: tx/length };
+  }
+
+  function placeRiverLabels() {
+    const placed = [];
+    for (const era of G.eras) {
+      const p = riverPoint(era.tMid), width = era.name.length * 14 + 26;
+      let best = null, bestScore = Infinity;
+      for (const offset of [-76, 76, -108, 108, -50, 50]) {
+        const x = Math.max(width/2+16, Math.min(river.w-width/2-16, p.x+p.nx*offset));
+        const y = Math.max(202, Math.min(river.mapBottom+24, p.y+p.ny*offset));
+        const box = [x-width/2, y-18, x+width/2, y+18];
+        const overlap = placed.reduce((sum, b) => sum + Math.max(0,Math.min(box[2]+8,b[2])-Math.max(box[0]-8,b[0]))
+          * Math.max(0,Math.min(box[3]+8,b[3])-Math.max(box[1]-8,b[1])), 0);
+        const score = overlap * 10 + Math.abs(offset) + (y < 215 && x < 630 ? 180 : 0);
+        if (score < bestScore) { bestScore = score; best = { x, y, box }; }
+      }
+      era.riverLabel = best; placed.push(best.box);
+    }
+  }
+
+  function riverToScreen(x, y) {
+    return { x: river.w * .5 + (x - river.w * .5) * river.zoom + river.panX,
+      y: river.h * .5 + (y - river.h * .5) * river.zoom + river.panY };
+  }
+
+  function zoomRiver(factor, x = river.w * .5, y = river.h * .5) {
+    const next = Math.max(.65, Math.min(8, river.targetZoom * factor));
+    const ratio = next / river.targetZoom, cx = x - river.w * .5, cy = y - river.h * .5;
+    river.targetPanX = cx - (cx - river.targetPanX) * ratio;
+    river.targetPanY = cy - (cy - river.targetPanY) * ratio;
+    river.targetZoom = next;
+    river.hoveredItem = null;
+    hideTip();
+  }
+
+  function resetRiver() {
+    river.targetPanX = 0; river.targetPanY = 0; river.targetZoom = 1;
+    river.hoveredItem = null; river.hoveredEra = null;
+    $('riverGroup').hidden = true;
+    hideTip();
+  }
+
+  function openRiverGroup(node, page = 0) {
+    const members = node.members;
+    const start = page * 40, end = Math.min(start + 40, members.length);
+    $('riverGroupTitle').textContent = node.pending ? `时代待定 · ${members.length} 条图录` : `此处聚合 ${members.length} 条图录`;
+    $('riverGroupZoom').hidden = !Number.isFinite(node.wx);
+    $('riverGroupZoom').onclick = () => {
+      const next = Math.min(8, river.targetZoom * 2);
+      river.targetPanX = -(node.wx - river.w * .5) * next;
+      river.targetPanY = -(node.wy - river.h * .5) * next;
+      river.targetZoom = next;
+      $('riverGroup').hidden = true;
+      hideTip();
+    };
+    const rows = members.slice(start, end).map(n => {
+      const it = n.item, button = document.createElement('button');
+      button.type = 'button'; button.className = 'river-group-item';
+      const label = document.createElement('span'); label.textContent = it.title;
+      const source = document.createElement('small');
+      source.textContent = `${sourcePageLabel(it)} · ${it.periods.join('、') || '尚未标注时代'}`;
+      button.append(label, source);
+      button.onclick = () => { $('riverGroup').hidden = true; openDrawer(it.id); };
+      return button;
+    });
+    $('riverGroupList').replaceChildren(...rows);
+    $('riverGroupList').scrollTop = 0;
+    const foot = $('riverGroupFoot');
+    foot.replaceChildren();
+    const label = document.createElement('span');
+    label.textContent = `${start + 1}—${end} / ${members.length} 条`;
+    foot.append(label);
+    for (const [text, target] of [['上一页', page - 1], ['下一页', page + 1]]) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'chip'; button.textContent = text;
+      button.disabled = target < 0 || target * 40 >= members.length;
+      button.onclick = () => openRiverGroup(node, target);
+      foot.append(button);
+    }
+    $('riverGroup').hidden = false;
   }
 
   function bindRiverEvents() {
     const c = river.canvas;
     c.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
-      river.dragging = true;
-      river.dragMoved = false;
-      river.dragSX = e.clientX;
-      river.dragSY = e.clientY;
+      river.dragging = true; river.dragMoved = false;
+      river.hoveredItem = null; river.hoveredEra = null; river.pendingPointer = null;
+      river.dragSX = e.clientX; river.dragSY = e.clientY;
       c.setPointerCapture(e.pointerId);
     });
     c.addEventListener('pointermove', e => {
-      river.mouseX = e.clientX;
-      river.mouseY = e.clientY;
+      river.mouseX = e.clientX; river.mouseY = e.clientY;
       if (river.dragging) {
-        const dx = e.clientX - river.dragSX;
-        const dy = e.clientY - river.dragSY;
-        if (Math.hypot(dx, dy) > 4) river.dragMoved = true;
-        river.targetPanX += dx;
-        river.targetPanY += dy;
-        river.dragSX = e.clientX;
-        river.dragSY = e.clientY;
+        const dx = e.clientX - river.dragSX, dy = e.clientY - river.dragSY;
+        if (Math.hypot(dx, dy) > 3) river.dragMoved = true;
+        river.targetPanX += dx; river.targetPanY += dy;
+        river.dragSX = e.clientX; river.dragSY = e.clientY;
         hideTip();
-        return;
-      }
-      hitTestRiver(e.clientX, e.clientY);
+      } else river.pendingPointer = { x: e.clientX, y: e.clientY };
     });
     c.addEventListener('pointerup', e => {
       if (!river.dragging) return;
       river.dragging = false;
-      if (!river.dragMoved) {
-        hitTestRiver(e.clientX, e.clientY);
-        if (river.hoveredItem) {
-          const it = river.hoveredItem.item;
-          const now = performance.now();
-          if (river.lastTapId === it.id && now - river.lastTap < 360) {
-            // Double-click jumps directly to its clustered graph!
-            if (it.motifs.length) openGraph('motif', it.motifs[0]);
-            else if (it.materials.length) openGraph('material', it.materials[0]);
-            else if (it.eraGroups.length) openGraph('era', it.eraGroups[0]);
-          } else {
-            openDrawer(it.id);
-          }
-          river.lastTap = now;
-          river.lastTapId = it.id;
-        } else if (river.hoveredEra) {
-          openGraph('era', river.hoveredEra);
-        } else {
-          closeDrawer();
-        }
-      }
+      if (river.dragMoved) return;
+      hitTestRiver(e.clientX, e.clientY);
+      const n = river.hoveredItem;
+      if (n) {
+        if (n.count > 1) openRiverGroup(n);
+        else openDrawer(n.item.id);
+      } else if (river.hoveredEra) openGraph('era', river.hoveredEra);
+      else { closeDrawer(); $('riverGroup').hidden = true; }
     });
+    c.addEventListener('pointercancel', () => { river.dragging = false; });
     c.addEventListener('pointerleave', () => {
       river.mouseX = -9999; river.mouseY = -9999;
-      river.hoveredItem = null; river.hoveredEra = null;
-      hideTip();
+      river.pendingPointer = null; river.hoveredItem = null; river.hoveredEra = null; hideTip();
     });
     c.addEventListener('wheel', e => {
-      e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.12 : 0.89;
-      const nextZ = Math.max(0.75, Math.min(2.6, river.targetZoom * factor));
-      const ratio = nextZ / river.targetZoom;
-      const cx = e.clientX - river.w * 0.5;
-      const cy = e.clientY - river.h * 0.5;
-      river.targetPanX = cx - (cx - river.targetPanX) * ratio;
-      river.targetPanY = cy - (cy - river.targetPanY) * ratio;
-      river.targetZoom = nextZ;
+      e.preventDefault(); zoomRiver(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
     }, { passive: false });
     c.addEventListener('dblclick', e => {
-      if (!river.hoveredItem && !river.hoveredEra) {
-        river.targetPanX = 0; river.targetPanY = 0; river.targetZoom = 1;
-      }
+      if (river.hoveredItem?.count > 1) zoomRiver(2, e.clientX, e.clientY);
+      else if (river.hoveredItem) {
+        const it = river.hoveredItem.item;
+        if (it.motifs.length) openGraph('motif', it.motifs[0]);
+        else if (it.eraGroups.length) openGraph('era', it.eraGroups[0]);
+      } else resetRiver();
     });
   }
 
   function hitTestRiver(mx, my) {
     let best = null, bestD = Infinity;
-    for (let i = river.nodes.length - 1; i >= 0; i--) {
-      const n = river.nodes[i];
-      if (state.riverDatedOnly && !n.item.hasPeriod) continue;
-      const d = Math.hypot(mx - n.sx, my - n.sy);
-      if (d <= n.sr + 5 && d < bestD) { best = n; bestD = d; }
+    for (const n of river.visibleNodes) {
+      const d = (mx - n.sx) ** 2 + (my - n.sy) ** 2;
+      if (d <= (n.sr + 4) ** 2 && d < bestD) { best = n; bestD = d; }
     }
     river.hoveredItem = best;
+    river.hoveredEra = null;
+    if (!best) for (const e of G.eras) {
+      const b = e._hitBox;
+      if (b && mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) { river.hoveredEra = e.name; break; }
+    }
+    river.canvas.classList.toggle('pointer', Boolean(best || river.hoveredEra));
+    if (best?.count > 1) {
+      const eras = [...new Set(best.members.flatMap(n => n.item.eraGroups))];
+      showTip(mx, my, `<strong>${best.count} 条图录聚合</strong><div class="tip-tags">${eras.map(e => `<span class="tip-tag">${esc(e)}</span>`).join('')}</div><div class="tip-hint">点击查看全部记录 · 放大逐步展开</div>`);
+    } else if (best) {
+      const it = best.item;
+      showTip(mx, my, `<strong>${esc(it.title)}</strong><div class="tip-tags">${[...it.periods, ...it.materials, ...it.motifs.slice(0, 2)].map(t => `<span class="tip-tag">${esc(t)}</span>`).join('')}</div><div class="tip-hint">${esc(sourcePageLabel(it))} · 点击核读出处</div>`);
+    } else if (river.hoveredEra) {
+      const era = G.eraById.get(river.hoveredEra);
+      showTip(mx, my, `<strong>${esc(era.name)}</strong><div class="tip-hint">${era.count} 条图录 · 点击进入时代星图</div>`);
+    } else hideTip();
+  }
 
-    // Also check clickable era header pills on the river canvas
-    let eraHit = null;
-    if (!best) {
-      for (const e of G.eras) {
-        if (e._hitBox) {
-          const [x1, y1, x2, y2] = e._hitBox;
-          if (mx >= x1 && mx <= x2 && my >= y1 && my <= y2) { eraHit = e.name; break; }
-        }
+  function ensureRiverGroups() {
+    // World-space cells keep aggregates stable while panning. At close zoom every item is restored.
+    const level = river.zoom >= 5 ? 99 : Math.floor(Math.log2(river.zoom) * 2);
+    const key = `${river.layoutVersion}:${level}`;
+    if (river.groupKey === key && river.groupOverlay === stageOverlay) return;
+    const cells = new Map(), cellSize = level === 99 ? 0 : 31 / Math.pow(2, level / 2);
+    const forced = stageOverlay?.artifactSet;
+    for (const n of river.nodes) {
+      if (!Number.isFinite(n.wx)) continue;
+      const id = !cellSize || forced?.has(n.item.id) ? n.item.id
+        : `${n.item.eraGroups[0]}:${Math.floor(n.wx / cellSize)}:${Math.floor(n.wy / cellSize)}`;
+      let group = cells.get(id);
+      if (!group) { group = { key: id, item: n.item, members: [], wx: 0, wy: 0 }; cells.set(id, group); }
+      group.members.push(n); group.wx += n.wx; group.wy += n.wy;
+    }
+    river.groups = [...cells.values()].map(g => {
+      g.count = g.members.length;
+      const seed = (hashStr(g.key + ':size') % 10000) / 10000;
+      const anchor = g.members[Math.floor(seed * g.count)];
+      g.wx = g.wx / g.count * .4 + anchor.wx * .6;
+      g.wy = g.wy / g.count * .4 + anchor.wy * .6;
+      g.item = anchor.item; g.seed = seed;
+      g.baseR = g.count > 1 ? 8 + seed ** 2 * 13 + Math.min(3, Math.log2(g.count) * .5) : 7 + seed ** 2 * 9;
+      return g;
+    });
+    river.groupKey = key; river.groupOverlay = stageOverlay;
+    river.hoveredItem = null;
+  }
+
+  const riverGlowCache = new Map();
+  function riverGlow(color, dark) {
+    const key = `${color}:${dark}`;
+    if (riverGlowCache.has(key)) return riverGlowCache.get(key);
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 96;
+    const ctx = canvas.getContext('2d'), glow = ctx.createRadialGradient(48,48,0,48,48,48);
+    glow.addColorStop(0, hexAlpha(color, dark ? .65 : .32));
+    glow.addColorStop(.25, hexAlpha(color, dark ? .23 : .12));
+    glow.addColorStop(.6, hexAlpha(color, dark ? .07 : .035));
+    glow.addColorStop(1, hexAlpha(color, 0));
+    ctx.fillStyle = glow; ctx.fillRect(0,0,96,96);
+    riverGlowCache.set(key,canvas); return canvas;
+  }
+
+  const riverMedallionCache = new WeakMap();
+  function riverMedallion(sprite, bitmap, color, dark) {
+    let variants = riverMedallionCache.get(sprite);
+    if (!variants) { variants = new Map(); riverMedallionCache.set(sprite,variants); }
+    const key = `${color}:${dark}`, previous = variants.get(key);
+    if (previous?.bitmap === bitmap) return previous.canvas;
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 144;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(riverGlow(color,dark),9,9,126,126);
+    paintSprite(ctx,sprite,bitmap,72,72,30);
+    ctx.beginPath();ctx.arc(72,72,30,0,Math.PI*2);
+    ctx.strokeStyle=hexAlpha(color,.5);ctx.lineWidth=.8;ctx.stroke();
+    variants.set(key,{bitmap,canvas});
+    return canvas;
+  }
+
+  function riverLandscape(dark) {
+    const key = `${river.layoutVersion}:${river.dpr}:${dark}`;
+    if (river.landscapeKey === key) return river.landscape;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(river.w * river.dpr); canvas.height = Math.round(river.h * river.dpr);
+    const ctx = canvas.getContext('2d'); ctx.scale(river.dpr, river.dpr);
+    // Diffuse, overlapping washes form a changing river bed, rather than a uniform ribbon.
+    for (let i = 0; i <= 90; i++) {
+      const t = i/90, p = riverPoint(t), era = G.eras[Math.min(G.eras.length-1,Math.floor(t*G.eras.length))];
+      const col = colorFor('era',era?.name), size = (110 + Math.sin(t*31)**2*110);
+      ctx.globalAlpha = dark ? .17 : .12;
+      ctx.drawImage(riverGlow(col,dark),p.x-size/2,p.y-size/2,size,size);
+    }
+    for (const [si, offset] of [-34,-19,-8,0,10,23,38].entries()) {
+      ctx.beginPath();
+      for (let i = 0; i <= 360; i++) {
+        const t = i/360, p = riverPoint(t);
+        const drift = offset*(.6+.4*Math.sin(t*19+si*.3)**2) + Math.sin(t*39+si*1.7)*5;
+        const x = p.x+p.nx*drift, y = p.y+p.ny*drift;
+        if (!i) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = !offset ? (dark ? 'rgba(216,179,119,.23)' : 'rgba(130,85,48,.2)')
+        : (dark ? 'rgba(220,222,236,.038)' : 'rgba(80,65,52,.035)');
+      ctx.lineWidth = offset ? .65 : 1.05;
+      ctx.stroke();
+    }
+    // Every small point belongs to a dated source record. The distant cloud stays cached.
+    const batches = new Map();
+    for (const n of river.nodes) {
+      if (!Number.isFinite(n.wx)) continue;
+      const col = colorFor('era',n.item.eraGroups[0]);
+      const bucket = `${col}:${Math.floor(n.seed*3)}`;
+      let batch = batches.get(bucket);
+      if (!batch) { batch = { col,alpha:.16+Math.floor(n.seed*3)*.12,path:new Path2D() }; batches.set(bucket,batch); }
+      const radius = .45+n.seed*1.1;
+      batch.path.moveTo(n.wx+radius,n.wy); batch.path.arc(n.wx,n.wy,radius,0,Math.PI*2);
+      if (n.seed>.89) {
+        const size = 8+n.seed*12;
+        ctx.globalAlpha = dark ? .5 : .24;
+        ctx.drawImage(riverGlow(col,dark),n.wx-size/2,n.wy-size/2,size,size);
       }
     }
-    river.hoveredEra = eraHit;
-    river.canvas.classList.toggle('pointer', Boolean(best || eraHit));
-
-    if (best) {
-      const it = best.item;
-      const tags = [
-        ...it.periods.map(p => `<span class="tip-tag">${esc(p)}</span>`),
-        ...it.materials.map(m => `<span class="tip-tag">${esc(m)}</span>`),
-        ...it.motifs.slice(0, 3).map(m => `<span class="tip-tag">${esc(m)}</span>`),
-      ];
-      if (!tags.length) tags.push('<span class="tip-tag">未标关系</span>');
-      showTip(mx, my, `<strong>${esc(it.title)}</strong><div class="tip-tags">${tags.join('')}</div><div class="tip-hint">点击查看关系与出处 · 双击进入图谱</div>`);
-    } else if (eraHit) {
-      const eObj = G.eraById.get(eraHit);
-      showTip(mx, my, `<strong>${esc(eraHit)}</strong><div class="tip-tags"><span class="tip-tag">${eObj.count} 条图录</span><span class="tip-tag">默认按材质聚类</span></div><div class="tip-hint">点击进入时代 2D/3D 聚类图谱 →</div>`);
-    } else {
-      hideTip();
+    ctx.globalAlpha = 1;
+    for (const b of batches.values()) { ctx.fillStyle=hexAlpha(b.col,dark?b.alpha:b.alpha*.65);ctx.fill(b.path); }
+    // Sparse direction cues follow the current, with no implied relation between neighboring records.
+    for (const t of [.035,.23,.43,.64,.84,.965]) {
+      const p = riverPoint(t), angle = Math.atan2(p.ty,p.tx);
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(angle);
+      ctx.beginPath(); ctx.moveTo(-4,-2.5);ctx.lineTo(1,0);ctx.lineTo(-4,2.5);
+      ctx.strokeStyle = dark ? 'rgba(213,186,137,.45)' : 'rgba(130,99,64,.4)';ctx.lineWidth=.9;ctx.stroke();ctx.restore();
     }
+    river.landscapeKey = key; river.landscape = canvas;
+    return canvas;
+  }
+
+  // Only this transparent layer animates while idle; artwork and the nebula do not get repainted.
+  function drawRiverFlow(now) {
+    if (!river.flowCtx || !river.curve || now-river.lastFlowAt<48) return;
+    const reduced = river.motionQuery.matches;
+    const key = `${river.layoutVersion}:${river.panX}:${river.panY}:${river.zoom}:${currentTheme()}`;
+    if (reduced && river.flowKey===key) return;
+    river.lastFlowAt=now; river.flowKey=key;
+    const ctx=river.flowCtx,{w,h,dpr}=river,dark=currentTheme()==='dark',time=now*.001;
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    for (let i=0;i<32;i++) {
+      const t=(i*.61803398875+(reduced?0:time*.003))%1,p=riverPoint(t);
+      const drift=Math.sin(i*7.1+time*.14)*(5+i%17),q=riverToScreen(p.x+p.nx*drift,p.y+p.ny*drift);
+      if (!inViewport(q.x,q.y,18,w,h)) continue;
+      const alpha=.18+.18*Math.sin(time*.7+i*2.3)**2;
+      ctx.globalAlpha=dark?alpha:alpha*.65;
+      ctx.drawImage(riverGlow(dark?'#e0c995':'#987247',dark),q.x-10,q.y-10,20,20);
+      ctx.beginPath();ctx.arc(q.x,q.y,.7+(i%3)*.3,0,Math.PI*2);ctx.fillStyle=dark?'#f5e6c1':'#987247';ctx.fill();
+    }
+    for (let i=0;i<river.nodes.length;i+=37) {
+      const n=river.nodes[i];if (!Number.isFinite(n.wx)) continue;
+      const q=riverToScreen(n.wx,n.wy);if (!inViewport(q.x,q.y,4,w,h)) continue;
+      ctx.globalAlpha=(.05+.25*Math.sin(time*.5+n.seed*70)**4)*(dark?1:.55);
+      ctx.fillStyle=dark?'#e5e1d5':'#8c7557';ctx.beginPath();ctx.arc(q.x,q.y,.6+n.seed*.7,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
   }
 
   function drawRiver(timeSec) {
     const { ctx, w, h, dpr } = river;
     if (!w || !h) return;
-
-    // Smooth camera damping
-    river.panX += (river.targetPanX - river.panX) * 0.14;
-    river.panY += (river.targetPanY - river.panY) * 0.14;
-    river.zoom += (river.targetZoom - river.zoom) * 0.14;
-
-    const dark = currentTheme() === 'dark';
+    river.panX += (river.targetPanX - river.panX) * .22;
+    river.panY += (river.targetPanY - river.panY) * .22;
+    river.zoom += (river.targetZoom - river.zoom) * .22;
+    ensureRiverGroups();
+    const dark = currentTheme() === 'dark', overlay = stageOverlay?.artifactSet;
+    const activeEra = state.riverHighlightEra || river.hoveredEra, activeMat = state.riverHighlightMat;
+    const hovered = river.hoveredItem, hoveredMotifs = new Set(hovered?.count === 1 ? hovered.item.motifs : []);
+    const filtering = Boolean(activeEra || activeMat || hoveredMotifs.size || overlay);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // 1) Rich Atmospheric Background
-    const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.48, 40, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
-    if (dark) {
-      bgGrad.addColorStop(0, '#131722');
-      bgGrad.addColorStop(0.55, '#0b0d14');
-      bgGrad.addColorStop(1, '#07080c');
-    } else {
-      bgGrad.addColorStop(0, '#fcfaf5');
-      bgGrad.addColorStop(0.65, '#f6f3eb');
-      bgGrad.addColorStop(1, '#eee9de');
+    paintBackdrop(ctx, river, dark, 'river');
+    ctx.save();
+    ctx.translate(w * .5 + river.panX, h * .5 + river.panY); ctx.scale(river.zoom, river.zoom); ctx.translate(-w * .5, -h * .5);
+    ctx.drawImage(riverLandscape(dark), 0, 0, w, h);
+    ctx.restore();
+    river.visibleNodes = [];
+    const highlighted = [], ordinary = [], nodeByArt = new Map();
+    for (const n of river.groups) {
+      const p = riverToScreen(n.wx, n.wy);
+      n.sx = p.x; n.sy = p.y; n.sr = n.baseR * Math.pow(river.zoom, .35);
+      for (const member of n.members) nodeByArt.set(member.item.id, n);
+      n.focus = n === hovered || n.members.some(m => m.item.id === state.drawerItemId);
+      n.match = n.focus || (filtering && n.members.some(({ item: it }) => overlay?.has(it.id)
+        || (activeEra && it.eraGroups.includes(activeEra)) || (activeMat && it.materials.includes(activeMat))
+        || (hoveredMotifs.size && it.motifs.some(m => hoveredMotifs.has(m)))));
+      const extent = n.sr * (n.focus ? 1.3 : 1);
+      n.visible = inViewport(n.sx, n.sy, extent + 20, w, h);
+      if (!n.visible) continue;
+      river.visibleNodes.push(n);
+      (n.match ? highlighted : ordinary).push(n);
     }
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, w, h);
-
-    // 2) Starfield / Paper Grain Dots
-    for (const s of river.stars) {
-      const tw = 0.65 + 0.35 * Math.sin(timeSec * 0.9 + s.p);
-      ctx.fillStyle = dark
-        ? `rgba(232, 222, 200, ${(s.a * tw).toFixed(3)})`
-        : `rgba(60, 52, 42, ${(s.a * 0.45 * tw).toFixed(3)})`;
+    // Only evidenced shared-motif links are shown, on demand; proximity creates no relation.
+    if (hovered?.count === 1 && hoveredMotifs.size) {
       ctx.beginPath();
-      ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // World transform helper
-    const marginX = Math.max(48, w * 0.045);
-    const spanW = w - marginX * 2;
-    const toScreen = (wx, wy) => ({
-      x: w * 0.5 + (wx - w * 0.5) * river.zoom + river.panX,
-      y: h * 0.5 + (wy - h * 0.5) * river.zoom + river.panY,
-    });
-
-    // 3) Soft Era Nebula Washes along the Historical River
-    const activeEra = state.riverHighlightEra || river.hoveredEra;
-    for (const e of G.eras) {
-      const col = colorFor('era', e.name);
-      const wx = marginX + e.tMid * spanW;
-      const wy = riverSpineY(e.tMid, h);
-      const p = toScreen(wx, wy);
-      const rad = Math.max(130, (e.t1 - e.t0) * spanW * 0.68) * river.zoom;
-      const boost = activeEra === e.name ? 1.85 : 1.0;
-      const ng = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, rad);
-      ng.addColorStop(0, hexAlpha(col, (dark ? 0.14 : 0.09) * boost));
-      ng.addColorStop(0.55, hexAlpha(col, (dark ? 0.05 : 0.03) * boost));
-      ng.addColorStop(1, hexAlpha(col, 0));
-      ctx.fillStyle = ng;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // 4) Sweeping Multi-Strand River Stream Lines (Historical Current)
-    const strands = [-28, -10, 0, 11, 30];
-    strands.forEach((off, si) => {
-      ctx.beginPath();
-      const steps = 64;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const wx = marginX + t * spanW;
-        const wave = Math.sin(t * 7 + timeSec * 0.35 + si) * (si === 2 ? 2 : 5);
-        const wy = riverSpineY(t, h) + off + wave;
-        const p = toScreen(wx, wy);
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
+      for (const n of highlighted) if (n !== hovered && n.members.some(m => m.item.motifs.some(v => hoveredMotifs.has(v)))) {
+        ctx.moveTo(hovered.sx, hovered.sy); ctx.lineTo(n.sx, n.sy);
       }
-      ctx.strokeStyle = si === 2
-        ? (dark ? 'rgba(216,179,119,0.28)' : 'rgba(130,85,48,0.24)')
-        : (dark ? 'rgba(239,236,228,0.065)' : 'rgba(40,35,28,0.06)');
-      ctx.lineWidth = si === 2 ? 1.4 : 0.8;
-      ctx.setLineDash(si === 0 || si === 4 ? [3, 6] : []);
-      ctx.stroke();
-    });
-    ctx.setLineDash([]);
-
-    // 5) Compute live positions for all floating medallions
-    const verticalSpread = Math.min(h * 0.36, 270);
-    const hoveredMotifs = new Set(river.hoveredItem?.item.motifs || []);
-    const hoveredId = river.hoveredItem?.item.id || state.drawerItemId;
-    const activeMat = state.riverHighlightMat;
-
-    for (const n of river.nodes) {
-      const it = n.item;
-      const wx = marginX + it.riverT * spanW + Math.cos(timeSec * 0.42 + n.phase) * n.ampX;
-      const spine = riverSpineY(it.riverT, h);
-      const laneH = it.hasPeriod ? verticalSpread * 0.56 : verticalSpread * 0.96;
-      const wy = spine + it.riverLane * laneH + Math.sin(timeSec * 0.55 + n.phase) * n.ampY;
-      const p = toScreen(wx, wy);
-      n.sx = p.x;
-      n.sy = p.y;
-      n.sr = n.baseR * Math.pow(river.zoom, 0.72);
+      ctx.strokeStyle = dark ? 'rgba(216,179,119,.35)' : 'rgba(130,85,48,.3)'; ctx.lineWidth = 1; ctx.stroke();
     }
-
-    // 6) Motif Lineage Filaments across the River (subtle ambient + glowing on hover!)
-    if (hoveredMotifs.size > 0 && river.hoveredItem) {
-      const src = river.hoveredItem;
-      ctx.lineWidth = 1.25;
-      for (const n of river.nodes) {
-        if (n === src) continue;
-        if (state.riverDatedOnly && !n.item.hasPeriod) continue;
-        if (n.item.motifs.some(m => hoveredMotifs.has(m))) {
-          const col = colorFor('motif', n.item.motifs.find(m => hoveredMotifs.has(m)));
-          ctx.beginPath();
-          const mx = (src.sx + n.sx) * 0.5;
-          const my = (src.sy + n.sy) * 0.5 - Math.min(70, Math.abs(src.sx - n.sx) * 0.16);
-          ctx.moveTo(src.sx, src.sy);
-          ctx.quadraticCurveTo(mx, my, n.sx, n.sy);
-          ctx.strokeStyle = hexAlpha(col, dark ? 0.55 : 0.48);
-          ctx.stroke();
-        }
-      }
-    } else {
-      // Gentle constellation threads connecting same-era or same-motif neighbors along the stream
-      ctx.lineWidth = 0.65;
-      ctx.strokeStyle = dark ? 'rgba(216,179,119,0.08)' : 'rgba(60,52,42,0.07)';
-      for (const e of G.eras) {
-        const datedNodes = river.nodes.filter(n => n.item.eraGroups[0] === e.name).sort((a, b) => a.sx - b.sx);
-        if (datedNodes.length < 2) continue;
-        ctx.beginPath();
-        for (let i = 0; i < datedNodes.length - 1; i++) {
-          const a = datedNodes[i], b = datedNodes[i + 1];
-          if (Math.hypot(a.sx - b.sx, a.sy - b.sy) < 160 * river.zoom) {
-            ctx.moveTo(a.sx, a.sy);
-            ctx.lineTo(b.sx, b.sy);
-          }
-        }
-        ctx.stroke();
-      }
-    }
-
-    // 7) Draw Floating Pattern Medallions (ambient first, dated & highlighted on top!)
-    const overlaySet = stageOverlay?.artifactSet || null;
-    const ordered = [...river.nodes].sort((a, b) => {
-      const ah = a.item.id === hoveredId ? 3 : (overlaySet?.has(a.item.id) ? 2 : (a.item.hasPeriod ? 1 : 0));
-      const bh = b.item.id === hoveredId ? 3 : (overlaySet?.has(b.item.id) ? 2 : (b.item.hasPeriod ? 1 : 0));
-      return ah - bh;
-    });
-
-    // Draw glowing reasoning path energy arcs across the River when overlay is active!
     if (stageOverlay?.pathChains?.length) {
-      const nodeByArt = new Map(river.nodes.map(n => [n.item.id, n]));
+      ctx.beginPath();
       for (const chain of stageOverlay.pathChains) {
-        const pts = chain.map(aid => nodeByArt.get(aid)).filter(Boolean);
-        for (let i = 0; i < pts.length - 1; i++) {
-          const a = pts[i], b = pts[i + 1];
-          const mx = (a.sx + b.sx) * 0.5;
-          const my = (a.sy + b.sy) * 0.5 - Math.min(95, Math.max(36, Math.abs(a.sx - b.sx) * 0.22));
-          ctx.beginPath();
-          ctx.moveTo(a.sx, a.sy);
-          ctx.quadraticCurveTo(mx, my, b.sx, b.sy);
-          ctx.strokeStyle = dark ? 'rgba(228,191,122,0.72)' : 'rgba(155,78,48,0.68)';
-          ctx.lineWidth = 2.2;
-          ctx.stroke();
-          // Traveling energy pulse along the river arc
-          const tP = (timeSec * 0.55 + i * 0.27) % 1;
-          const u = 1 - tP;
-          const px = u * u * a.sx + 2 * u * tP * mx + tP * tP * b.sx;
-          const py = u * u * a.sy + 2 * u * tP * my + tP * tP * b.sy;
-          ctx.fillStyle = dark ? '#fff2cc' : '#8f4e32';
-          ctx.beginPath();
-          ctx.arc(px, py, 3.6, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        const points = chain.map(id => nodeByArt.get(id)).filter(Boolean);
+        points.forEach((n, i) => { if (i) ctx.lineTo(n.sx, n.sy); else ctx.moveTo(n.sx, n.sy); });
+      }
+      ctx.strokeStyle = dark ? '#e4bf7a' : '#9b4e30'; ctx.lineWidth = 2.2; ctx.stroke();
+    }
+    for (const n of [...ordinary, ...highlighted]) {
+      const r = n.sr * (n.focus ? 1.18 : 1);
+      const it = n.item, col = it.materials.length ? colorFor('material',it.materials[0]) : colorFor('era', it.eraGroups[0]);
+      ctx.globalAlpha = filtering && !n.match ? .14 : n.match ? 1 : .55+n.seed*.4;
+      const sprite = getSprite(it.thumbUrl, n.focus ? 2 : n.match ? 1 : 0), bitmap = spriteBitmap(sprite, dark);
+      if (bitmap) {
+        const size=r*4.8;
+        ctx.drawImage(riverMedallion(sprite,bitmap,col,dark),n.sx-size/2,n.sy-size/2,size,size);
+      }
+      else {
+        ctx.drawImage(riverGlow(col,dark),n.sx-r*2.1,n.sy-r*2.1,r*4.2,r*4.2);
+        ctx.beginPath(); ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2);
+        ctx.fillStyle = dark ? '#1b2230' : '#ede6da'; ctx.fill();
+      }
+      if (n.focus) {
+        ctx.beginPath();ctx.arc(n.sx,n.sy,r,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+      }
+      if (n.count > 1 && (n.focus || river.zoom > 2.8)) {
+        const bx = n.sx + r * .68, by = n.sy + r * .65, label = String(n.count);
+        const width = Math.max(20, label.length * 6 + 10);
+        ctx.fillStyle = dark ? '#252b38' : '#fffaf0'; roundRect(ctx, bx - width / 2, by - 9, width, 18, 8); ctx.fill();
+        ctx.font = '600 10px ui-monospace,monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = dark ? '#efe5cf' : '#544332'; ctx.fillText(label, bx, by);
+      } else if (n.focus || (n.match && filtering && river.zoom > 1.5)) {
+        ctx.font = `500 11px ${canvasFont()}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = dark ? '#efece4' : '#29261f';
+        ctx.fillText(it.title.length > 12 ? it.title.slice(0, 11) + '…' : it.title, n.sx, n.sy + r + 15);
       }
     }
-
-    for (const n of ordered) {
-      const it = n.item;
-      if (state.riverDatedOnly && !it.hasPeriod && !overlaySet?.has(it.id)) continue;
-      if (n.sx < -40 || n.sx > w + 40 || n.sy < -40 || n.sy > h + 40) continue;
-
-      const isFocus = it.id === hoveredId;
-      const ovMatch = overlaySet ? overlaySet.has(it.id) : false;
-      const motifMatch = hoveredMotifs.size > 0 && it.motifs.some(m => hoveredMotifs.has(m));
-      const eraMatch = activeEra && it.eraGroups.includes(activeEra);
-      const matMatch = activeMat && it.materials.includes(activeMat);
-      const filtering = Boolean(activeEra || activeMat || hoveredMotifs.size > 0 || overlaySet);
-      const highlighted = isFocus || motifMatch || eraMatch || matMatch || ovMatch;
-
-      let alpha = it.hasPeriod ? 0.94 : 0.62;
-      if (filtering) alpha = highlighted ? 1 : 0.14;
-
-      const r = isFocus ? n.sr * 1.28 : (highlighted && filtering ? n.sr * 1.1 : n.sr);
-      const ringCol = it.materials.length
-        ? colorFor('material', it.materials[0])
-        : (it.eraGroups.length ? colorFor('era', it.eraGroups[0]) : (dark ? '#9c9588' : '#7a7266'));
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      // Soft outer halo on highlighted or dated nodes
-      if (highlighted || (dark && it.hasPeriod)) {
-        const glow = ctx.createRadialGradient(n.sx, n.sy, r * 0.7, n.sx, n.sy, r * (isFocus ? 2.1 : 1.55));
-        glow.addColorStop(0, hexAlpha(ringCol, isFocus ? 0.42 : (highlighted ? 0.28 : 0.14)));
-        glow.addColorStop(1, hexAlpha(ringCol, 0));
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(n.sx, n.sy, r * (isFocus ? 2.1 : 1.55), 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      const sp = getSprite(it.thumbUrl);
-      const bmp = sp?.status === 'ready' ? (dark ? sp.dark : sp.light) : null;
-      if (bmp) {
-        ctx.drawImage(bmp, n.sx - r, n.sy - r, r * 2, r * 2);
-      } else {
-        ctx.fillStyle = dark ? '#191d28' : '#ebe6dc';
-        ctx.beginPath();
-        ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Crisp hairline ring
-      ctx.beginPath();
-      ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = isFocus
-        ? (dark ? '#f6dfb2' : '#8f4e32')
-        : hexAlpha(ringCol, highlighted ? 0.95 : (dark ? 0.55 : 0.48));
-      ctx.lineWidth = isFocus ? 2.2 : (highlighted ? 1.5 : 1.0);
-      ctx.stroke();
-
-      // Show short motif label directly below prominent nodes when zoomed in or highlighted
-      if ((isFocus || (highlighted && filtering) || (river.zoom > 1.35 && it.hasPeriod)) && (it.motifs[0] || it.title)) {
-        const lbl = it.motifs[0] || it.title.slice(0, 8);
-        ctx.font = `500 11px ${getComputedStyle(document.body).fontFamily}`;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = dark ? 'rgba(239,236,228,0.92)' : 'rgba(30,28,25,0.88)';
-        ctx.fillText(lbl, n.sx, n.sy + r + 14);
-      }
-      ctx.restore();
-    }
-
-    // 8) Clickable Era Gate Markers along the River Horizon
+    ctx.globalAlpha = 1;
     for (const e of G.eras) {
-      const wx = marginX + e.tMid * spanW;
-      const wy = riverSpineY(e.tMid, h);
-      const p = toScreen(wx, wy);
-      const isHov = activeEra === e.name;
-      const col = colorFor('era', e.name);
-      const labelY = Math.max(108, p.y - Math.min(h * 0.25, 165) * Math.min(1.15, river.zoom));
-
-      // Delicate vertical time hairline dropping from Era header into the river spine
-      ctx.beginPath();
-      ctx.moveTo(p.x, labelY + 18);
-      ctx.lineTo(p.x, p.y);
-      ctx.strokeStyle = hexAlpha(col, isHov ? 0.55 : 0.20);
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 4]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // River anchor diamond
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, isHov ? 4.5 : 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Serif Era Title Badge (clickable!)
-      ctx.font = `600 15px "Noto Serif SC","Songti SC",serif`;
-      const tw = ctx.measureText(e.name).width;
-      const padX = 14, bh = 28;
-      const bx = p.x - tw * 0.5 - padX;
-      const by = labelY - bh * 0.5;
-      e._hitBox = [bx, by, bx + tw + padX * 2, by + bh];
-
-      ctx.fillStyle = isHov
-        ? hexAlpha(col, dark ? 0.24 : 0.16)
-        : (dark ? 'rgba(13,16,24,0.72)' : 'rgba(252,250,245,0.82)');
-      roundRect(ctx, bx, by, tw + padX * 2, bh, 14);
-      ctx.fill();
-      ctx.strokeStyle = hexAlpha(col, isHov ? 0.88 : 0.36);
-      ctx.lineWidth = isHov ? 1.3 : 1;
-      ctx.stroke();
-
-      ctx.fillStyle = isHov ? (dark ? '#fff6e4' : col) : (dark ? '#efece4' : '#1e1c19');
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(e.name, p.x, labelY + 0.5);
-      ctx.textBaseline = 'alphabetic';
+      const anchor = riverPoint(e.tMid), p = riverToScreen(anchor.x, anchor.y);
+      const labelP = riverToScreen(e.riverLabel.x,e.riverLabel.y);
+      e._hitBox = null;
+      if (!inViewport(labelP.x, labelP.y, 75, w, h)) continue;
+      const col = colorFor('era', e.name), active = activeEra === e.name;
+      const x = labelP.x, y = labelP.y;
+      ctx.drawImage(riverGlow(col,dark),p.x-18,p.y-18,36,36);
+      ctx.beginPath();ctx.arc(p.x,p.y,2.4,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(x, y);
+      ctx.strokeStyle = hexAlpha(col, .22); ctx.lineWidth = .8; ctx.setLineDash([2, 5]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = '600 14px "Noto Serif SC","Songti SC",serif';
+      const bw = ctx.measureText(e.name).width + 26, bh = 28;
+      e._hitBox = [x - bw / 2, y - bh / 2, x + bw / 2, y + bh / 2];
+      ctx.fillStyle = dark ? 'rgba(13,17,25,.72)' : 'rgba(252,250,245,.8)'; roundRect(ctx, x - bw / 2, y - bh / 2, bw, bh, 14); ctx.fill();
+      ctx.strokeStyle = hexAlpha(col, active ? .9 : .24); ctx.lineWidth = active ? 1.5 : .7; ctx.stroke();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = dark ? '#efece4' : '#29261f'; ctx.fillText(e.name, x, y);
     }
+    ctx.textBaseline = 'alphabetic';
+    const text = `${Math.round(river.zoom * 100)}% · 拖拽漫游`;
+    if ($('riverDisplayStatus').textContent !== text) $('riverDisplayStatus').textContent = text;
+    $('riverUndated').hidden = state.riverDatedOnly || !river.undated.length;
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -3269,11 +3614,12 @@ __REASONER_JS__
 
   function resizeGraph() {
     if (!graph.canvas) return;
-    graph.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    graph.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     graph.w = window.innerWidth;
     graph.h = window.innerHeight;
     graph.canvas.width = Math.round(graph.w * graph.dpr);
     graph.canvas.height = Math.round(graph.h * graph.dpr);
+    graph.lastRenderKey = null;
   }
 
   function getFocalItems(kind, id) {
@@ -3302,7 +3648,8 @@ __REASONER_JS__
           groupMap.set(k, { id: k, name: k, kind: state.clusterBy, isUnlabeled, items: [] });
         }
         const grp = groupMap.get(k);
-        if (!grp.items.includes(it)) grp.items.push(it);
+        if (!grp.itemIds) grp.itemIds = new Set();
+        if (!grp.itemIds.has(it.id)) { grp.itemIds.add(it.id); grp.items.push(it); }
       }
     }
 
@@ -3439,7 +3786,6 @@ __REASONER_JS__
           baseR: nodeR,
           sx: 0, sy: 0, sz: 0, sr: nodeR,
         });
-        getSprite(it.thumbUrl);
       });
     }
 
@@ -3589,12 +3935,13 @@ __REASONER_JS__
         hideTip();
         return;
       }
-      hitTestGraph(e.clientX, e.clientY);
+      graph.pendingPointer = { x: e.clientX, y: e.clientY };
     });
     c.addEventListener('pointerup', e => {
       if (!graph.dragging) return;
       graph.dragging = false;
       if (!graph.dragMoved) {
+        graph.pendingPointer = null;
         hitTestGraph(e.clientX, e.clientY);
         if (stageOverlay?.graphScene) {
           const hit = stageOverlay.hoveredNode;
@@ -3620,6 +3967,7 @@ __REASONER_JS__
       }
     });
     c.addEventListener('pointerleave', () => {
+      graph.pendingPointer = null;
       graph.hoveredNode = null;
       graph.hoveredCluster = null;
       if (stageOverlay) stageOverlay.hoveredNode = null;
@@ -3665,6 +4013,7 @@ __REASONER_JS__
     // 1) Check specimen nodes front-to-back (highest z first)
     let hitNode = null, bestZ = -Infinity;
     for (const n of graph.nodes) {
+      if (!n.visible) continue;
       const d = Math.hypot(mx - n.sx, my - n.sy);
       if (d <= n.sr + 4 && n.sz >= bestZ) { hitNode = n; bestZ = n.sz; }
     }
@@ -3675,6 +4024,7 @@ __REASONER_JS__
     if (!hitNode) {
       let bestCZ = -Infinity;
       for (const c of graph.clusters) {
+        if (!c.visible) continue;
         const dHub = Math.hypot(mx - c.sx, my - c.sy);
         const inPill = c._labelBox && mx >= c._labelBox[0] && mx <= c._labelBox[2] && my >= c._labelBox[1] && my <= c._labelBox[3];
         if ((dHub <= c.sr + 6 || inPill) && c.sz >= bestCZ) {
@@ -3718,51 +4068,29 @@ __REASONER_JS__
         graph.targetPitch = Math.max(-1.15, Math.min(1.15, graph.targetPitch + graph.velPitch));
         graph.velYaw *= 0.92;
         graph.velPitch *= 0.92;
-        // Very subtle celestial drift when idle
-        if (Math.abs(graph.velYaw) < 0.0002 && !graph.hoveredNode && !graph.hoveredCluster) {
-          graph.targetYaw += 0.00065;
-        }
       }
       graph.yaw += (graph.targetYaw - graph.yaw) * 0.14;
       graph.pitch += (graph.targetPitch - graph.pitch) * 0.14;
     }
 
     // Spring-morph cluster and node coordinates
-    for (const c of graph.clusters) {
-      c.x += (c.tx - c.x) * 0.15;
-      c.y += (c.ty - c.y) * 0.15;
-      c.z += (c.tz - c.z) * 0.15;
-    }
-    for (const n of graph.nodes) {
-      n.x += (n.tx - n.x) * 0.15;
-      n.y += (n.ty - n.y) * 0.15;
-      n.z += (n.tz - n.z) * 0.15;
+    if (!stageOverlay?.graphScene) {
+      for (const c of graph.clusters) {
+        c.x += (c.tx - c.x) * 0.15;
+        c.y += (c.ty - c.y) * 0.15;
+        c.z += (c.tz - c.z) * 0.15;
+      }
+      for (const n of graph.nodes) {
+        n.x += (n.tx - n.x) * 0.15;
+        n.y += (n.ty - n.y) * 0.15;
+        n.z += (n.tz - n.z) * 0.15;
+      }
     }
 
     const dark = currentTheme() === 'dark';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // 1) Backdrop
-    const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.52, 20, w * 0.5, h * 0.52, Math.max(w, h) * 0.68);
-    if (dark) {
-      bgGrad.addColorStop(0, '#141824');
-      bgGrad.addColorStop(0.6, '#0b0d13');
-      bgGrad.addColorStop(1, '#07090d');
-    } else {
-      bgGrad.addColorStop(0, '#fdfcf9');
-      bgGrad.addColorStop(0.65, '#f6f4ee');
-      bgGrad.addColorStop(1, '#ede8dd');
-    }
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Subtle background starfield / academic chart dots
-    for (const s of graph.stars) {
-      ctx.fillStyle = dark ? `rgba(232,224,205,${s.a})` : `rgba(50,45,38,${s.a * 0.45})`;
-      ctx.beginPath();
-      ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    paintBackdrop(ctx, graph, dark, 'graph');
 
     // If a dedicated Reasoning Overlay Scene (path / compare / predict) is active, render it in full 2D/3D!
     if (stageOverlay?.graphScene) {
@@ -3802,92 +4130,93 @@ __REASONER_JS__
       c.sx = p.x; c.sy = p.y; c.sz = p.z; c.sk = p.k;
       c.sr = c.hubR * p.k;
       c.haloSr = c.haloR * p.k;
+      c.visible = inViewport(c.sx, c.sy, c.haloSr + 40, w, h);
     }
 
-    // 4) Cluster Halos & Core-to-Cluster Spokes (depth-ordered)
-    const sortedClusters = [...graph.clusters].sort((a, b) => a.sz - b.sz);
+    // Paint only halos intersecting the viewport; retain every cluster in the model.
+    const sortedClusters = graph.clusters.filter(c => c.visible);
+    if (state.dim === '3d') sortedClusters.sort((a, b) => a.sz - b.sz);
     for (const c of sortedClusters) {
       const col = colorFor(c.kind, c.name);
       const isAct = activeCluster === c;
-      const dimAlpha = activeCluster && !isAct ? 0.30 : 1.0;
+      const dimAlpha = activeCluster && !isAct ? 0.30 : 1;
       const depthFade = state.dim === '3d' ? Math.max(0.32, Math.min(1, (c.sz + 520) / 720)) : 1;
-      const a = dimAlpha * depthFade;
-
-      // Translucent cluster constellation halo
-      const hg = ctx.createRadialGradient(c.sx, c.sy, c.sr * 0.5, c.sx, c.sy, c.haloSr);
-      hg.addColorStop(0, hexAlpha(col, (dark ? 0.14 : 0.09) * a * (isAct ? 1.55 : 1)));
-      hg.addColorStop(0.75, hexAlpha(col, (dark ? 0.045 : 0.03) * a));
+      const alpha = dimAlpha * depthFade;
+      const hg = ctx.createRadialGradient(c.sx, c.sy, c.sr * .5, c.sx, c.sy, c.haloSr);
+      hg.addColorStop(0, hexAlpha(col, (dark ? .14 : .09) * alpha * (isAct ? 1.55 : 1)));
+      hg.addColorStop(.75, hexAlpha(col, (dark ? .045 : .03) * alpha));
       hg.addColorStop(1, hexAlpha(col, 0));
       ctx.fillStyle = hg;
-      ctx.beginPath();
-      ctx.arc(c.sx, c.sy, c.haloSr, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Delicate dashed perimeter enclosing the cluster
-      ctx.beginPath();
-      ctx.arc(c.sx, c.sy, c.haloSr, 0, Math.PI * 2);
-      ctx.strokeStyle = hexAlpha(col, (isAct ? 0.55 : 0.22) * a);
-      ctx.lineWidth = isAct ? 1.3 : 0.85;
-      ctx.setLineDash(c.isUnlabeled ? [2, 5] : [4, 5]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Curved filament connecting Center Core -> Cluster Hub
-      ctx.beginPath();
-      const mx = (coreP.x + c.sx) * 0.5 - (c.sy - coreP.y) * 0.09;
-      const my = (coreP.y + c.sy) * 0.5 + (c.sx - coreP.x) * 0.09;
-      ctx.moveTo(coreP.x, coreP.y);
-      ctx.quadraticCurveTo(mx, my, c.sx, c.sy);
-      ctx.strokeStyle = hexAlpha(col, (isAct ? 0.72 : 0.28) * a);
-      ctx.lineWidth = isAct ? 1.65 : 1.0;
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(c.sx, c.sy, c.haloSr, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(c.sx, c.sy, c.haloSr, 0, Math.PI * 2);
+      ctx.strokeStyle = hexAlpha(col, (isAct ? .55 : .22) * alpha);
+      ctx.lineWidth = isAct ? 1.3 : .85;
+      ctx.setLineDash(c.isUnlabeled ? [2, 5] : [4, 5]); ctx.stroke(); ctx.setLineDash([]);
     }
 
-    // 5) Project all specimen nodes & draw intra-cluster constellation filaments
+    // Batch filaments by paint style, including visible portions of offscreen spokes.
+    const filaments = new Map();
+    const filament = (col, alpha, width) => {
+      const key = `${col}:${alpha}:${width}`;
+      let batch = filaments.get(key);
+      if (!batch) {
+        batch = { path: new Path2D(), col, alpha, width };
+        filaments.set(key, batch);
+      }
+      return batch.path;
+    };
+    for (const c of graph.clusters) {
+      // Dense overviews show spokes to visible hubs; panning restores the rest.
+      if (graph.clusters.length > 80 && !c.visible) continue;
+      if (!lineInViewport(coreP.x, coreP.y, c.sx, c.sy, w, h)) continue;
+      const col = colorFor(c.kind, c.name), isAct = activeCluster === c;
+      const depth = state.dim === '3d' ? Math.round(Math.max(.32, Math.min(1, (c.sz + 520) / 720)) * 8) / 8 : 1;
+      const alpha = (isAct ? .72 : .28) * (activeCluster && !isAct ? .30 : 1) * depth;
+      const path = filament(col, alpha, isAct ? 1.65 : 1);
+      path.moveTo(coreP.x, coreP.y);
+      path.quadraticCurveTo((coreP.x + c.sx) * .5 - (c.sy - coreP.y) * .09,
+        (coreP.y + c.sy) * .5 + (c.sx - coreP.x) * .09, c.sx, c.sy);
+    }
     for (const n of graph.nodes) {
       const p = projectPoint(n.x, n.y, n.z);
-      n.sx = p.x; n.sy = p.y; n.sz = p.z; n.sk = p.k;
-      n.sr = n.baseR * p.k;
-
+      n.sx = p.x; n.sy = p.y; n.sz = p.z; n.sk = p.k; n.sr = n.baseR * p.k;
+      n.visible = inViewport(n.sx, n.sy, Math.max(5, n.sr) * 2.5 + 20, w, h);
       const c = n.cluster;
-      const col = colorFor(c.kind, c.name);
+      if (!lineInViewport(c.sx, c.sy, n.sx, n.sy, w, h)) continue;
       const isAct = activeCluster === c || n.item.id === selectedItemId;
-      const dimAlpha = activeCluster && !isAct ? 0.22 : 1;
-      const depthFade = state.dim === '3d' ? Math.max(0.28, Math.min(1, (n.sz + 520) / 720)) : 1;
-
-      ctx.beginPath();
-      ctx.moveTo(c.sx, c.sy);
-      ctx.lineTo(n.sx, n.sy);
-      ctx.strokeStyle = hexAlpha(col, (isAct ? 0.45 : 0.18) * dimAlpha * depthFade);
-      ctx.lineWidth = isAct ? 1.15 : 0.75;
-      ctx.stroke();
+      const depth = state.dim === '3d' ? Math.round(Math.max(.28, Math.min(1, (n.sz + 520) / 720)) * 8) / 8 : 1;
+      const alpha = (isAct ? .45 : .18) * (activeCluster && !isAct ? .22 : 1) * depth;
+      const path = filament(colorFor(c.kind, c.name), alpha, isAct ? 1.15 : .75);
+      path.moveTo(c.sx, c.sy); path.lineTo(n.sx, n.sy);
+    }
+    for (const batch of filaments.values()) {
+      ctx.strokeStyle = hexAlpha(batch.col, batch.alpha); ctx.lineWidth = batch.width;
+      ctx.stroke(batch.path);
     }
 
-    // Cross-cluster co-occurrence arcs when hovering a specimen node!
+    // Cache semantic neighbors until the hovered specimen changes.
     if (graph.hoveredNode) {
       const hn = graph.hoveredNode;
-      const hMotifs = new Set(hn.item.motifs);
-      for (const n of graph.nodes) {
-        if (n === hn || n.cluster === hn.cluster) continue;
-        const shared = n.item.id === hn.item.id || (hMotifs.size && n.item.motifs.some(m => hMotifs.has(m)));
-        if (shared) {
-          ctx.beginPath();
-          ctx.moveTo(hn.sx, hn.sy);
-          ctx.quadraticCurveTo(coreP.x, coreP.y, n.sx, n.sy);
-          ctx.strokeStyle = dark ? 'rgba(216,179,119,0.48)' : 'rgba(143,78,50,0.42)';
-          ctx.lineWidth = 1.2;
-          ctx.setLineDash([3, 4]);
-          ctx.stroke();
-        }
+      if (graph.linkHover !== hn) {
+        const motifs = new Set(hn.item.motifs);
+        graph.hoverLinks = graph.nodes.filter(n => n !== hn && n.cluster !== hn.cluster
+          && (n.item.id === hn.item.id || n.item.motifs.some(m => motifs.has(m))));
+        graph.linkHover = hn;
       }
-      ctx.setLineDash([]);
+      ctx.beginPath();
+      for (const n of graph.hoverLinks) {
+        ctx.moveTo(hn.sx, hn.sy);
+        ctx.quadraticCurveTo(coreP.x, coreP.y, n.sx, n.sy);
+      }
+      ctx.strokeStyle = dark ? 'rgba(216,179,119,0.48)' : 'rgba(143,78,50,0.42)';
+      ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
     }
 
     // 6) Depth-sorted paint pass: Core + Cluster Hubs + Specimen Medallions
     const drawables = [];
     drawables.push({ type: 'core', z: coreP.z });
-    for (const c of graph.clusters) drawables.push({ type: 'cluster', z: c.sz + 0.5, obj: c });
-    for (const n of graph.nodes) drawables.push({ type: 'node', z: n.sz + (n.item.id === selectedItemId ? 40 : 0), obj: n });
+    for (const c of sortedClusters) drawables.push({ type: 'cluster', z: c.sz + 0.5, obj: c });
+    for (const n of graph.nodes.filter(n => n.visible)) drawables.push({ type: 'node', z: n.sz + (n.item.id === selectedItemId ? 40 : 0), obj: n });
     drawables.sort((a, b) => a.z - b.z);
 
     for (const d of drawables) {
@@ -3926,9 +4255,9 @@ __REASONER_JS__
 
     // Core disc
     const sp = getSprite(core.thumbUrl);
-    const bmp = sp?.status === 'ready' ? (dark ? sp.dark : sp.light) : null;
+    const bmp = spriteBitmap(sp, dark);
     if (bmp && core.kind === 'motif') {
-      ctx.drawImage(bmp, core.sx - r, core.sy - r, r * 2, r * 2);
+      paintSprite(ctx, sp, bmp, core.sx, core.sy, r);
       ctx.fillStyle = dark ? 'rgba(9,11,16,0.45)' : 'rgba(250,248,243,0.48)';
       ctx.beginPath();
       ctx.arc(core.sx, core.sy, r, 0, Math.PI * 2);
@@ -4006,6 +4335,12 @@ __REASONER_JS__
     ctx.fillStyle = col;
     ctx.fillText(String(c.items.length), c.sx, c.sy + 0.5);
 
+    if (graph.clusters.length > 80 && c.sr < 8 && !isAct) {
+      c._labelBox = null;
+      ctx.restore();
+      return;
+    }
+
     // Clean clickable Cluster Label Pill outside top edge of cluster halo
     const labelText = c.name + (c.hiddenCount > 0 ? ` (+${c.hiddenCount})` : '');
     const ly = c.sy - c.haloSr - 12;
@@ -4039,6 +4374,15 @@ __REASONER_JS__
     const depthFade = state.dim === '3d' ? Math.max(0.28, Math.min(1, (n.sz + 520) / 720)) : 1;
     const r = Math.max(5, n.sr * (isSel ? 1.24 : 1));
 
+    // Small overview nodes stay interactive; thumbnails appear on zoom/focus.
+    if (!isSel && !isAct && r < 8) {
+      ctx.globalAlpha = dimAlpha * depthFade;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      return;
+    }
+
     ctx.save();
     ctx.globalAlpha = dimAlpha * depthFade;
 
@@ -4053,9 +4397,9 @@ __REASONER_JS__
     }
 
     const sp = getSprite(it.thumbUrl);
-    const bmp = sp?.status === 'ready' ? (dark ? sp.dark : sp.light) : null;
+    const bmp = spriteBitmap(sp, dark);
     if (bmp) {
-      ctx.drawImage(bmp, n.sx - r, n.sy - r, r * 2, r * 2);
+      paintSprite(ctx, sp, bmp, n.sx, n.sy, r);
     } else {
       ctx.fillStyle = dark ? '#1a1f2c' : '#ece7dc';
       ctx.beginPath();
@@ -4074,7 +4418,7 @@ __REASONER_JS__
       const lbl = (it.motifs[0] && state.clusterBy !== 'motif' && state.focusKind !== 'motif')
         ? it.motifs[0]
         : (it.title.length > 9 ? it.title.slice(0, 8) + '…' : it.title);
-      ctx.font = `500 10.5px ${getComputedStyle(document.body).fontFamily}`;
+      ctx.font = `500 10.5px ${canvasFont()}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = dark ? 'rgba(239,236,228,0.88)' : 'rgba(30,28,25,0.85)';
       ctx.fillText(lbl, n.sx, n.sy + r + 13);
@@ -4224,10 +4568,13 @@ __REASONER_JS__
     const total = G.pages.length;
     state.currentPage = Math.max(1, Math.min(total, Number(num) || 1));
     const pageObj = G.pages[state.currentPage - 1];
-    $('pageTitle').textContent = `原页 · 第 ${state.currentPage} 页`;
-    $('pageInput').value = state.currentPage;
-    $('pageInput').max = total;
-    $('pageTotal').textContent = `/ ${total}`;
+    const volumePages = G.pagesByVolume.get(pageObj?.volume || '') || G.pages;
+    const localMax = Math.max(...volumePages.map(p => p.volumePage || p.page));
+    $('pageTitle').textContent = `原页 · ${sourcePageLabel(pageObj || { page: state.currentPage })}`;
+    $('pageVolume').value = pageObj?.volume || '';
+    $('pageInput').value = pageObj?.volumePage || state.currentPage;
+    $('pageInput').max = localMax;
+    $('pageTotal').textContent = `/ ${localMax}`;
     $('prevPage').disabled = state.currentPage <= 1;
     $('nextPage').disabled = state.currentPage >= total;
     $('pageScan').src = pageObj?.previewUrl || '';
@@ -4354,6 +4701,12 @@ __REASONER_JS__
     addRelRow('时代', 'era', it.periods);
     addRelRow('材质', 'material', it.materials);
     addRelRow('纹样', 'motif', it.motifs);
+    for (const r of it.rows.filter(r => r.origin === 'page_heading_inheritance')) {
+      const note = document.createElement('p');
+      note.style.cssText = 'font-size:12px;color:var(--ink-3)';
+      note.textContent = `时代归属候选来自同页标题「${r.object}」（${sourcePageLabel(it)}），尚未人工确认。`;
+      rels.append(note);
+    }
     if (!rels.childElementCount) {
       const p = document.createElement('div');
       p.style.fontSize = '12px'; p.style.color = 'var(--ink-3)';
@@ -4461,9 +4814,9 @@ __REASONER_JS__
     const pageMatch = q.match(/^(\d+)$/);
     if (pageMatch) {
       const p = Number(pageMatch[1]);
-      if (p >= 1 && p <= G.pages.length) {
-        addGroup('原页', [{ label: `PDF 第 ${p} 页`, meta: '原页核读', action: () => { state.currentPage = p; switchView('pages'); } }]);
-      }
+      const targets = G.pages.filter(page => (page.volumePage || page.page) === p);
+      addGroup('原页', targets.map(page => ({ label: sourcePageLabel(page), meta: '原页核读',
+        action: () => { state.currentPage = page.page; switchView('pages'); } })));
     }
 
     addGroup('时代 · 按材质聚类', G.eras.filter(e => !q || e.name.toLowerCase().includes(q)).slice(0, 8)
@@ -4474,7 +4827,7 @@ __REASONER_JS__
       .map(m => ({ label: m.name, meta: `${m.count} 条`, action: () => openGraph('motif', m.id) })));
     if (q) {
       addGroup('器物条目', G.items.filter(i => i.title.toLowerCase().includes(q)).slice(0, 10)
-        .map(i => ({ label: i.title, meta: `P.${i.page}`, action: () => openDrawer(i.id) })));
+        .map(i => ({ label: i.title, meta: sourcePageLabel(i), action: () => openDrawer(i.id) })));
     }
   }
 
@@ -4486,7 +4839,7 @@ __REASONER_JS__
 
   function showTip(x, y, html) {
     const tip = $('canvasTip');
-    tip.innerHTML = html;
+    if (tip._content !== html) { tip.innerHTML = html; tip._content = html; }
     tip.hidden = false;
     const rightEdge = x + 280 > window.innerWidth;
     tip.style.left = (rightEdge ? Math.max(12, x - 275) : x + 10) + 'px';
@@ -4501,11 +4854,51 @@ __REASONER_JS__
   /* ═══════════════════════════════════════════════════════════════
      10. Animation Loop & Initialization
      ═══════════════════════════════════════════════════════════════ */
+  function shouldPaintView(view, kind, now) {
+    const key = [view.w, view.h, view.dpr, currentTheme(), spriteRevision, state.drawerItemId,
+      kind === 'river' ? view.hoveredItem?.key : view.hoveredNode?.item.id,
+      kind === 'graph' ? view.hoveredNode?.cluster.id : '',
+      kind === 'river' ? view.hoveredEra : view.hoveredCluster?.id,
+      state.riverHighlightEra, state.riverHighlightMat, state.riverDatedOnly,
+      state.focusKind, state.focusId, state.clusterBy, state.dim].join('|');
+    const cameraMoving = Math.abs(view.panX - view.targetPanX) > .08
+      || Math.abs(view.panY - view.targetPanY) > .08 || Math.abs(view.zoom - view.targetZoom) > .0001;
+    const graphMoving = kind === 'graph' && ((state.dim === '3d' && (Math.abs(view.yaw - view.targetYaw) > .0001
+      || Math.abs(view.pitch - view.targetPitch) > .0001 || Math.abs(view.velYaw) > .00005 || Math.abs(view.velPitch) > .00005))
+      || (!stageOverlay?.graphScene && (view.clusters.some(c => Math.abs(c.x-c.tx) + Math.abs(c.y-c.ty) + Math.abs(c.z-c.tz) > .1)
+      || view.nodes.some(n => Math.abs(n.x-n.tx) + Math.abs(n.y-n.ty) + Math.abs(n.z-n.tz) > .1))));
+    const changed = view.lastRenderKey !== key || view.lastOverlay !== stageOverlay;
+    const animatedOverlay = kind === 'graph' && Boolean(stageOverlay?.graphScene);
+    if (!changed && !cameraMoving && !graphMoving && !view.dragging && !animatedOverlay) return false;
+    // Preserve interaction frame rate; reasoning pulses alone need only 30 frames per second.
+    if (!changed && !cameraMoving && !graphMoving && animatedOverlay && now - view.lastDrawAt < 32) return false;
+    view.lastRenderKey = key; view.lastOverlay = stageOverlay; view.lastDrawAt = now;
+    return true;
+  }
+
   function tick(now) {
     const t = now * 0.001;
-    if (G) {
-      if (state.view === 'river') drawRiver(t);
-      else if (state.view === 'graph') drawGraph(t);
+    spriteFrameTime = now;
+    if (G && !document.hidden) {
+      if (state.view === 'river' && river.pendingPointer) {
+        const pointer = river.pendingPointer; river.pendingPointer = null;
+        hitTestRiver(pointer.x, pointer.y);
+      }
+      if (state.view === 'graph' && graph.pendingPointer) {
+        const pointer = graph.pendingPointer;
+        graph.pendingPointer = null;
+        hitTestGraph(pointer.x, pointer.y);
+      }
+      if (state.view === 'river') {
+        if (shouldPaintView(river, 'river', now)) drawRiver(t);
+        drawRiverFlow(now);
+      }
+      else if (state.view === 'graph' && shouldPaintView(graph, 'graph', now)) drawGraph(t);
+      if (spriteWorkers && spritePriorityIds.size && now-lastSpritePriorityHint > 100) {
+        const hint = { kind: 'priority', ids: [...spritePriorityIds], stamp: now };
+        for (const worker of spriteWorkers) worker.postMessage(hint);
+        spritePriorityIds.clear(); lastSpritePriorityHint = now;
+      }
     }
     requestAnimationFrame(tick);
   }
@@ -4572,7 +4965,17 @@ __REASONER_JS__
 
     $('prevPage').onclick = () => { renderPage(state.currentPage - 1); syncHash(); };
     $('nextPage').onclick = () => { renderPage(state.currentPage + 1); syncHash(); };
-    $('pageForm').onsubmit = e => { e.preventDefault(); renderPage(Number($('pageInput').value)); syncHash(); };
+    $('pageVolume').onchange = () => {
+      const pages = G.pagesByVolume.get($('pageVolume').value);
+      if (pages?.length) { renderPage(pages[0].page); syncHash(); }
+    };
+    $('pageForm').onsubmit = e => {
+      e.preventDefault();
+      const number = Number($('pageInput').value);
+      const pages = G.pagesByVolume.get($('pageVolume').value) || G.pages;
+      const page = pages.find(p => (p.volumePage || p.page) === number);
+      if (page) { renderPage(page.page); syncHash(); }
+    };
 
     $('paletteBackdrop').onclick = e => { if (e.target === $('paletteBackdrop')) closePalette(); };
     $('paletteInput').oninput = renderPalette;
@@ -4684,7 +5087,16 @@ __REASONER_JS__
     const chosen = focusIndex !== null && pathRes.paths[focusIndex]
       ? [pathRes.paths[focusIndex]]
       : pathRes.paths.slice(0, 3);
-    if (!chosen.length) return null;
+    if (!chosen.length) {
+      const nodes = [pathRes.source, pathRes.target].filter(Boolean).map((n, i) => ({
+        key: n.key || `path:missing:${i}`, label: n.label, kind: n.kind || 'era',
+        isOntology: Boolean(n.isOntology), artifactId: null,
+        roleTag: n.missing ? '当前模式无此节点' : '本次未找到路径', sub: '',
+        x: i ? 60 : -60, y: 0, z: 0, tx: i ? 220 : -220, ty: 0, tz: 0,
+        baseR: 34, color: '#b7a58c', sx: 0, sy: 0, sz: 0, sr: 34,
+      }));
+      return { kind: 'path', nodes, edges: [], extent: 300 };
+    }
 
     const nodeMap = new Map();
     const edges = [];
@@ -4753,12 +5165,12 @@ __REASONER_JS__
 
     const nA = {
       key: 'cmp:A', label: cmpRes.entityA, kind: cmpRes.kind, isOntology: false,
-      roleTag: `实体 A · ${cmpRes.countA} 条`, sub: `独有 ${cmpRes.primary.onlyA.length}`,
+      roleTag: `实体 A · ${cmpRes.countA} 条`, sub: `当前记录差集 ${cmpRes.primary.onlyA.length}`,
       x: -60, y: 0, z: 0, tx: -250, ty: 0, tz: 20, baseR: 38, color: colA, sx: 0, sy: 0, sz: 0, sr: 38,
     };
     const nB = {
       key: 'cmp:B', label: cmpRes.entityB, kind: cmpRes.kind, isOntology: false,
-      roleTag: `实体 B · ${cmpRes.countB} 条`, sub: `独有 ${cmpRes.primary.onlyB.length}`,
+      roleTag: `实体 B · ${cmpRes.countB} 条`, sub: `当前记录差集 ${cmpRes.primary.onlyB.length}`,
       x: 60, y: 0, z: 0, tx: 250, ty: 0, tz: 20, baseR: 38, color: colB, sx: 0, sy: 0, sz: 0, sr: 38,
     };
     nodes.push(nA, nB);
@@ -4796,8 +5208,8 @@ __REASONER_JS__
         edges.push({ from: anchor, to: nd, label: '', dashed: true, color: col, phase: i * 0.2 });
       });
     };
-    fanWing(cmpRes.primary.onlyA, nA, -1, colA, `仅 ${cmpRes.entityA} 独有 (NOT EXISTS)`);
-    fanWing(cmpRes.primary.onlyB, nB, 1, colB, `仅 ${cmpRes.entityB} 独有 (NOT EXISTS)`);
+    fanWing(cmpRes.primary.onlyA, nA, -1, colA, `当前仅在 ${cmpRes.entityA} 检索到`);
+    fanWing(cmpRes.primary.onlyB, nB, 1, colB, `当前仅在 ${cmpRes.entityB} 检索到`);
 
     return { kind: 'compare', nodes, edges, extent: 490 };
   }
@@ -4920,7 +5332,7 @@ __REASONER_JS__
 
       // Concise edge predicate / confidence pill
       if (e.label) {
-        ctx.font = `500 10.5px ${getComputedStyle(document.body).fontFamily}`;
+        ctx.font = `500 10.5px ${canvasFont()}`;
         const tw = ctx.measureText(e.label).width;
         const bx = mx - tw * 0.5 - 6, by = my - 9;
         ctx.fillStyle = dark ? 'rgba(11,14,22,0.85)' : 'rgba(252,250,245,0.92)';
@@ -4959,9 +5371,9 @@ __REASONER_JS__
       ctx.fill();
 
       const sp = n.thumbUrl ? getSprite(n.thumbUrl) : null;
-      const bmp = sp?.status === 'ready' ? (dark ? sp.dark : sp.light) : null;
+      const bmp = spriteBitmap(sp, dark);
       if (bmp && n.artifactId) {
-        ctx.drawImage(bmp, n.sx - r, n.sy - r, r * 2, r * 2);
+        paintSprite(ctx, sp, bmp, n.sx, n.sy, r);
       } else {
         const dg = ctx.createRadialGradient(n.sx - r * 0.25, n.sy - r * 0.25, 2, n.sx, n.sy, r);
         if (dark) {
@@ -5091,7 +5503,7 @@ __REASONER_JS__
         rState.deepseekReady = true;
         rState.model = info.model || 'deepseek-chat';
         $('rStatusDot').classList.remove('off');
-        $('rStatusText').textContent = 'DeepSeek 就绪';
+        $('rStatusText').textContent = info.agentProvider === 'openrouter' ? 'OpenRouter 就绪' : 'DeepSeek 就绪';
         if (!rState.agentMessages.length) renderAgentFeed();
       }
     }).catch(() => {});
@@ -5167,23 +5579,24 @@ __REASONER_JS__
     out.replaceChildren();
     if (!res.ok) {
       out.innerHTML = `<div class="r-card"><div class="r-card-title">${esc(res.error)}</div></div>`;
+      applyAgentStageAction({ ...res, overlay: 'path' });
       return;
     }
 
     if (res.ontologyUnlocked) {
       const tip = document.createElement('div');
       tip.className = 'proof-line';
-      tip.innerHTML = `<code>✦ RDFS 本体闭包解锁连通性</code>字面严格模式下无连通路径，开启本体泛化后成功推导出 ${res.paths.length} 条演化链路。`;
+      tip.innerHTML = `<code>✦ RDFS 本体闭包扩展连通性</code>字面模式未找到路径，开启本体泛化后找到 ${res.paths.length} 条关联候选。类别关联不能单独证明历史传承。`;
       out.append(tip);
     }
 
     if (!res.paths.length) {
-      out.innerHTML = `<div class="r-card"><div class="r-card-title">当前约束下未找到连通路径</div><div style="font-size:12px;color:var(--ink-2)">尝试开启「本体泛化」或更换一对实体节点。</div></div>`;
-      clearStageOverlay();
+      out.innerHTML = `<div class="r-card"><div class="r-card-title">本次最多 ${res.search.maxHops} 跳，未找到关联路径</div><div style="font-size:12px;color:var(--ink-2)">${res.search.budgetExhausted ? '搜索预算已用尽，不能判断不连通。' : '当前图谱可能缺少时代、纹样或材质标注；未找到不代表历史上没有联系。'}</div></div>`;
+      applyAgentStageAction({ ...res, overlay: 'path' });
       return;
     }
 
-    const projectPathToCanvas = idx => {
+    const projectPathToCanvas = (idx, openGraphView = state.view !== 'river') => {
       const scene = buildPathStageScene(res, idx);
       const selPaths = idx !== null ? [res.paths[idx]] : res.paths;
       const artSet = new Set(selPaths.flatMap(p => p.artifactIds));
@@ -5194,12 +5607,34 @@ __REASONER_JS__
         artifactSet: artSet,
         pathChains: chains,
         graphScene: scene,
-      }, state.view !== 'river');
+      }, openGraphView);
     };
 
     res.paths.forEach((p, idx) => {
       const card = document.createElement('div');
-      card.className = 'r-card' + (idx === 0 ? ' active' : '');
+      card.className = 'r-card r-path-card' + (idx === 0 ? ' active' : '');
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', `在星图显示路径 ${p.id}，${p.hops} 跳`);
+      card.setAttribute('aria-pressed', String(idx === 0));
+      const selectPath = () => {
+        out.querySelectorAll('.r-path-card').forEach(c => {
+          c.classList.remove('active');
+          c.setAttribute('aria-pressed', 'false');
+        });
+        card.classList.add('active');
+        card.setAttribute('aria-pressed', 'true');
+        projectPathToCanvas(idx, true);
+      };
+      card.onclick = event => {
+        if (!event.target.closest('button, a, input, select, textarea')) selectPath();
+      };
+      card.onkeydown = event => {
+        if (event.target === card && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          selectPath();
+        }
+      };
 
       const head = document.createElement('div');
       head.className = 'r-card-head';
@@ -5227,20 +5662,12 @@ __REASONER_JS__
 
       const actions = document.createElement('div');
       actions.className = 'r-row';
-      actions.style.justifyContent = 'space-between';
-      const showBtn = document.createElement('button');
-      showBtn.type = 'button'; showBtn.className = 'mini-link';
-      showBtn.textContent = '在 2D/3D 星图高亮此路径 ↗';
-      showBtn.onclick = () => {
-        out.querySelectorAll('.r-card').forEach(c => c.classList.remove('active'));
-        card.classList.add('active');
-        projectPathToCanvas(idx);
-      };
+      actions.style.justifyContent = 'flex-end';
       const askBtn = document.createElement('button');
       askBtn.type = 'button'; askBtn.className = 'mini-link';
       askBtn.textContent = '交由 DeepSeek 深度解构 →';
       askBtn.onclick = () => bridgeToAgent(`请深度解读「${res.source.label}」到「${res.target.label}」之间的演化与迁移路径，并核验涉及的原书证据。`);
-      actions.append(showBtn, askBtn);
+      actions.append(askBtn);
       card.append(actions);
       out.append(card);
     });
@@ -5268,7 +5695,7 @@ __REASONER_JS__
     const res = R.compareEntities(kind, a, b, { useOntology: rState.useOntology });
     rState.lastSymbolic = res;
     $('rSparqlInput').value = res.sparql || '';
-    $('rSparqlPlan').textContent = res.ok ? `Jaccard = ${res.primary.jaccard} · 支持 FILTER NOT EXISTS` : '';
+    $('rSparqlPlan').textContent = res.ok ? `Jaccard = ${res.primary.jaccard ?? '标注不足'} · 仅比较当前记录` : '';
     $('rSparqlTableWrap').replaceChildren();
 
     const out = $('rSymbolicOut');
@@ -5282,8 +5709,8 @@ __REASONER_JS__
     metrics.className = 'cmp-metrics';
     metrics.innerHTML = `
       <div class="cmp-stat shared"><strong>${res.primary.shared.length}</strong><span>共有交集 A∩B</span></div>
-      <div class="cmp-stat onlyA"><strong>${res.primary.onlyA.length}</strong><span>仅 ${esc(a)} 独有</span></div>
-      <div class="cmp-stat onlyB"><strong>${res.primary.onlyB.length}</strong><span>仅 ${esc(b)} 独有</span></div>
+      <div class="cmp-stat onlyA"><strong>${res.primary.onlyA.length}</strong><span>当前仅 ${esc(a)} 检索到</span></div>
+      <div class="cmp-stat onlyB"><strong>${res.primary.onlyB.length}</strong><span>当前仅 ${esc(b)} 检索到</span></div>
     `;
     out.append(metrics);
 
@@ -5306,14 +5733,18 @@ __REASONER_JS__
     };
 
     const axisLbl = KIND_LABEL[res.primary.axis] || '属性';
-    addBucket(`共有延续${axisLbl}（Jaccard ${res.primary.jaccard}）`, res.primary.shared, 'shared');
-    addBucket(`仅「${a}」独有（FILTER NOT EXISTS ${b}）`, res.primary.onlyA, 'onlyA');
-    addBucket(`仅「${b}」独有（FILTER NOT EXISTS ${a}）`, res.primary.onlyB, 'onlyB');
+    const note = document.createElement('p');
+    const coverage = res.primary.coverage;
+    note.textContent = `${coverage ? `${axisLbl}标注覆盖：${a} ${coverage.withValuesA}/${coverage.totalA}，${b} ${coverage.withValuesB}/${coverage.totalB}。` : ''}${res.interpretation || '仅比较当前录入记录。'}`;
+    out.append(note);
+    addBucket(`当前共有${axisLbl}（Jaccard ${res.primary.jaccard ?? '标注不足'}）`, res.primary.shared, 'shared');
+    addBucket(`当前仅在「${a}」检索到`, res.primary.onlyA, 'onlyA');
+    addBucket(`当前仅在「${b}」检索到`, res.primary.onlyB, 'onlyB');
 
     const askBtn = document.createElement('button');
     askBtn.type = 'button'; askBtn.className = 'mini-link';
     askBtn.textContent = '交由 DeepSeek 综合比较演变意义 →';
-    askBtn.onclick = () => bridgeToAgent(`请深度对比「${a}」与「${b}」在当前图谱中的纹样与材质体系差异（共有延续 vs 各自独有），并引用原书实证。`);
+    askBtn.onclick = () => bridgeToAgent(`请对比「${a}」与「${b}」在当前候选图谱中的纹样与材质记录，说明共有、差集与标注覆盖率，并引用来源。不要将未检索到解释为历史不存在。`);
     out.append(askBtn);
 
     const scene = buildCompareStageScene(res);
@@ -5358,7 +5789,7 @@ __REASONER_JS__
       row.style.flexWrap = 'wrap';
       const openArt = document.createElement('button');
       openArt.type = 'button'; openArt.className = 'mini-link';
-      openArt.textContent = `查看条目 P.${p.page} ↗`;
+      openArt.textContent = `查看条目 · ${sourcePageLabel(p)} ↗`;
       openArt.onclick = () => openDrawer(p.artifactId);
       row.append(openArt);
       for (const s of p.supporters.slice(0, 2)) {
@@ -5422,13 +5853,13 @@ __REASONER_JS__
       empty.className = 'agent-empty';
       empty.innerHTML = `
         <h3>DeepSeek 神经-符号推演智能体</h3>
-        <p>${rState.deepseekReady ? `已连接 ${esc(rState.model)} · 自动调用本体路径、差集 SPARQL 与链接预测，实时驾驶 2D/3D 星图。` : '当前为离线静态模式（启动 unified server 并配置 DEEPSEEK_API_KEY 即可启用实时对话）。'}</p>
+        <p>${rState.deepseekReady ? `已连接 ${esc(rState.model)} · 自动调用本体路径、差集 SPARQL 与链接预测，实时驾驶 2D/3D 星图。` : '当前 Agent 未连接。服务端配置 OpenRouter 或 DeepSeek 后可启用对话；符号推演可离线使用。'}</p>
       `;
       for (const s of (rState.summary?.suggestions || [])) {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'agent-prompt-btn';
         b.textContent = s.question;
-        b.onclick = () => sendAgentMessage(s.question);
+        b.onclick = () => sendAgentMessage(s.question, s);
         empty.append(b);
       }
       feed.append(empty);
@@ -5443,7 +5874,7 @@ __REASONER_JS__
         const det = document.createElement('details');
         det.className = 'trace-details';
         const sec = msg.elapsedMs ? `${(msg.elapsedMs / 1000).toFixed(1)}s` : '';
-        det.innerHTML = `<summary>✦ ${esc(msg.model || 'DeepSeek')} · ${msg.trace.length} 步推演 · ${(msg.citations || []).length} 实证 · ${(msg.inferences || []).length} 推论 ${sec ? '· ' + sec : ''} ▾</summary>`;
+        det.innerHTML = `<summary>✦ ${esc(msg.model || 'DeepSeek')} · ${msg.trace.length} 步推演 · ${(msg.citations || []).length} 来源 · ${(msg.inferences || []).length} 推论 ${sec ? '· ' + sec : ''} ▾</summary>`;
         const list = document.createElement('div');
         list.className = 'trace-list';
         for (const st of msg.trace) {
@@ -5458,6 +5889,22 @@ __REASONER_JS__
       const bub = document.createElement('div');
       bub.className = 'msg-bubble';
       if (msg.role === 'assistant') {
+        for (const result of msg.stageAction?.searchResults || []) {
+          const status = document.createElement('p');
+          status.textContent = `路径搜索 · 本体${result.useOntology ? '开启' : '关闭'} · 最多 ${result.search.maxHops} 跳：${result.error || (result.pathCount ? `找到 ${result.pathCount} 条关联候选` : `未找到路径${result.search.budgetExhausted ? '（搜索预算已用尽）' : '（当前图谱及约束内）'}`)}。`;
+          bub.append(status);
+        }
+        const comparison = msg.stageAction?.comparison;
+        if (comparison?.primary) {
+          const totals = document.createElement('p');
+          totals.textContent = `符号计算结果：当前共有 ${comparison.primary.shared.length} 项，${comparison.entityA}/${comparison.entityB}记录差集 ${comparison.primary.onlyA.length}/${comparison.primary.onlyB.length} 项。差集不代表历史独有。`;
+          bub.append(totals);
+        }
+        if (msg.responseMode === 'tool_summary') {
+          const note = document.createElement('p');
+          note.textContent = '模型未完成结论生成，以下展示已计算的符号工具结果。';
+          bub.append(note);
+        }
         renderCitedContent(bub, msg.content, msg.citations || [], msg.inferences || []);
       } else {
         bub.textContent = msg.content;
@@ -5499,7 +5946,7 @@ __REASONER_JS__
             const btn = document.createElement('button');
             btn.type = 'button'; btn.className = 'cite-pill ev';
             btn.textContent = `实证 ${ref}`;
-            btn.title = `${ev.subject} · ${ev.predicate} · ${ev.object} (P.${ev.page})`;
+            btn.title = `${ev.subject} · ${ev.predicate} · ${ev.object}（${sourcePageLabel(ev)}）`;
             btn.onclick = () => { if (ev.artifactId) openDrawer(ev.artifactId); };
             el.append(btn);
             continue;
@@ -5508,10 +5955,13 @@ __REASONER_JS__
             const inf = infMap.get(ref);
             const btn = document.createElement('button');
             btn.type = 'button'; btn.className = 'cite-pill inf';
-            btn.textContent = `推论 ${ref}`;
+            btn.textContent = `${inf.type === 'path_search' ? '计算' : '推论'} ${ref}`;
             btn.title = inf.summary || inf.title;
             btn.onclick = () => {
               if (inf.type === 'prediction' && inf.artifactId) openDrawer(inf.artifactId);
+              else if (inf.type === 'path_search') {
+                applyAgentStageAction({ ...inf, overlay: 'path', searchResults: [{ ...inf, pathCount: inf.paths.length }] });
+              }
               else if (inf.type === 'path' && inf.steps?.length) {
                 const fakeRes = { source: { label: inf.steps[0].fromLabel }, target: { label: inf.steps[inf.steps.length - 1].toLabel }, paths: [{ steps: inf.steps, artifactIds: inf.artifactIds || [] }] };
                 applyStageOverlay({ type: 'path', banner: `推论 ${ref}：${inf.title}`, artifactSet: new Set(inf.artifactIds || []), graphScene: buildPathStageScene(fakeRes, 0) }, true);
@@ -5605,12 +6055,12 @@ __REASONER_JS__
 
   function applyAgentStageAction(action) {
     if (!action) return;
-    if (action.overlay === 'path' && action.paths?.length) {
+    if (action.overlay === 'path') {
       const scene = buildPathStageScene(action, null);
-      const chains = action.paths.map(p => p.artifactIds || []).filter(c => c.length >= 2);
+      const chains = (action.paths || []).map(p => p.artifactIds || []).filter(c => c.length >= 2);
       applyStageOverlay({
         type: 'path',
-        banner: `DeepSeek 推演光轨：${action.source?.label || ''} → ${action.target?.label || ''}`,
+        banner: `路径搜索：${action.source?.label || ''} → ${action.target?.label || ''}${action.paths?.length ? ' · 关联候选' : ' · 本次未找到路径'}（本体${action.useOntology ? '开启' : '关闭'}）`,
         artifactSet: new Set(action.artifactIds || []),
         pathChains: chains,
         graphScene: scene,
@@ -5640,7 +6090,7 @@ __REASONER_JS__
     }
   }
 
-  async function sendAgentMessage(question) {
+  async function sendAgentMessage(question, intent = null) {
     rState.agentMessages.push({ role: 'user', content: question });
     $('agentInput').value = '';
     rState.agentBusy = true;
@@ -5655,7 +6105,7 @@ __REASONER_JS__
       const resp = await fetch('/api/kg/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, intent }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.error || `请求失败（HTTP ${resp.status}）`);
@@ -5663,6 +6113,7 @@ __REASONER_JS__
       rState.agentMessages.push({
         role: 'assistant',
         content: data.answer,
+        responseMode: data.responseMode,
         model: data.model,
         trace: data.trace || [],
         citations: data.citations || [],
@@ -5696,9 +6147,14 @@ __REASONER_JS__
     const shortTitle = G.title.split('·')[0].trim() || '纹样星图';
     document.title = `${shortTitle} · 纹样星图`;
     $('brandTitle').textContent = shortTitle;
-    $('brandSub').textContent = `${G.pages.length} 页 · ${G.items.length} 条 · ${G.motifs.length} 纹样`;
+    $('brandSub').textContent = `${G.volumes.length ? G.volumes.length + ' 册 · ' : ''}${G.pages.length} 页 · ${G.items.length} 条 · ${G.motifs.length} 纹样`;
+    $('pageVolume').replaceChildren(...[...G.pagesByVolume.keys()].map(volume => {
+      const option = document.createElement('option'); option.value = volume; option.textContent = volume || '当前语料';
+      return option;
+    }));
+    $('pageVolume').hidden = G.volumes.length < 2;
     $('riverHeading').textContent = shortTitle;
-    $('riverSub').textContent = `${G.eras.map(e => e.name).join(' · ') || '历史长河'}`;
+    $('riverSub').textContent = '循时代溯源 · 滚轮放大 · 点击纹样查看图录';
 
     bindGlobalUI();
     initRiver();

@@ -248,10 +248,11 @@ async fn local_pipeline_image(
     state: State<'_, AppState>,
     token: String,
     page: u32,
+    run_id: Option<String>,
 ) -> Result<Response> {
     state.require_admin(&token)?;
     let store = state.store.clone();
-    worker(move || store.pipeline_image(page).map(Response::new)).await
+    worker(move || store.pipeline_image_for_run(page, run_id.as_deref()).map(Response::new)).await
 }
 #[tauri::command]
 async fn analyze_library(

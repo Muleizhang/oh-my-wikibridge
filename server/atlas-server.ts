@@ -9,6 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createKGReasoner } from '../src/kg-reasoner.js';
+import { assessAgentAnswer, comparisonSummary, hasToolMarkup, recoverToolCalls, resolvePathIntent, pathSearchSummary } from './agent-answer.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -29,6 +30,33 @@ function loadEnvFiles() {
 }
 
 loadEnvFiles();
+
+type AgentConfig = {
+  provider: 'openrouter' | 'deepseek';
+  apiKey: string;
+  model: string;
+  completionUrl: string;
+};
+
+function agentConfig(): AgentConfig {
+  const provider = process.env.ATLAS_AGENT_PROVIDER?.trim()
+    || (process.env.OPENROUTER_API_KEY?.trim() ? 'openrouter' : 'deepseek');
+  if (provider === 'openrouter') {
+    return {
+      provider,
+      apiKey: process.env.OPENROUTER_API_KEY?.trim() || '',
+      model: process.env.OPENROUTER_MODEL?.trim() || 'deepseek/deepseek-v3.2',
+      completionUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    };
+  }
+  if (provider !== 'deepseek') throw new Error('ATLAS_AGENT_PROVIDER 须为 openrouter 或 deepseek。');
+  return {
+    provider,
+    apiKey: process.env.DEEPSEEK_API_KEY?.trim() || '',
+    model: process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat',
+    completionUrl: 'https://api.deepseek.com/v1/chat/completions',
+  };
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -70,7 +98,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'find_paths',
-      description: '在图谱中搜索任意两个实体（时代、材质、纹样、器物）之间的多跳语义演化路径，并自动触发跨时代传承、跨材质迁移与本体闭包规则。',
+      description: '在候选图谱中搜索任意两个实体之间的多跳关联路径，返回搜索条件、预算与标注覆盖率。本体泛化和图上连通不能单独证明历史传承或材质迁移。',
       parameters: {
         type: 'object',
         properties: {
@@ -88,7 +116,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'compare_entities',
-      description: '对两个时代、两种材质或两种纹样进行集合交集（延续/共有）、差集（独有 / FILTER NOT EXISTS）与 Jaccard 相似度对比推理。',
+      description: '对时代、材质或纹样计算当前录入记录的交集、差集与标注覆盖率。启用本体时，周代包含西周、东周及其下位时期。差集不代表历史独有，共有不证明传承。',
       parameters: {
         type: 'object',
         properties: {
@@ -159,19 +187,26 @@ const SYSTEM_PROMPT = `你是「中国纹样知识图谱」的神经-符号推�
 2. 所有实证事实必须就地标注工具返回的实证编号 [E1]、[E2] 等；所有符号路径、对比结论或缺失补全推论必须标注推论编号 [R1]、[R2] 等。
 3. 严禁编造任何未在工具结果中出现的 [E#] 或 [R#] 编号，严禁使用书外常识冒充图谱实证；若图谱无相关证据，直接说明「当前图谱未载」。
 4. 明确区分【原书实证】与【规则推论】（如本体泛化、关联规则置信度与提升度）。
-5. 中文回答简洁精炼、分点清晰，避免冗长客套，让学者一眼看清结论、推导链与原页依据。`;
+5. 中文回答简洁精炼、分点清晰，避免冗长客套，让学者一眼看清结论、推导链与原页依据。
+6. 工具调用只能通过 API 的 tool_calls 字段返回，禁止把 DSML、XML 或工具调用代码写进回答。收到最终回答要求后停止调用工具。
+7. 当前数据是未独立验收的机器候选。比较时必须说明标注覆盖率；未录入不等于历史不存在，差集不代表历史独有，共有纹样不单独证明传承。优先使用 compare_entities 的完整结果，避免对已经返回的空字段重复查询。
+8. shared/onlyA/onlyB 数组仅含部分例子。总数必须读取 totals，不得用例子数组长度冒充总数。引用使用单独的 [E1][E2] 或 [R1]，不要输出区间引用。
+9. 路径任务必须回答路径搜索结果，不能用集合对比代替。分别说明本体关闭与开启时的结果、搜索跳数和缺边情况。任何图上连通、共纹样或类别泛化都只构成关联候选，不能证明历史传承或迁移方向。`;
 
 type ChatMsg = { role: string; content: string | null; tool_calls?: any[]; tool_call_id?: string };
 
-async function runDeepSeekAgent(
+export async function runDeepSeekAgent(
   reasoner: any,
   history: { role: 'user' | 'assistant'; content: string }[],
-  apiKey: string,
-  model: string,
+  config: AgentConfig,
+  intentHint?: unknown,
 ) {
+  const { apiKey, model, completionUrl, provider } = config;
   const t0 = Date.now();
   const summary = reasoner.getCatalogSummary();
-  const contextHint = `当前已加载图谱：《${summary.title}》（${summary.counts.artifacts} 件条目，${summary.counts.triples} 条实证边，${summary.counts.axioms} 条本体公理）。时代：${summary.eras.map((e: any) => e.name).join('、')}；主要材质：${summary.materials.slice(0, 10).map((m: any) => m.name).join('、')}。`;
+  const pathIntent = resolvePathIntent(history.at(-1)?.content || '', intentHint, summary);
+  const allowedTools = pathIntent ? AGENT_TOOLS.filter(t => !['compare_entities', 'predict_missing'].includes(t.function.name)) : AGENT_TOOLS;
+  const contextHint = `当前已加载图谱：《${summary.title}》（${summary.counts.artifacts} 件条目，${summary.counts.triples} 条来源候选边，${summary.counts.axioms} 条本体规则）。时代：${summary.eras.map((e: any) => e.name).join('、')}；主要材质：${summary.materials.slice(0, 10).map((m: any) => m.name).join('、')}。`;
 
   const messages: ChatMsg[] = [
     { role: 'system', content: `${SYSTEM_PROMPT}\n\n${contextHint}` },
@@ -182,6 +217,12 @@ async function runDeepSeekAgent(
   const inferences = new Map<string, any>(); // infKey -> { ref: R#, ... }
   const trace: any[] = [];
   let stageAction: any = null;
+  let fallbackAnswer = '';
+  const pathSearches = new Map<string, { result: any; ref: string }>();
+  const completed = (answer: string, responseMode = 'model') => ({
+    model, answer, trace, citations: [...citations.values()], inferences: [...inferences.values()],
+    stageAction, elapsedMs: Date.now() - t0, responseMode,
+  });
 
   const regCitation = (ev: any) => {
     const key = ev.id || `${ev.subjectId}:${ev.predicate}:${ev.objectLabel}`;
@@ -195,11 +236,17 @@ async function runDeepSeekAgent(
         predicate: ev.predicateLabel || ev.predicate,
         object: ev.objectLabel,
         page: ev.page,
+        volume: ev.volume,
+        volumePage: ev.volumePage,
+        sourceName: ev.sourceName,
         locator: ev.locator,
         quote: ev.quote,
         bbox: ev.bbox,
         pageUrl: ev.pageUrl,
         captionUrl: ev.captionUrl,
+        origin: ev.origin,
+        binding: ev.binding,
+        supportingEvidence: ev.supportingEvidence,
       });
     }
     return citations.get(key).ref;
@@ -213,68 +260,152 @@ async function runDeepSeekAgent(
     return inferences.get(key).ref;
   };
 
+  const runPathTool = (args: Record<string, any>) => {
+    const res = reasoner.findPaths(args.source, args.target, {
+      maxHops: args.maxHops, useOntology: args.useOntology !== false, maxPaths: 4,
+    });
+    const key = `${args.source}:${args.target}:${res.useOntology}:${res.search.maxHops}`;
+    const localEv = new Map(res.evidence.map((e: any) => [e.ref, e]));
+    const compactPaths = res.paths.map((p: any) => {
+      const steps = p.steps.map((s: any) => ({
+        from: s.fromLabel, relation: s.predicateLabel, to: s.toLabel,
+        isInferred: s.isInferred, axiom: s.axiom,
+        ref: s.evidenceRef ? regCitation(localEv.get(s.evidenceRef)) : null,
+      }));
+      const ref = regInference(`path:${key}:${p.id}`, {
+        type: 'path', title: `${res.source.label} → ${res.target.label}（${p.hops} 跳关联候选）`,
+        summary: p.summary, rules: p.rulesTriggered, steps: p.steps,
+        artifactIds: p.artifactIds, nodeKeys: p.nodeKeys,
+      });
+      return { inferenceRef: ref, hops: p.hops, usesOntology: p.usesOntology,
+        summary: p.summary, rules: p.rulesTriggered.map((r: any) => r.name), steps };
+    });
+    // A failed/empty search is a computed result too, with its own reference.
+    const searchRef = regInference(`path-search:${key}`, {
+      type: 'path_search', title: `${args.source} → ${args.target}（本体${res.useOntology ? '开启' : '关闭'}）`,
+      summary: res.error || `本次最多 ${res.search.maxHops} 跳，找到 ${res.paths.length} 条关联候选路径。`,
+      search: res.search, coverage: res.coverage, useOntology: res.useOntology,
+      ok: res.ok, error: res.error, source: res.source, target: res.target, paths: res.paths,
+      artifactIds: [...new Set(res.paths.flatMap((p: any) => p.artifactIds))],
+    });
+    if (!pathIntent || (args.source === pathIntent.source && args.target === pathIntent.target)) {
+      pathSearches.set(String(res.useOntology), { result: res, ref: searchRef });
+      fallbackAnswer = pathSearchSummary([...pathSearches.values()]);
+      const selected = [...pathSearches.values()].sort((a, b) =>
+        Number(Boolean(b.result.paths.length)) - Number(Boolean(a.result.paths.length))
+        || Number(b.result.useOntology) - Number(a.result.useOntology))[0].result;
+      stageAction = {
+        overlay: 'path', source: selected.source, target: selected.target,
+        useOntology: selected.useOntology, paths: selected.paths, sparql: selected.sparql,
+        artifactIds: [...new Set(selected.paths.flatMap((p: any) => p.artifactIds))],
+        searchResults: [...pathSearches.values()].map(({ result: r, ref }) => ({
+          ref, ok: r.ok, error: r.error, source: r.source, target: r.target,
+          useOntology: r.useOntology, pathCount: r.paths.length, search: r.search, coverage: r.coverage,
+        })),
+      };
+    }
+    return {
+      ok: res.ok, error: res.error, inferenceRef: searchRef,
+      source: res.source.label, target: res.target.label, useOntology: res.useOntology,
+      search: res.search, coverage: res.coverage, literalReachable: res.literalReachable,
+      ontologyUnlocked: res.ontologyUnlocked, paths: compactPaths, sparql: res.sparql,
+    };
+  };
+
+  // Bind an explicit path task before asking the model to interpret the results.
+  // This also preserves a useful answer when generation fails or chooses another tool.
+  if (pathIntent) {
+    const calls = [false, true].map(useOntology => ({
+      id: `path_preflight_${useOntology}`, type: 'function', function: {
+        name: 'find_paths', arguments: JSON.stringify({ source: pathIntent.source,
+          target: pathIntent.target, maxHops: pathIntent.maxHops, useOntology }),
+      },
+    }));
+    messages.push({ role: 'assistant', content: null, tool_calls: calls });
+    for (const call of calls) {
+      const args = JSON.parse(call.function.arguments);
+      const output = runPathTool(args);
+      trace.push({ tool: 'find_paths', args, sparql: output.sparql, count: output.paths.length,
+        summary: `${args.source} → ${args.target}（本体${args.useOntology ? '开启' : '关闭'}）` });
+      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(output) });
+    }
+    if (![...pathSearches.values()].some(x => x.result.paths.length)) {
+      return completed(fallbackAnswer, 'symbolic');
+    }
+    messages.push({ role: 'system', content: '本轮主任务已绑定为路径搜索，已计算本体关闭和开启两种模式。解释这些结果及标注覆盖率，明确关联候选不能证明传承；不得改为集合对比或预测补全。' });
+  }
+
   const deadline = AbortSignal.timeout(60_000);
 
   for (let round = 0; round < 6; round++) {
+    const finalize = round >= 4 && trace.length > 0;
+    if (finalize) messages.push({ role: 'system', content: '现在仅根据已返回的工具结果输出带合法 [E#]/[R#] 引用的简短最终结论，说明数据缺项。禁止输出工具调用或 DSML 标记。' });
     const body: Record<string, unknown> = {
       model,
       messages,
       temperature: 0.1,
       max_tokens: 1400,
     };
-    if (round < 5) {
-      body.tools = AGENT_TOOLS;
-      body.tool_choice = round === 0 ? 'required' : 'auto';
-    } else {
-      body.tool_choice = 'none';
-    }
+    body.tools = allowedTools;
+    body.tool_choice = !trace.length ? 'required' : (finalize ? 'none' : 'auto');
+    if (provider === 'openrouter') body.provider = { require_parameters: true };
 
-    const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    let resp: Response;
+    try { resp = await fetch(completionUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       signal: deadline,
       body: JSON.stringify(body),
-    });
+    }); } catch (error) {
+      if (fallbackAnswer && deadline.aborted) return completed(fallbackAnswer, 'tool_summary');
+      throw error;
+    }
 
     if (!resp.ok) {
       const errBody = await resp.text().catch(() => '');
-      throw new Error(`DeepSeek API 返回 HTTP ${resp.status}${errBody ? `：${errBody.slice(0, 180)}` : ''}`);
+      throw new Error(`${provider === 'openrouter' ? 'OpenRouter' : 'DeepSeek'} API 返回 HTTP ${resp.status}${errBody ? `：${errBody.slice(0, 180)}` : ''}`);
     }
 
-    const data = await resp.json() as { choices?: { message: ChatMsg }[] };
+    const data = await resp.json() as { choices?: { message: ChatMsg; finish_reason?: string }[] };
     const msg = data.choices?.[0]?.message;
     if (!msg) throw new Error('DeepSeek 返回空消息。');
+    if (!msg.tool_calls?.length && hasToolMarkup(msg.content)) {
+      try {
+        const recovered = recoverToolCalls(msg.content, allowedTools, `dsml_${round}`);
+        if (recovered.length && !finalize) {
+          msg.tool_calls = recovered;
+          msg.content = null;
+        }
+      } catch {
+        // Invalid or incomplete protocol content is handled by the final-answer guard.
+      }
+    }
 
     if (!msg.tool_calls?.length) {
-      const answer = (msg.content || '').trim();
       const validE = new Set([...citations.values()].map(c => c.ref));
       const validR = new Set([...inferences.values()].map(r => r.ref));
-      const badE = [...answer.matchAll(/\[(E\d+)\]/g)].map(m => m[1]).filter(id => !validE.has(id));
-      const badR = [...answer.matchAll(/\[(R\d+)\]/g)].map(m => m[1]).filter(id => !validR.has(id));
-
-      if ((badE.length || badR.length) && round < 5) {
-        messages.push({ role: 'assistant', content: answer });
+      const verdict = assessAgentAnswer(msg, data.choices?.[0]?.finish_reason, {
+        citations: validE, inferences: validR, toolCount: trace.length,
+      });
+      if (!verdict.ok) {
+        console.warn('[atlas-agent] Answer rejected:', { round, reason: verdict.reason, tools: trace.map(step => step.tool) });
+        if (fallbackAnswer && (round >= 3 || verdict.reason === 'tool_markup' || verdict.reason === 'truncated')) {
+          return completed(fallbackAnswer, 'tool_summary');
+        }
+        if (round === 5) throw new Error('模型未生成完整且引用有效的结论，请使用符号推演查看已计算结果。');
         messages.push({
-          role: 'user',
-          content: `核验失败：引用 ${[...badE, ...badR].join('、')} 不在工具结果中。请仅使用已返回的合法编号（实证：${[...validE].join('、') || '无'}；推论：${[...validR].join('、') || '无'}）重写简洁回答。`,
+          role: 'system',
+          content: `回答核验失败（${verdict.reason}）。请使用 API tool_calls 调用工具，或依据已返回结果输出完整中文结论。禁止输出工具标记。引用仅允许：${[...validE, ...validR].join('、') || '尚无，须先调用工具'}。`,
         });
         continue;
       }
-
-      return {
-        model,
-        answer: answer || '当前图谱工具返回不足以回答该问题。',
-        trace,
-        citations: [...citations.values()],
-        inferences: [...inferences.values()],
-        stageAction,
-        elapsedMs: Date.now() - t0,
-      };
+      return completed(verdict.answer);
     }
 
-    messages.push({ role: 'assistant', content: msg.content, tool_calls: msg.tool_calls });
+    const toolCalls = msg.tool_calls.slice(0, 4);
+    messages.push({ role: 'assistant', content: msg.content, tool_calls: toolCalls });
 
-    for (const call of msg.tool_calls.slice(0, 4)) {
+    for (const call of toolCalls) {
       const toolName = call.function?.name;
       let args: Record<string, any> = {};
       let toolOutput: any = { error: '参数解析失败' };
@@ -284,6 +415,7 @@ async function runDeepSeekAgent(
 
       try {
         args = JSON.parse(call.function?.arguments || '{}');
+        if (!allowedTools.some(t => t.function.name === toolName)) throw new Error('该工具不属于本轮路径任务，请解释已计算的路径结果。');
         if (toolName === 'query_graph') {
           const res = reasoner.queryArtifacts(args);
           const evById = new Map(res.evidence.map((e: any) => [e.ref, e]));
@@ -294,6 +426,7 @@ async function runDeepSeekAgent(
             useOntology: res.useOntology,
             items: res.items.slice(0, 10).map((it: any) => ({
               id: it.id, title: it.title, page: it.page,
+              volume: it.volume, volumePage: it.volumePage, sourceName: it.sourceName,
               periods: it.periods, materials: it.materials, motifs: it.motifs,
               evidenceRefs: it.refs.slice(0, 5).map((r: string) => regCitation(evById.get(r))).filter(Boolean),
             })),
@@ -308,59 +441,10 @@ async function runDeepSeekAgent(
             };
           }
         } else if (toolName === 'find_paths') {
-          const res = reasoner.findPaths(args.source, args.target, {
-            maxHops: args.maxHops,
-            useOntology: args.useOntology !== false,
-            maxPaths: 4,
-          });
-          sparql = res.sparql || '';
+          toolOutput = runPathTool(args);
+          sparql = toolOutput.sparql || '';
+          hitCount = toolOutput.paths.length;
           traceSummary = `${args.source} → ${args.target}${args.useOntology === false ? '（字面）' : '（本体）'}`;
-          if (!res.ok) {
-            toolOutput = { error: res.error };
-          } else {
-            hitCount = res.paths.length;
-            const localEv = new Map(res.evidence.map((e: any) => [e.ref, e]));
-            const compactPaths = res.paths.map((p: any) => {
-              const stepRefs = p.steps.map((s: any) => ({
-                from: s.fromLabel,
-                relation: s.predicateLabel,
-                to: s.toLabel,
-                isInferred: s.isInferred,
-                axiom: s.axiom,
-                ref: s.evidenceRef ? regCitation(localEv.get(s.evidenceRef)) : null,
-              }));
-              const rRef = regInference(`path:${res.source.key}:${res.target.key}:${p.id}`, {
-                type: 'path',
-                title: `${res.source.label} → ${res.target.label}（${p.hops} 跳）`,
-                summary: p.summary,
-                rules: p.rulesTriggered,
-                steps: p.steps,
-                artifactIds: p.artifactIds,
-                nodeKeys: p.nodeKeys,
-              });
-              return { inferenceRef: rRef, hops: p.hops, usesOntology: p.usesOntology, summary: p.summary, rules: p.rulesTriggered.map((r: any) => r.name), steps: stepRefs };
-            });
-            toolOutput = {
-              source: res.source.label,
-              target: res.target.label,
-              useOntology: res.useOntology,
-              literalReachable: res.literalReachable,
-              ontologyUnlocked: res.ontologyUnlocked,
-              paths: compactPaths,
-              sparql: res.sparql,
-            };
-            if (res.paths.length) {
-              stageAction = {
-                overlay: 'path',
-                source: res.source,
-                target: res.target,
-                useOntology: res.useOntology,
-                paths: res.paths,
-                sparql: res.sparql,
-                artifactIds: [...new Set(res.paths.flatMap((p: any) => p.artifactIds))],
-              };
-            }
-          }
         } else if (toolName === 'compare_entities') {
           const res = reasoner.compareEntities(args.kind, args.entityA, args.entityB, { useOntology: args.useOntology !== false });
           sparql = res.sparql || '';
@@ -374,11 +458,13 @@ async function runDeepSeekAgent(
             const rRef = regInference(`cmp:${res.kind}:${res.entityA}:${res.entityB}`, {
               type: 'compare',
               title: `${res.entityA} vs ${res.entityB}`,
-              summary: `共有 ${res.primary.shared.length} 项（Jaccard ${res.primary.jaccard}），仅 ${res.entityA} 独有 ${res.primary.onlyA.length} 项，仅 ${res.entityB} 独有 ${res.primary.onlyB.length} 项。`,
+              summary: `当前记录共有 ${res.primary.shared.length} 项，差集 ${res.primary.onlyA.length}/${res.primary.onlyB.length} 项；不代表历史独有。`,
               kind: res.kind,
               entityA: res.entityA,
               entityB: res.entityB,
               jaccard: res.primary.jaccard,
+              coverage: { primary: res.primary.coverage, secondary: res.secondary.coverage },
+              interpretation: res.interpretation,
               artifactIds: [...new Set([...res.artifactIdsA, ...res.artifactIdsB])],
             });
             toolOutput = {
@@ -387,14 +473,28 @@ async function runDeepSeekAgent(
               entityA: res.entityA, countA: res.countA,
               entityB: res.entityB, countB: res.countB,
               primaryAxis: res.primary.axis,
+              totals: { shared: res.primary.shared.length, onlyA: res.primary.onlyA.length, onlyB: res.primary.onlyB.length },
+              examplesArePartial: true,
+              coverage: { primary: res.primary.coverage, secondary: res.secondary.coverage },
+              interpretation: res.interpretation,
+              comparisonScope: res.comparisonScope,
               jaccard: res.primary.jaccard,
               shared: res.primary.shared.slice(0, 10).map((x: any) => ({ label: x.label, countA: x.countA, countB: x.countB, refsA: mapRefs(x.refsA), refsB: mapRefs(x.refsB) })),
               onlyA: res.primary.onlyA.slice(0, 10).map((x: any) => ({ label: x.label, count: x.count, refs: mapRefs(x.refs) })),
               onlyB: res.primary.onlyB.slice(0, 10).map((x: any) => ({ label: x.label, count: x.count, refs: mapRefs(x.refs) })),
               secondaryAxis: res.secondary.axis,
               secondaryShared: res.secondary.shared.slice(0, 6).map((x: any) => x.label),
+              secondary: {
+                axis: res.secondary.axis,
+                comparable: res.secondary.comparable,
+                totals: { shared: res.secondary.shared.length, onlyA: res.secondary.onlyA.length, onlyB: res.secondary.onlyB.length },
+                shared: res.secondary.shared.slice(0, 6).map((x: any) => ({ label: x.label, refsA: mapRefs(x.refsA), refsB: mapRefs(x.refsB) })),
+                onlyA: res.secondary.onlyA.slice(0, 6).map((x: any) => ({ label: x.label, refs: mapRefs(x.refs) })),
+                onlyB: res.secondary.onlyB.slice(0, 6).map((x: any) => ({ label: x.label, refs: mapRefs(x.refs) })),
+              },
               sparql: res.sparql,
             };
+            fallbackAnswer = comparisonSummary(res, rRef);
             stageAction = {
               overlay: 'compare',
               comparison: res,
@@ -415,6 +515,7 @@ async function runDeepSeekAgent(
           const mapped = res.predictions.slice(0, 8).map((p: any) => {
             const supMapped = p.supporters.map((s: any) => ({
               title: s.title, page: s.page,
+              volume: s.volume, volumePage: s.volumePage, sourceName: s.sourceName,
               ref: s.ref && localEv.has(s.ref) ? regCitation(localEv.get(s.ref)) : null,
             }));
             const rRef = regInference(`pred:${p.artifactId}:${p.predicate}:${p.predictedValue}`, {
@@ -435,6 +536,7 @@ async function runDeepSeekAgent(
               artifactId: p.artifactId,
               artifactTitle: p.artifactTitle,
               page: p.page,
+              volume: p.volume, volumePage: p.volumePage, sourceName: p.sourceName,
               predictedValue: p.predictedValue,
               confidence: p.confidence,
               lift: p.lift,
@@ -447,7 +549,7 @@ async function runDeepSeekAgent(
             totalMissing: res.totalMissing,
             predictions: mapped,
           };
-          if (res.predictions.length) {
+          if (!pathIntent && res.predictions.length) {
             stageAction = {
               overlay: 'predict',
               targetPredicate: res.targetPredicate,
@@ -491,6 +593,9 @@ async function runDeepSeekAgent(
               id: res.artifact.id,
               title: res.artifact.title,
               page: res.artifact.page,
+              volume: res.artifact.volume,
+              volumePage: res.artifact.volumePage,
+              sourceName: res.artifact.sourceName,
               locator: res.artifact.locator,
               findspot: res.artifact.findspot,
               quote: res.artifact.quote,
@@ -499,6 +604,7 @@ async function runDeepSeekAgent(
                 predicate: e.predicateLabel,
                 object: e.objectLabel,
                 page: e.page,
+                volume: e.volume, volumePage: e.volumePage, sourceName: e.sourceName,
               })),
               predictions: res.predictions.map((p: any) => ({
                 inferenceRef: regInference(`pred:${p.artifactId}:${p.predicate}:${p.predictedValue}`, {
@@ -525,6 +631,7 @@ async function runDeepSeekAgent(
     }
   }
 
+  if (fallbackAnswer) return completed(fallbackAnswer, 'tool_summary');
   throw new Error('DeepSeek 推理轮次达到上限，请缩小问题范围。');
 }
 
@@ -572,8 +679,8 @@ function loadSiteKG(siteDir: string) {
 
 async function main() {
   const { port, host, siteDir } = parseCliArgs();
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim() || '';
-  const model = process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat';
+  const config = agentConfig();
+  const { apiKey, model, provider } = config;
   const templatePath = resolve(ROOT, 'scripts/atlas_viewer.html');
   const reasonerJsPath = resolve(ROOT, 'src/kg-reasoner.js');
 
@@ -590,6 +697,7 @@ async function main() {
         sendJson(res, 200, {
           ready: true,
           deepseekReady: Boolean(apiKey),
+          agentProvider: provider,
           model,
           ...summary,
         });
@@ -621,7 +729,8 @@ async function main() {
       // 3) Mode B: DeepSeek Neuro-Symbolic Agent API
       if (req.method === 'POST' && pathname === '/api/kg/agent') {
         if (!apiKey) {
-          sendJson(res, 503, { error: '服务端未配置 DEEPSEEK_API_KEY，请在 .env.local 或环境变量中设置。' });
+          const keyName = provider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'DEEPSEEK_API_KEY';
+          sendJson(res, 503, { error: `服务端未配置 ${keyName}，请在 .env.local 或环境变量中设置。` });
           return;
         }
         const body = await readJsonBody(req);
@@ -634,7 +743,7 @@ async function main() {
           role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
           content: String(m.content || '').slice(0, 2000),
         }));
-        const result = await runDeepSeekAgent(reasoner, cleaned, apiKey, model);
+        const result = await runDeepSeekAgent(reasoner, cleaned, config, body.intent);
         sendJson(res, 200, result);
         return;
       }
@@ -706,11 +815,13 @@ async function main() {
   server.listen(port, host, () => {
     console.log(`[atlas-server] Listening on http://${host}:${port}/`);
     console.log(`[atlas-server] Data: ${dataPath} (${summary.counts.artifacts} items, ${summary.counts.triples} triples, ${summary.counts.axioms} axioms)`);
-    console.log(`[atlas-server] DeepSeek Agent: ${apiKey ? `ENABLED (${model})` : 'DISABLED (no DEEPSEEK_API_KEY)'}`);
+    console.log(`[atlas-server] Agent: ${apiKey ? `ENABLED (${provider} / ${model})` : `DISABLED (${provider} API key missing)`}`);
   });
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}

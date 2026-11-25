@@ -318,16 +318,26 @@ impl Store {
     }
 
     pub fn pipeline_image(&self, page: u32) -> Result<Vec<u8>> {
+        self.pipeline_image_for_run(page, None)
+    }
+
+    pub fn pipeline_image_for_run(&self, page: u32, run_id: Option<&str>) -> Result<Vec<u8>> {
         let conn = self.connect()?;
-        let selected: bool = sql(conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM kg_runs, json_each(kg_runs.graph_json, '$.selection') AS pages WHERE kg_runs.state='complete' AND pages.value=?1)",
-            [page],
+        let selected: Option<String> = sql(conn.query_row(
+            "SELECT kg_runs.id FROM kg_runs, json_each(kg_runs.graph_json, '$.selection') AS pages WHERE kg_runs.state='complete' AND pages.value=?1 AND (?2 IS NULL OR kg_runs.id=?2) ORDER BY kg_runs.created_at DESC, kg_runs.rowid DESC LIMIT 1",
+            rusqlite::params![page, run_id],
             |row| row.get(0),
-        ))?;
-        if page == 0 || !selected {
+        ).optional())?;
+        if page == 0 || selected.is_none() {
             return Err("该页不属于已完成的图谱运行。".into());
         }
-        let directory = self.root.join("pipeline-pages");
+        let selected = selected.unwrap();
+        if Path::new(&selected).file_name().and_then(|name| name.to_str()) != Some(selected.as_str()) {
+            return Err("运行标识无效。".into());
+        }
+        let base = self.root.join("pipeline-pages");
+        let scoped = base.join(&selected);
+        let directory = if scoped.is_dir() { scoped } else { base };
         let manifest = directory.join("page-images.json");
         let filename = if manifest.is_file() {
             let text = fs::read_to_string(manifest).map_err(|error| error.to_string())?;

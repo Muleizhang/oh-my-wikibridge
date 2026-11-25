@@ -8,6 +8,7 @@ from kg_v2.common import OUT, ident, load, save, selected_pages
 from kg_v2.contracts import publication_gate, statement_issues
 from kg_v2.records import attributes, events_and_places, local_evidence
 from kg_v2.values import FIELD_LABELS, parse_quantity, value_kind
+from kg_v2.caption_fields import supplement_relations
 
 PRONOUNS = {'它', '它们', '其', '有的', '有些', '这种', '这些', '此', '这', '作法', '方法', '图案', '纹饰'}
 
@@ -88,6 +89,10 @@ def main():
                 'qualifiers': [], 'evidence': [ev], 'origin': 'uie_caption_field', 'issues': issue,
                 'binding': {'kind': 'caption_scope', 'item': record['item']},
                 'modelScore': field['modelScore'], 'status': 'candidate'})
+
+        extra_entities, extra_statements = supplement_relations(extraction, entities, statements)
+        entities.update({e['id']: e for e in extra_entities})
+        statements += extra_statements
 
         # Open prose remains open; unidentified phrases do not become graph entities.
         for window in extraction['prose']:

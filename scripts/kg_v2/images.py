@@ -78,7 +78,11 @@ def install_previews(graph, application_root):
     assets = preview_images()
     if any(str(page) not in assets for page in graph['selection']):
         raise ValueError('Prepare original page images before importing the graph')
-    target_dir = Path(application_root) / 'pipeline-pages'; target_dir.mkdir(parents=True, exist_ok=True)
+    run_id = graph.get('runId')
+    if not run_id or Path(run_id).name != run_id:
+        raise ValueError('A valid run ID is required for source-isolated previews')
+    target_dir = Path(application_root) / 'pipeline-pages' / run_id
+    target_dir.mkdir(parents=True, exist_ok=True)
     for page in graph['selection']:
         asset = assets[str(page)]; source = OUT / 'images' / asset['file']; target = target_dir / asset['file']
         if target.exists() and os.path.samefile(source, target): continue

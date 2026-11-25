@@ -12,3 +12,5 @@ __pycache__/
 public/book-sample/
 .env
 .env.local
+.env.*
+!.env.example

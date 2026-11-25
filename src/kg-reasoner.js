@@ -16,6 +16,7 @@ export const DYNASTY_TABLE = [
   { group: '新石器时代', order: 10, re: /新石器|原始社会|仰韶|半坡|庙底沟|马家窑|半山|马厂|河姆渡|良渚|龙山|大汶口|红山|裴李岗|磁山|屈家岭|马家浜|大溪/ },
   { group: '夏代', order: 20, re: /夏代|二里头|夏文化/ },
   { group: '商代', order: 30, re: /商|殷/ },
+  { group: '周代', order: 35, re: /周代|周朝/ },
   { group: '西周', order: 40, re: /西周/ },
   { group: '东周', order: 45, re: /东周/ },
   { group: '春秋', order: 50, re: /春秋/ },
@@ -33,6 +34,9 @@ export const DYNASTY_TABLE = [
   { group: '清代', order: 170, re: /清/ },
   { group: '近现代', order: 180, re: /民国|近代|现代|当代/ },
 ];
+
+// Containment is directional: a broad period does not establish a narrower date.
+const ERA_PARENTS = { 西周: '周代', 东周: '周代', 春秋: '东周', 战国: '东周' };
 
 export const MATERIAL_ONTOLOGY = [
   { cls: '陶瓷类', re: /彩陶|红陶|白陶|黑陶|灰陶|印纹陶|陶器|陶|瓷|青瓷|釉陶/ },
@@ -117,11 +121,14 @@ function normalizeManifest(manifest) {
       id: it.artifactId,
       title: it.artifact || String(it.item || it.artifactId),
       page: Number(it.page || ev.ordinal || 1),
+      volume: it.volume || ev.volume || '',
+      volumePage: Number(it.volumePage || ev.volumePage || it.page || ev.ordinal || 1),
+      sourceName: it.sourceName || ev.sourceName || '',
       locator: it.locator || ev.locator || '',
       status: it.status || '',
       findspot: it.findspot || '',
       observation: it.observation || '',
-      quote: ev.text || it.quote || '',
+      quote: it.quote || ev.text || '',
       thumbUrl: it.detailUrl || it.imageUrl || ev.previewUrl || '',
       plateUrl: it.imageUrl || it.detailUrl || ev.previewUrl || '',
       captionUrl: it.captionUrl || ev.captionUrl || '',
@@ -151,6 +158,9 @@ function normalizeManifest(manifest) {
       objectLabel: r.object,
       objectKind: kind,
       page: Number(r.page || ev.ordinal || art.page || 1),
+      volume: r.volume || ev.volume || art.volume,
+      volumePage: Number(r.volumePage || ev.volumePage || art.volumePage),
+      sourceName: r.sourceName || ev.sourceName || art.sourceName,
       locator: r.proofLocator || r.locator || ev.locator || art.locator,
       quote: ev.text || r.quote || art.quote,
       evidenceId: r.evidenceId || art.id,
@@ -158,6 +168,9 @@ function normalizeManifest(manifest) {
       pageUrl: ev.previewUrl || art.pageUrl,
       captionUrl: ev.captionUrl || r.captionUrl || art.captionUrl,
       isInferred: false,
+      origin: r.origin || '',
+      binding: r.binding || null,
+      supportingEvidence: r.supportingEvidence || [],
     };
     triples.push(triple);
     art.tripleIds.push(triple.id);
@@ -174,6 +187,7 @@ function normalizeManifest(manifest) {
     triples,
     tripleById: new Map(triples.map(t => [t.id, t])),
     pages: manifest.pages || [],
+    volumes: manifest.volumes || [],
   };
 }
 
@@ -312,6 +326,12 @@ export function createKGReasoner(rawData) {
     if (info.group && info.group !== p) {
       registerSubClass(`era:${p}`, p, `era:${info.group}`, info.group, 'era');
     }
+    let child = info.group;
+    while (ERA_PARENTS[child]) {
+      const parent = ERA_PARENTS[child];
+      registerSubClass(`era:${child}`, child, `era:${parent}`, parent, 'era');
+      child = parent;
+    }
   }
   for (const m of observedMaterials) {
     const cls = materialClass(m);
@@ -325,31 +345,39 @@ export function createKGReasoner(rawData) {
   // Forward-chaining RDFS materialized triples
   const inferredTriples = [];
   for (const t of kg.triples) {
-    const sub = subclassMap.get(t.objectKey);
-    if (!sub) continue;
-    const infPred = t.predicate === 'period' ? 'period_class'
-      : (t.predicate === 'made_of' ? 'made_of_class' : 'motif_family');
-    inferredTriples.push({
-      id: `inf:${t.id}:${sub.parentKey}`,
-      subjectId: t.subjectId,
-      subjectLabel: t.subjectLabel,
-      predicate: infPred,
-      predicateLabel: PREDICATE_LABELS[infPred] || infPred,
-      objectKey: sub.parentKey,
-      objectLabel: sub.parentLabel,
-      objectKind: sub.kind,
-      page: t.page,
-      locator: t.locator,
-      quote: t.quote,
-      evidenceId: t.evidenceId,
-      bbox: t.bbox,
-      pageUrl: t.pageUrl,
-      captionUrl: t.captionUrl,
-      isInferred: true,
-      rule: 'RDFS_SUBCLASS',
-      premiseTripleId: t.id,
-      axiom: `${t.objectLabel} ⊑ ${sub.parentLabel}`,
-    });
+    let key = t.objectKey;
+    const visited = new Set([key]);
+    const chain = [t.objectLabel];
+    while (subclassMap.has(key)) {
+      const sub = subclassMap.get(key);
+      if (visited.has(sub.parentKey)) break;
+      visited.add(sub.parentKey);
+      chain.push(sub.parentLabel);
+      const infPred = t.predicate === 'period' ? 'period_class'
+        : (t.predicate === 'made_of' ? 'made_of_class' : 'motif_family');
+      inferredTriples.push({
+        id: `inf:${t.id}:${sub.parentKey}`,
+        subjectId: t.subjectId,
+        subjectLabel: t.subjectLabel,
+        predicate: infPred,
+        predicateLabel: PREDICATE_LABELS[infPred] || infPred,
+        objectKey: sub.parentKey,
+        objectLabel: sub.parentLabel,
+        objectKind: sub.kind,
+        page: t.page,
+        locator: t.locator,
+        quote: t.quote,
+        evidenceId: t.evidenceId,
+        bbox: t.bbox,
+        pageUrl: t.pageUrl,
+        captionUrl: t.captionUrl,
+        isInferred: true,
+        rule: 'RDFS_SUBCLASS',
+        premiseTripleId: t.id,
+        axiom: chain.join(' ⊑ '),
+      });
+      key = sub.parentKey;
+    }
   }
 
   // Build entity lookup index (literal + ontology classes)
@@ -444,7 +472,15 @@ export function createKGReasoner(rawData) {
     if (kind === 'era') {
       const targetGrp = eraInfo(label).group;
       for (const p of observedEras) {
-        if (eraInfo(p).group === targetGrp) out.add(p);
+        let key = `era:${p}`;
+        const visited = new Set();
+        while (!visited.has(key)) {
+          if (key === `era:${targetGrp}`) { out.add(p); break; }
+          visited.add(key);
+          const parent = subclassMap.get(key);
+          if (!parent) break;
+          key = parent.parentKey;
+        }
       }
     } else if (kind === 'material') {
       const cls = MATERIAL_ONTOLOGY.some(m => m.cls === label) ? label : materialClass(label);
@@ -480,19 +516,36 @@ export function createKGReasoner(rawData) {
     const useOntology = opts.useOntology !== false;
     const maxHops = Math.max(2, Math.min(8, Number(opts.maxHops) || 6));
     const maxPaths = Math.max(1, Math.min(8, Number(opts.maxPaths) || 4));
+    const maxExpansions = Math.max(1, Math.min(14000, Number(opts.maxExpansions) || 14000));
     const g = useOntology ? graphOntology : graphLiteral;
     const src = resolveNode(sourceInput, useOntology);
     const dst = resolveNode(targetInput, useOntology);
+    const endpointCoverage = node => {
+      const arts = !node ? [] : node.kind === 'artifact'
+        ? allArtifacts.filter(a => `artifact:${a.id}` === node.key)
+        : ['era', 'material', 'motif'].includes(node.kind) ? matchingArtifacts(node.kind, node.label, useOntology) : [];
+      return { total: arts.length, withMotifs: arts.filter(a => a.motifs.length).length,
+        withMaterials: arts.filter(a => a.materials.length).length };
+    };
+    const context = {
+      source: src || { label: String(sourceInput || ''), missing: true },
+      target: dst || { label: String(targetInput || ''), missing: true },
+      useOntology, coverage: { source: endpointCoverage(src), target: endpointCoverage(dst) },
+    };
+    const search = { maxHops, maxPaths, maxExpansions, expansions: 0,
+      budgetExhausted: false, completeWithinConstraints: false, stoppedReason: 'missing_node' };
 
     if (!src || !dst) {
       return {
+        ...context, search,
         ok: false,
         error: !src ? `未在图谱中找到起点「${sourceInput}」` : `未在图谱中找到终点「${targetInput}」`,
-        useOntology, paths: [], evidence: [], sparql: '',
+        paths: [], evidence: [], sparql: '',
       };
     }
     if (src.key === dst.key) {
-      return { ok: false, error: '起点与终点相同，请选择两个不同节点。', useOntology, paths: [], evidence: [], sparql: '' };
+      return { ...context, search: { ...search, stoppedReason: 'same_node' }, ok: false,
+        error: '起点与终点相同，请选择两个不同节点。', paths: [], evidence: [], sparql: '' };
     }
 
     // Priority-BFS discovering diverse simple paths up to maxHops
@@ -500,9 +553,8 @@ export function createKGReasoner(rawData) {
     const found = [];
     const bridgeUsage = new Map();
     let expansions = 0;
-    const MAX_EXPANSIONS = 14000;
 
-    while (queue.length && found.length < maxPaths * 4 && expansions < MAX_EXPANSIONS) {
+    while (queue.length && found.length < maxPaths * 4 && expansions < maxExpansions) {
       // Pop lowest cost state
       let bestIdx = 0;
       for (let i = 1; i < queue.length; i++) {
@@ -602,15 +654,21 @@ export function createKGReasoner(rawData) {
       };
     });
 
-    // Also compute literal-only path count when ontology is ON, to showcase the ontology lift!
-    let literalCount = null;
+    search.expansions = expansions;
+    search.completeWithinConstraints = queue.length === 0;
+    search.budgetExhausted = queue.length > 0 && expansions >= maxExpansions;
+    search.stoppedReason = search.completeWithinConstraints ? 'exhausted'
+      : search.budgetExhausted ? 'expansion_budget' : 'candidate_limit';
+
+    // Unknown reachability stays unknown when the bounded search stops early.
+    let literalReachable = annotatedPaths.length > 0 ? true : search.completeWithinConstraints ? false : null;
     if (useOntology) {
       const litSrc = resolveNode(sourceInput, false);
       const litDst = resolveNode(targetInput, false);
-      if (!litSrc || !litDst) literalCount = 0;
+      if (!litSrc || !litDst) literalReachable = false;
       else {
-        const litRes = findPaths(litSrc.key, litDst.key, { useOntology: false, maxHops, maxPaths: 1 });
-        literalCount = litRes.paths.length;
+        const litRes = findPaths(litSrc.key, litDst.key, { useOntology: false, maxHops, maxPaths: 1, maxExpansions });
+        literalReachable = litRes.paths.length > 0 ? true : litRes.search.completeWithinConstraints ? false : null;
       }
     }
 
@@ -619,11 +677,9 @@ export function createKGReasoner(rawData) {
     return {
       ok: true,
       mode: 'path',
-      source: src,
-      target: dst,
-      useOntology,
-      literalReachable: literalCount === null ? annotatedPaths.length > 0 : literalCount > 0,
-      ontologyUnlocked: useOntology && literalCount === 0 && annotatedPaths.length > 0,
+      ...context, search,
+      literalReachable,
+      ontologyUnlocked: useOntology && literalReachable === false && annotatedPaths.length > 0,
       paths: annotatedPaths,
       evidence: [...evidenceMap.values()],
       sparql,
@@ -647,33 +703,35 @@ export function createKGReasoner(rawData) {
         detail: `通过 RDFS 本体层级（${axs.join('；')}）打通跨术语边界。`,
       });
     }
-    if (arts.length >= 2 && motifs.length >= 1) {
+    const sharedMotif = motifs.find(m => steps.filter(s => !s.isInferred && s.predicate === 'decorated_with'
+      && (s.fromKey === m.key || s.toKey === m.key)).length >= 2);
+    if (sharedMotif) {
       rules.push({
         code: 'R3_CO_MOTIF',
-        name: '共纹样桥接传递',
-        formula: `decorated_with(A1, ${motifs[0].label}) ∧ decorated_with(A2, ${motifs[0].label}) ⇒ shares_motif(A1, A2)`,
-        detail: `两件器物通过共同纹样「${motifs[0].label}」形成语义桥接。`,
+        name: '同名纹样关联',
+        formula: `decorated_with(A1, ${sharedMotif.label}) ∧ decorated_with(A2, ${sharedMotif.label}) ⇒ shares_recorded_motif(A1, A2)`,
+        detail: `两件器物均标注「${sharedMotif.label}」。这只表示记录共现，不证明历史传播。`,
       });
     }
-    if (eras.length >= 2 && motifs.length >= 1) {
+    if (eras.length >= 2 && motifs.length >= 1 && arts.length >= 2) {
       const e1 = eras[0], e2 = eras[eras.length - 1];
       const o1 = eraInfo(e1.label).order, o2 = eraInfo(e2.label).order;
       if (o1 !== o2) {
         const [early, late] = o1 < o2 ? [e1.label, e2.label] : [e2.label, e1.label];
         rules.push({
-          code: 'R1_CONTINUITY',
-          name: '跨时代纹样传承',
-          formula: `precedes(${early}, ${late}) ∧ bridge(${motifs[0].label}) ⇒ persists(${motifs[0].label}, ${early}→${late})`,
-          detail: `推导出「${motifs[0].label}」跨越时序偏序 ${early} ≺ ${late} 延续传承。`,
+          code: 'R1_TEMPORAL_ASSOCIATION',
+          name: '跨时代纹样关联候选',
+          formula: `connected_via_motif(${early}, ${late}) ⇒ temporal_association_candidate(${early}, ${late})`,
+          detail: `当前图谱通过纹样节点连接「${early}」与「${late}」。连通性不能单独证明传承，类别泛化也不意味着纹样相同。`,
         });
       }
     }
     if (mats.length >= 2 && motifs.length >= 1 && mats[0].label !== mats[mats.length - 1].label) {
       rules.push({
-        code: 'R2_TRANSFER',
-        name: '跨材质载体迁移',
-        formula: `made_of(A1, ${mats[0].label}) ∧ made_of(A2, ${mats[mats.length - 1].label}) ∧ bridge(${motifs[0].label}) ⇒ transfers_material`,
-        detail: `纹样「${motifs[0].label}」实现从「${mats[0].label}」到「${mats[mats.length - 1].label}」的跨载体迁移。`,
+        code: 'R2_MATERIAL_ASSOCIATION',
+        name: '跨材质纹样关联候选',
+        formula: `connected_via_motif(${mats[0].label}, ${mats[mats.length - 1].label}) ⇒ material_association_candidate`,
+        detail: `路径连接「${mats[0].label}」与「${mats[mats.length - 1].label}」，仅构成跨材质关联候选，不能证明纹样迁移或迁移方向。`,
       });
     }
     return rules;
@@ -792,8 +850,13 @@ export function createKGReasoner(rawData) {
       onlyA.sort((x, y) => y.count - x.count);
       onlyB.sort((x, y) => y.count - x.count);
       const union = keys.size;
-      const jaccard = union ? Number((shared.length / union).toFixed(3)) : 0;
-      return { axis, shared, onlyA, onlyB, jaccard };
+      const coveredA = new Set([...mA.values()].flatMap(value => value.artifactIds)).size;
+      const coveredB = new Set([...mB.values()].flatMap(value => value.artifactIds)).size;
+      const comparable = coveredA > 0 && coveredB > 0;
+      const jaccard = comparable && union ? Number((shared.length / union).toFixed(3)) : null;
+      return { axis, shared, onlyA, onlyB, jaccard, comparable,
+        coverage: { withValuesA: coveredA, totalA: artsA.length, withValuesB: coveredB, totalB: artsB.length },
+        interpretation: 'Current recorded candidates only. Missing annotations are not evidence of historical absence; shared labels do not prove transmission.' };
     };
 
     const primary = diffAxis(primaryAxis);
@@ -806,7 +869,7 @@ export function createKGReasoner(rawData) {
     const valB = (useOntology && kind === 'material' && materialClass(entityB)) ? materialClass(entityB) : entityB;
 
     const sparql = [
-      `# 否定差集推理：找出「${entityA}」独有而「${entityB}」未出现的${PREDICATE_LABELS[targetPred.slice(1)]}`,
+      `# 当前图谱差集：找出「${entityA}」已录入而「${entityB}」未检索到的${PREDICATE_LABELS[targetPred.slice(1)]}；不代表历史独有`,
       `SELECT DISTINCT ?target ?artifact WHERE {`,
       `  ?artifact ${predA} "${valA}" .`,
       `  ?artifact ${targetPred} ?target .`,
@@ -831,6 +894,9 @@ export function createKGReasoner(rawData) {
       artifactIdsB: artsB.map(a => a.id),
       primary,
       secondary,
+      comparisonScope: useOntology && kind === 'era' ? 'Era subclasses and their transitive parents are included.' : 'Literal labels or selected ontology expansion.',
+      absenceIsEvidence: false,
+      interpretation: '候选记录的共有与差集；缺少标注不等于历史不存在，共有纹样也不能单独证明传承。',
       evidence: [...evidenceMap.values()],
       sparql,
     };
@@ -1332,6 +1398,9 @@ export function createKGReasoner(rawData) {
         artifactId: sa.id,
         title: sa.title,
         page: sa.page,
+        volume: sa.volume,
+        volumePage: sa.volumePage,
+        sourceName: sa.sourceName,
         ref: regArtEv(sa, targetPredicate),
       }));
 
@@ -1340,6 +1409,9 @@ export function createKGReasoner(rawData) {
         artifactId: art.id,
         artifactTitle: art.title,
         page: art.page,
+        volume: art.volume,
+        volumePage: art.volumePage,
+        sourceName: art.sourceName,
         predicate: targetPredicate,
         predicateLabel: PREDICATE_LABELS[targetPredicate],
         predictedValue: bestVal,
@@ -1420,6 +1492,9 @@ export function createKGReasoner(rawData) {
         id: art.id,
         title: art.title,
         page: art.page,
+        volume: art.volume,
+        volumePage: art.volumePage,
+        sourceName: art.sourceName,
         locator: art.locator,
         findspot: art.findspot,
         periods: art.periods,
@@ -1477,7 +1552,7 @@ export function createKGReasoner(rawData) {
     const materials = [...matCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
     const motifs = [...motifCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
 
-    // Dynamically pick compelling path/compare pairs that ACTUALLY exist in this KG!
+    // Pick observed labels; this does not guarantee a connecting path or enough annotations.
     const e1 = eras[0]?.name, e2 = eras[1]?.name, eLast = eras[eras.length - 1]?.name;
     const m1 = materials[0]?.name, m2 = materials[1]?.name;
     const mo1 = motifs.find(m => !/连续|边缘/.test(m.name))?.name || motifs[0]?.name;
@@ -1487,9 +1562,9 @@ export function createKGReasoner(rawData) {
     if (e1 && e2) {
       suggestions.push({
         type: 'path',
-        label: `${e1} → ${e2} 演化路径`,
+        label: `${e1} → ${e2} 关联路径检索`,
         source: e1, target: e2,
-        question: `请推导「${e1}」与「${e2}」之间存在哪些多跳纹样传承或材质迁移路径？并说明开启本体泛化前后的差异。`,
+        question: `请检索「${e1}」与「${e2}」之间的多跳纹样或材质关联路径，说明本体泛化前后的差异与标注缺口，并判断这些证据是否足以支持传承或迁移。`,
       });
     }
     if (e2 && eLast && e2 !== eLast) {
@@ -1497,7 +1572,7 @@ export function createKGReasoner(rawData) {
         type: 'compare',
         label: `对比 ${e2} vs ${eLast}`,
         kind: 'era', entityA: e2, entityB: eLast,
-        question: `对比「${e2}」与「${eLast}」的纹样与材质体系：哪些是延续共有的，哪些是各自独有的（差集推理）？`,
+        question: `对比「${e2}」与「${eLast}」的纹样与材质记录：当前共有、差集与标注覆盖率分别是多少？不要把差集解释为历史独有。`,
       });
     }
     if (m1 && m2) {
@@ -1526,6 +1601,7 @@ export function createKGReasoner(rawData) {
     return {
       title: kg.title,
       format: kg.format,
+      volumes: kg.volumes || [],
       counts: {
         artifacts: allArtifacts.length,
         triples: kg.triples.length,

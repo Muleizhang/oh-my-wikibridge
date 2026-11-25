@@ -56,7 +56,8 @@ def main():
         for page in graph['selection']:
             asset = assets[str(page)]; original = OUT/'images'/asset['file']
             if hashlib.sha256(original.read_bytes()).hexdigest() != asset['sha256']: raise ValueError('Preview changed')
-            desktop = args.database_root/'pipeline-pages'/asset['file']
+            desktop_dir = args.database_root/'pipeline-pages'/graph['runId']
+            desktop = desktop_dir/asset['file']
             if not desktop.exists(): raise ValueError('Desktop preview is missing')
             for directory in [OUT/'images', args.database_root/'pipeline-pages']:
                 old = directory/f'v1-p{page:04d}.png'
@@ -66,7 +67,7 @@ def main():
               'pages': len(assets), 'originalJPEGs': sum(a['storage']=='original_jpeg_stream' for a in assets.values()),
               'losslessOriginalResolutionImages': sum(a['storage']=='original_resolution_lossless' for a in assets.values()),
               'layoutCachesMigrated': changed_caches, 'removedRasterFiles': removed_files, 'removedRasterBytes': removed_bytes,
-              'desktopHardlinks': sum(os.path.samefile(OUT/'images'/a['file'], args.database_root/'pipeline-pages'/a['file']) for a in assets.values()),
+              'desktopHardlinks': sum(os.path.samefile(OUT/'images'/a['file'], args.database_root/'pipeline-pages'/graph['runId']/a['file']) for a in assets.values()),
               'knowledgeUnchanged': True, 'runId': graph['runId'], 'coordinateSystem': 'Original OCR spans and boxes retained; preview overlay uses the PDF image-to-OCR viewBox.'}
     save(OUT/'image-storage.json', report); print(json.dumps(report,ensure_ascii=False),flush=True)
 

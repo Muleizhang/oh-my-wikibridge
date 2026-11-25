@@ -67,7 +67,7 @@ export function ReliableGraph({ token, onUnlock }: { token?: string; onUnlock: (
     const asset = data?.pageImages?.[String(ev.page)];
     if (!desktop) { setImage('/data/local-kg/images/' + (asset?.file ?? `v1-p${String(ev.page).padStart(4, '0')}.png`)); return; }
     let active = true, url: string | undefined;
-    void call<ArrayBuffer>('local_pipeline_image', { token, page: ev.page }).then(bytes => {
+    void call<ArrayBuffer>('local_pipeline_image', { token, page: ev.page, runId: data?.runId }).then(bytes => {
       if (active) { url = URL.createObjectURL(new Blob([bytes], { type: asset?.mimeType ?? 'image/png' })); setImage(url); }
     }).catch(e => { if (active) setError(errorText(e)); });
     return () => { active = false; if (url) URL.revokeObjectURL(url); };

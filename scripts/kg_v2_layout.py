@@ -60,6 +60,9 @@ def main():
     parser.add_argument('--workers', type=int, default=2)
     args = parser.parse_args()
     if args.workers < 1: raise SystemExit('--workers must be at least 1')
+    # Fail before loading four large models or starting page workers.
+    import fitz
+    from PIL import Image
     os.environ.update(PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK='True', HF_HUB_DISABLE_IMPLICIT_TOKEN='1',
                       HF_HUB_OFFLINE='1', TOKENIZERS_PARALLELISM='false')
     models, hashes = {}, {}

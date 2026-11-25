@@ -42,6 +42,11 @@ def persist(graph, root):
             (source_id, corpus, source.name, 'pdf', source.stat().st_size, digest, 'draft'))
         conn.execute('INSERT INTO kg_runs(id,source_id,state,graph_json) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET graph_json=excluded.graph_json',
             (run, source_id, 'complete', json.dumps(graph, ensure_ascii=False)))
+        source_pages = conn.execute("""SELECT s.id, MAX(json_array_length(r.graph_json,'$.selection'))
+            FROM sources s JOIN kg_runs r ON r.source_id=s.id
+            WHERE s.corpus_id=? AND r.state='complete' GROUP BY s.id""", (corpus,)).fetchall()
+        conn.execute('UPDATE corpora SET description=? WHERE id=?',
+            (f"{len(source_pages)}册、{sum(row[1] for row in source_pages)}页语料。属性、事件和实体分离；候选尚未独立验收。", corpus))
         for table in ['kg_assertions', 'kg_events', 'kg_source_mentions', 'kg_records']:
             conn.execute(f'DELETE FROM {table} WHERE run_id=?', (run,))
         conn.execute('DELETE FROM kg_entities WHERE run_id=?', (run,))

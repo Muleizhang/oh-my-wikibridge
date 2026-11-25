@@ -11,6 +11,63 @@ from merge_kg_volumes import merge_volumes
 
 
 class MergeVolumesTest(unittest.TestCase):
+    def test_manifest_collisions_preserve_sources_and_shared_concepts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            specs = []
+            for number, label in enumerate(['第一册', '第二册'], 1):
+                volume = root / f'vol{number}'
+                volume.mkdir()
+                (volume / 'p1.jpg').write_bytes(f'volume{number}'.encode())
+                (volume / 'p2.jpg').write_bytes(b'empty-page')
+                manifest = {
+                    'title': label, 'sourceName': f'book{number}.pdf', 'runId': f'run{number}',
+                    'summary': {'sourceRecords': 1},
+                    'pages': [{'page': 1, 'previewUrl': 'p1.jpg', 'entries': 1},
+                              {'page': 2, 'previewUrl': 'p2.jpg', 'entries': 0}],
+                    'items': [{'artifactId': 'same-record', 'artifact': '同名器物', 'page': 1,
+                               'evidenceId': 'same-evidence', 'imageUrl': 'p1.jpg'}],
+                    'evidence': [{'id': 'same-evidence', 'ordinal': 1, 'page': 1,
+                                  'text': '鸟纹', 'previewUrl': 'p1.jpg'}],
+                    'rows': [{'id': 'same-row', 'artifactId': 'same-record', 'page': 1,
+                              'evidenceId': 'same-evidence', 'predicate': 'decorated_with',
+                              'object': ' 鸟 纹 ' if number == 1 else '鸟纹',
+                              'binding': {'recordId': 'same-record'},
+                              'supportingEvidence': [{'page': 2, 'text': '同页标题',
+                                                      'previewUrl': 'p2.jpg'}]}],
+                }
+                (volume / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False))
+                specs.append(f'{label}={volume}')
+            out = root / 'merged'
+            merged = merge_volumes(specs, out, mode='copy', build_html=False)
+            self.assertEqual(merged['summary']['sourcePages'], 4)
+            self.assertEqual(len({it['artifactId'] for it in merged['items']}), 2)
+            self.assertEqual(len({r['objectId'] for r in merged['rows']}), 1)
+            self.assertEqual(merged['rows'][0]['object'], '鸟纹')
+            row = merged['rows'][1]
+            self.assertEqual(row['binding']['recordId'], 'v2:same-record')
+            self.assertEqual((row['page'], row['volumePage']), (3, 1))
+            support = row['supportingEvidence'][0]
+            self.assertEqual((support['page'], support['volumePage'], support['volume']), (4, 2, '第二册'))
+            ev = merged['evidence'][1]
+            self.assertEqual((ev['ordinal'], ev['page'], ev['volumePage']), (3, 3, 1))
+            self.assertEqual(ev['sourceName'], 'book2.pdf')
+            self.assertEqual((out / ev['previewUrl']).read_bytes(), b'volume2')
+            self.assertTrue((out / support['previewUrl']).is_file())
+            check_js = (
+                "import {readFileSync} from 'node:fs';"
+                "import {createKGReasoner} from './src/kg-reasoner.js';"
+                f"const r=createKGReasoner(JSON.parse(readFileSync({json.dumps(str(out / 'manifest.json'))},'utf8')));"
+                "const q=r.queryArtifacts({motif:'鸟纹',useOntology:false});"
+                "if(q.count!==2) throw Error('Shared motif must retain both artifacts');"
+                "const a=q.items.find(x=>x.volume==='第二册');"
+                "if(a.page!==3 || a.volumePage!==1 || a.sourceName!=='book2.pdf') throw Error('Lost source metadata');"
+                "const e=r.inspectEvidence(a.id).evidence[0];"
+                "if(e.volumePage!==1 || e.volume!=='第二册') throw Error('Lost evidence source');"
+                "if(r.getCatalogSummary().volumes.length!==2) throw Error('Lost volume catalog');"
+            )
+            subprocess.run(['node', '--input-type=module', '-e', check_js], check=True, capture_output=True, text=True)
+
     def test_merge_mixed_manifest_and_graph_volumes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
