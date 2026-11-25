@@ -1,3 +1,4 @@
+import { cameraDistance, depthCuts, edgeDepthAt, splitByDepth } from './edge-depth.js';
 // A compact perspective renderer shared by the application and the single-file atlas.
 const spaceScenes = new WeakMap();
 let spaceSerial = 0;
@@ -58,7 +59,12 @@ function buildSpace(host,nodes,edges) {
   const backdrop=svgEl('g',svg,{'aria-hidden':true,'pointer-events':'none'});
   svgEl('rect',backdrop,{width:'100%',height:'100%',fill:'url(#'+uid+'studio)'});
   const shadows=svgEl('g',backdrop,{fill:'url(#'+uid+'shadow)'});
-  const edgeLayer=svgEl('g',svg), nodeLayer=svgEl('g',svg);
+  // Blur the entire shadow pass once, including horizontal and vertical wires.
+  const blur=svgEl('filter',defs,{id:uid+'wire-blur',filterUnits:'userSpaceOnUse',x:-100,y:-100,width:1100,height:600});
+  svgEl('feGaussianBlur',blur,{stdDeviation:2.1});
+  const wireShadows=svgEl('g',backdrop,{filter:'url(#'+uid+'wire-blur)',opacity:.31,'pointer-events':'none'});
+  const scene=svgEl('g',svg,{class:'space-objects'});
+  let previousOrder=[];
   const status=html('p',host,'space-status'); status.setAttribute('aria-live','polite');
   const tip=html('small',bar,'space-tip','拖动旋转 · 点选关系查看出处');
   let width=720, yaw, pitch, zoom, spatial=true, selected='', pickEdge, pickNode;
@@ -133,7 +139,7 @@ function buildSpace(host,nodes,edges) {
     const radius=emblem?25:n===center?40:n.kind==='artifact'?32:16;
     const cast=svgEl('ellipse',shadows,{});
     const contact=svgEl('ellipse',shadows,{});
-    const g=svgEl('g',nodeLayer,{class:'space-node','data-kind':n.kind,tabindex:0,role:'button','aria-label':[n.label,n.sub].filter(Boolean).join(' · ')});
+    const g=svgEl('g',scene,{class:'space-node','data-kind':n.kind,tabindex:0,role:'button','aria-label':[n.label,n.sub].filter(Boolean).join(' · ')});
     if(n.kind==='material') materialMark(g,n.label);
     else if(n.kind==='period') periodMark(g,n.label);
     else if(n.kind==='concept') {
@@ -143,7 +149,7 @@ function buildSpace(host,nodes,edges) {
       svgEl('circle',g,{class:'space-face',r:radius,fill:n.image?'#fffdfa':'url(#'+uid+n.kind+')',
         stroke:n.image?'#cec7bc':spacePalette[n.kind][1],'stroke-width':.9});
       if(n.image) {
-        const clipId=uid+'crop-'+nodeLayer.childElementCount;
+        const clipId=uid+'crop-'+scene.childElementCount;
         const clip=svgEl('clipPath',defs,{id:clipId});
         svgEl('circle',clip,{r:radius-3});
         svgEl('image',g,{href:n.image,x:-radius,y:-radius,width:2*radius,height:2*radius,preserveAspectRatio:'xMidYMid slice','clip-path':'url(#'+clipId+')'});
@@ -162,66 +168,119 @@ function buildSpace(host,nodes,edges) {
   const parallels=new Map();
   const edgeViews=edges.map(e=>{
     const pair=JSON.stringify([e.from,e.to].sort()); const siblings=parallels.get(pair)??[];
-    const from=byId.get(e.from),to=byId.get(e.to);
-    const label=from.label+' → '+e.label+' → '+to.label;
-    const g=svgEl('g',edgeLayer,{class:'space-edge',tabindex:0,role:'button','aria-label':label});
-    const line=svgEl('path',g,{fill:'none'}), arrow=svgEl('path',g,{});
+    const label=byId.get(e.from).label+' → '+e.label+' → '+byId.get(e.to).label;
+    const g=svgEl('g',scene,{class:'space-edge',tabindex:0,role:'button','aria-label':label});
+    const arrow=svgEl('path',g,{class:'space-arrow'});
     svgEl('title',g).textContent=label;
-    const hit=svgEl('path',g,{fill:'none',stroke:'transparent','stroke-width':14});
     action(g,()=>pickEdge(e.id));
-    const caption=svgEl('text',g,{class:'space-predicate','text-anchor':'middle'});
+    const caption=svgEl('text',scene,{class:'space-predicate','text-anchor':'middle'});
     caption.textContent=e.label;
-    const v={e,from,to,g,line,arrow,hit,caption,siblings,index:siblings.length};
+    action(caption,()=>pickEdge(e.id));
+    const shade=svgEl('path',wireShadows,{fill:'none',stroke:'#60594f','stroke-linecap':'round'});
+    const arrowShade=svgEl('path',wireShadows,{fill:'#60594f'});
+    const v={e,g,arrow,caption,shade,arrowShade,siblings,index:siblings.length,strokes:[]};
     siblings.push(v);parallels.set(pair,siblings);return v;
   });
   function project(x,y,z) {
     const dx=x*Math.cos(yaw)+z*Math.sin(yaw), dz=z*Math.cos(yaw)-x*Math.sin(yaw);
     const dy=y*Math.cos(pitch)-dz*Math.sin(pitch), depth=y*Math.sin(pitch)+dz*Math.cos(pitch);
-    const k=zoom*(spatial?780/(780-depth):1);
+    const k=zoom*(spatial?cameraDistance/(cameraDistance-depth):1);
     return {x:width/2+dx*k*Math.min(1,(width-115)/500),y:173+dy*k,z:depth,k};
+  }
+  function shadowPoint(p) {
+    const lift=Math.max(0,Math.min(1,(p.z+230)/460));
+    const k=zoom*cameraDistance/(cameraDistance-p.z);
+    return {x:p.x+(5+15*lift)*k,y:p.y+(8+18*lift)*k,lift};
+  }
+  function edgeCurve(v,a,b) {
+    const loop=v.e.from===v.e.to;
+    const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
+    const bend=(v.index-(v.siblings.length-1)/2)*25*(v.e.from>v.e.to?-1:1);
+    if(!loop && len<=a.r+b.r+7 && Math.abs(bend)<a.r+b.r) return [];
+    const cx=(a.x+b.x)/2-bend*dy/(len||1),cy=(a.y+b.y)/2+bend*dx/(len||1);
+    const entry=loop?Math.PI:Math.atan2(cy-a.y,cx-a.x);
+    const exit=loop?1.9:Math.atan2(b.y-cy,b.x-cx);
+    const start={x:a.x+(a.r+2)*Math.cos(entry),y:a.y+(a.r+2)*Math.sin(entry)};
+    const end={x:b.x-(b.r+3)*Math.cos(exit),y:b.y-(b.r+3)*Math.sin(exit)};
+    const samples=loop?18:bend?10:2;
+    const t0=Math.min(.49,(a.r+2)/(len||1)),t1=Math.max(.51,1-(b.r+3)/(len||1));
+    return Array.from({length:samples+1},(_,i)=>{
+      const t=i/samples,u=1-t;
+      const x=loop?u**3*start.x+3*u*u*t*(a.x-65)+3*u*t*t*(a.x+40)+t**3*end.x:
+        u*u*start.x+2*u*t*(bend?cx:(start.x+end.x)/2)+t*t*end.x;
+      const y=loop?u**3*start.y+3*u*u*t*(a.y-74)+3*u*t*t*(a.y-78)+t**3*end.y:
+        u*u*start.y+2*u*t*(bend?cy:(start.y+end.y)/2)+t*t*end.y;
+      return {x,y,z:spatial?edgeDepthAt(a.z,b.z,t0+(t1-t0)*t):0};
+    });
+  }
+  function pathOf(points) {
+    return points.map((p,i)=>(i?'L':'M')+p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' ');
+  }
+  function placeArrow(el,prev,tip,scale) {
+    const angle=Math.atan2(tip.y-prev.y,tip.x-prev.x)*180/Math.PI;
+    set(el,{d:'M0 0 L-8 -3.6 L-8 3.6 Z',transform:'translate('+tip.x+' '+tip.y+') rotate('+angle+') scale('+scale+')'});
+  }
+  function strokeAt(v,i) {
+    if(v.strokes[i]) return v.strokes[i];
+    const g=svgEl('g',scene,{class:'space-edge','aria-hidden':true});
+    const line=svgEl('path',g,{class:'space-wire',fill:'none','stroke-linecap':'round'});
+    const hit=svgEl('path',g,{fill:'none',stroke:'transparent','stroke-width':14});
+    action(g,()=>pickEdge(v.e.id));
+    const stroke={g,line,hit};v.strokes.push(stroke);
+    return stroke;
   }
   function render() {
     width=Math.max(345,Math.min(860,host.clientWidth || 720));
     svg.setAttribute('viewBox','0 0 '+width+' 390');
     svg.setAttribute('data-mode',spatial?'space':'flat');
     shadows.setAttribute('display',spatial?'inline':'none');
-    const points=new Map();
+    wireShadows.setAttribute('display',spatial?'inline':'none');
+    const points=new Map(), paint=[];
     for(const view of nodeViews) {
       const {n}=view,p=project(n.x,n.y,n.z);points.set(n.id,{...p,r:view.radius*p.k});
       if(spatial) {
         // A fixed upper-left light: increasing separation from the backing plane
         // widens and displaces the shadow while reducing its peak density.
-        const lift=Math.max(0,Math.min(1,(p.z+230)/460));
+        const cast=shadowPoint(p),lift=cast.lift;
         const radius=view.radius*p.k;
         const spread=radius*(1.17+.37*lift);
-        set(view.cast,{cx:p.x+(5+15*lift)*p.k,cy:p.y+(8+18*lift)*p.k,
+        set(view.cast,{cx:cast.x,cy:cast.y,
           rx:spread,ry:spread*.94,opacity:.87-.24*lift});
         set(view.contact,{cx:p.x+2*p.k,cy:p.y+4*p.k,rx:radius*1.14,ry:radius*1.13,opacity:.6-.25*lift});
       }
+      paint.push({el:view.g,z:spatial?p.z:1});
       view.g.setAttribute('transform','translate('+p.x+' '+p.y+') scale('+p.k+')');
     }
-    const sorted=[...nodeViews].sort((a,b)=>points.get(a.n.id).z-points.get(b.n.id).z);
-    // Reorder only when the depth order changes, so pointer targets and keyboard focus stay stable.
-    const order=sorted.map(v=>v.n.id).join('\n');
-    if(nodeLayer.getAttribute('data-order')!==order){
-      const focused=document.activeElement;
-      for(const v of sorted) nodeLayer.append(v.g);
-      if(nodeLayer.contains(focused)) focused.focus();
-      nodeLayer.setAttribute('data-order',order);
-    }
-    for(const v of edgeViews) {
-      const a=points.get(v.e.from),b=points.get(v.e.to);
-      const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1;
-      const bend=(v.index-(v.siblings.length-1)/2)*25*(v.e.from>v.e.to?-1:1);
-      const cx=(a.x+b.x)/2-bend*dy/len,cy=(a.y+b.y)/2+bend*dx/len;
-      const loop=v.e.from===v.e.to;
-      const angle=loop?1.9:Math.atan2(b.y-cy,b.x-cx);
-      const x=b.x-Math.cos(angle)*(b.r+3), y=b.y-Math.sin(angle)*(b.r+3);
-      const d=loop?'M '+(a.x-a.r)+' '+a.y+' C '+(a.x-65)+' '+(a.y-74)+' '+(a.x+40)+' '+(a.y-78)+' '+x+' '+y:
-        'M '+a.x+' '+a.y+' Q '+cx+' '+cy+' '+x+' '+y;
-      set(v.caption,{x:(a.x+2*cx+b.x)/4,y:loop?a.y-52:(a.y+2*cy+b.y)/4-6});
-      v.line.setAttribute('d',d);v.hit.setAttribute('d',d);
-      set(v.arrow,{d:'M0 0 L-8 -3.6 L-8 3.6 Z',transform:'translate('+x+' '+y+') rotate('+angle*180/Math.PI+')'});
+    const curves=edgeViews.map(v=>edgeCurve(v,points.get(v.e.from),points.get(v.e.to)));
+    const cuts=spatial?depthCuts(curves,[...points.values()].map(p=>p.z)):[];
+    edgeViews.forEach((v,i)=>{
+      const curve=curves[i],shown=curve.length>0,display=shown?'inline':'none';
+      for(const el of [v.g,v.caption,v.shade,v.arrowShade]) el.setAttribute('display',display);
+      const pieces=splitByDepth(curve,cuts[i] ?? []);
+      for(let j=0;j<pieces.length;j++){
+        const part=pieces[j],stroke=strokeAt(v,j),d=pathOf([part.a,part.b]);
+        set(stroke.g,{display:'inline','data-selected':String(v.e.id===selected)});
+        stroke.line.setAttribute('d',d);stroke.hit.setAttribute('d',d);
+        paint.push({el:stroke.g,z:part.z});
+      }
+      for(let j=pieces.length;j<v.strokes.length;j++) v.strokes[j].g.setAttribute('display','none');
+      if(!shown) return;
+      const tip=curve[curve.length-1],before=curve[curve.length-2],mid=curve[Math.floor(curve.length/2)];
+      const size=spatial?zoom*cameraDistance/(cameraDistance-tip.z):zoom;
+      placeArrow(v.arrow,before,tip,size);
+      set(v.caption,{x:mid.x,y:mid.y-6});
+      paint.push({el:v.g,z:tip.z+.0001},{el:v.caption,z:mid.z+.0001});
+      if(spatial) {
+        const shadow=curve.map(shadowPoint);
+        set(v.shade,{d:pathOf(shadow),'stroke-width':2*size});
+        placeArrow(v.arrowShade,shadow[shadow.length-2],shadow[shadow.length-1],size);
+      }
+    });
+    paint.sort((a,b)=>a.z-b.z);
+    if(previousOrder.length!==paint.length || paint.some((v,i)=>v.el!==previousOrder[i])) {
+      const focused=scene.contains(document.activeElement)?document.activeElement:null;
+      for(const v of paint) scene.append(v.el);
+      focused?.focus();previousOrder=paint.map(v=>v.el);
     }
     svg.setAttribute('data-labels',width>=530 && edges.length<=8?'all':'selected');
     smaller.disabled=zoom<=.7;larger.disabled=zoom>=1.45;
@@ -261,7 +320,10 @@ function buildSpace(host,nodes,edges) {
     select(id,onEdge,onNode) {
       selected=id;pickEdge=onEdge;pickNode=onNode;
       const current=edges.find(e=>e.id===selected);
-      for(const v of edgeViews) v.g.setAttribute('data-selected',String(v.e.id===selected));
+      for(const v of edgeViews) {
+        const active=String(v.e.id===selected);
+        for(const el of [v.g,v.caption,...v.strokes.map(s=>s.g)]) el.setAttribute('data-selected',active);
+      }
       for(const {n,g} of nodeViews) g.setAttribute('data-selected',String(Boolean(current&&(current.from===n.id||current.to===n.id))));
       status.textContent=current?[byId.get(current.from).label,current.label,byId.get(current.to).label].join('　→　'):nodes.length+' 个实体 · '+edges.length+' 条关系';
     },

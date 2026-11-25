@@ -64,12 +64,12 @@
 .space-stage .space-predicate { fill:#4c5855; font:12px system-ui,sans-serif; }
 .space-stage .space-selection { stroke:transparent; }
 .space-stage .space-node[data-selected=true] .space-selection,.space-stage .space-node:hover .space-selection,.space-stage .space-node:focus-visible .space-selection { stroke:var(--space-accent); }
-.space-stage .space-edge path:first-child { stroke:var(--space-line); stroke-width:1.5px; }
-.space-stage .space-edge path:nth-child(2) { fill:var(--space-line); }
+.space-stage .space-edge .space-wire { stroke:var(--space-line); stroke-width:1.5px; }
+.space-stage .space-edge .space-arrow { fill:var(--space-line); }
 .space-stage .space-edge[data-selected=true],.space-stage .space-edge:hover,.space-stage .space-edge:focus-visible { --space-line:var(--space-accent); }
-.space-stage .space-edge[data-selected=true] path:first-child { stroke-width:2.4px; }
-.space-stage .space-edge[data-selected=true] .space-predicate { fill:var(--space-accent); font-weight:600; }
-.space-stage[data-labels=selected] .space-edge:not([data-selected=true]):not(:hover):not(:focus-visible) .space-predicate { display:none; }
+.space-stage .space-edge[data-selected=true] .space-wire { stroke-width:2.4px; }
+.space-stage .space-predicate[data-selected=true] { fill:var(--space-accent); font-weight:600; }
+.space-stage[data-labels=selected] .space-predicate:not([data-selected=true]):not(:hover) { display:none; }
 .space-stage[data-mode=flat] .space-rim { display:none; }
 .space-graph .space-stage[data-mode=space] { touch-action:none; }
 .space-status { display:flex; align-items:baseline; gap:8px; border-top:1px solid #deddd7; padding:10px 15px; margin:0; color:#404845; font:13px/1.5 system-ui,sans-serif; }
