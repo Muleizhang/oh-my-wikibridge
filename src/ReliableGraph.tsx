@@ -1,3 +1,4 @@
+import type { SpaceNode } from './spatial-graph.js';
 import { SpaceGraph } from './SpaceGraph';
 import { PlateEditor } from './PlateEditor';
 import type { Regions } from './motif-data';
@@ -111,7 +112,11 @@ export function ReliableGraph({ token, onUnlock }: { token?: string; onUnlock: (
   }).slice(0, 22);
   const spatialEdges=graphEdges.map(a=>({id:a.id,from:canonical.get(a.subject!)!,to:canonical.get(a.object.id!)!,label:a.label}));
   const spatialNodes=[...new Set(spatialEdges.flatMap(e=>[e.from,e.to]))]
-    .map(id=>({id,label:entityLabel(id),kind:'concept' as const}));
+    .map(id=>{
+      const type=entities.get(id)?.kind ?? data?.identityReview?.concepts.find(c=>c.id===id)?.kind;
+      const kind: SpaceNode['kind']=type==='material'||type==='period'||type==='motif'||type==='artifact'?type:'concept';
+      return {id,label:entityLabel(id),kind};
+    });
   const eventRows = data?.events.filter(e => search(e.label, e.time?.raw, ...e.evidence.map(v => v.text))) ?? [];
   const identityRows = data?.identityProposals.filter(p => search(entityLabel(p.left), entityLabel(p.right))) ?? [];
   const definitionRows = data?.relationProposals.filter(p => search(p.rawPredicate)) ?? [];

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, GitFork, Network, RefreshCw } from 'lucide-react';
+import type { SpaceNode } from './spatial-graph.js';
 import { SpaceGraph } from './SpaceGraph';
 import { call, errorText } from './api';
 import type { Analytics, Fact } from './types';
@@ -13,7 +14,17 @@ export function FactGraph({ facts, onEvidence }: { facts: Fact[]; onEvidence: (i
       chosen.add(fact.object);
       return true;
     });
-    const nodes = [...chosen].map(label => ({id:label,label,kind:'concept' as const}));
+    const roles=new Map<string, Set<SpaceNode['kind']>>();
+    for (const f of visible) {
+      const kind = f.relation==='材质' ? 'material' : f.relation==='所属时代' ? 'period' : undefined;
+      if (!kind) continue;
+      const types=roles.get(f.object) ?? new Set<SpaceNode['kind']>();
+      types.add(kind); roles.set(f.object,types);
+    }
+    const nodes: SpaceNode[] = [...chosen].map(label=>{
+      const kinds=roles.get(label);
+      return {id:label,label,kind:kinds?.size===1 ? [...kinds][0] : 'concept'};
+    });
     const edges = visible.map((fact,i)=>({id:String(i),from:fact.subject,to:fact.object,label:fact.relation,evidenceId:fact.evidenceId}));
     return { nodes, edges };
   }, [facts]);

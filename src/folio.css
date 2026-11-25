@@ -71,7 +71,7 @@
 .space-stage .space-edge[data-selected=true] .space-predicate { fill:var(--space-accent); font-weight:600; }
 .space-stage[data-labels=selected] .space-edge:not([data-selected=true]):not(:hover):not(:focus-visible) .space-predicate { display:none; }
 .space-stage[data-mode=flat] .space-rim { display:none; }
-.space-stage[data-mode=flat] .space-node[data-kind=concept] .space-face { fill:#a3c8bf; }
+.space-graph .space-stage[data-mode=space] { touch-action:none; }
 .space-status { display:flex; align-items:baseline; gap:8px; border-top:1px solid #deddd7; padding:10px 15px; margin:0; color:#404845; font:13px/1.5 system-ui,sans-serif; }
 .space-status::before { content:""; flex:none; width:7px; height:7px; border-radius:50%; background:var(--space-accent); }
 @media (max-width:480px) {

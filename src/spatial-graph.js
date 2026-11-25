@@ -2,8 +2,7 @@
 const spaceScenes = new WeakMap();
 let spaceSerial = 0;
 const spacePalette = {
-  motif: ['#fff5e6','#d7ae87','#866347'], artifact: ['#fffaf2','#dcc6ac','#8f7864'],
-  concept: ['#cee8e2','#70a59b','#446c68']
+  motif: ['#fff5e6','#d7ae87','#866347'], artifact: ['#fffaf2','#dcc6ac','#8f7864']
 };
 
 export function drawSpace(host, nodes, edges, picked, onEdge, onNode) {
@@ -85,21 +84,74 @@ function buildSpace(host,nodes,edges) {
     el.addEventListener('click',()=>{if(!suppressClick) fn();});
     el.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();ev.stopPropagation();fn();}});
   }
+  function materialMark(g,label) {
+    // Illustrative samples. Only the actual material name comes from the graph.
+    const ceramic=/^(彩陶|黑陶|灰陶|红陶|白陶|陶)(质|器|土)?$/.test(label);
+    const bronze=/^(青铜|铜|黄铜|红铜)(质|器)?$/.test(label);
+    const jade=/^(玉|青玉|白玉|碧玉|翡翠)(质|石|器)?$/.test(label);
+    const textile=/^(丝|丝绸|织锦|棉|麻|纺织)(织物|织品|布)?$/.test(label);
+    const colors=ceramic?['#be7753','#804b38','#dfac84']:bronze?['#9c8451','#5d5640','#cbb98b']:
+      jade?['#adc1af','#788d80','#e0e5d9']:textile?['#c3a181','#967654','#eddbc0']:['#b6ada0','#867e72','#e0dacf'];
+    g.setAttribute('data-symbol',ceramic?'ceramic':bronze?'bronze':jade?'jade':textile?'textile':'sample');
+    const tile=svgEl('g',g,{'stroke-linejoin':'round'});
+    svgEl('path',tile,{d:'M-23 -12 L-9 -21 L19 -16 L24 -5 L17 13 L4 20 L-21 13 Z',fill:colors[0],stroke:colors[1],'stroke-width':1.2});
+    svgEl('path',tile,{d:'M-21 8 L3 14 L16 8 L24 -5 L17 13 L4 20 L-21 13 Z',fill:colors[1]});
+    svgEl('path',tile,{d:'M-21 -11 L-9 -19 L17 -15',fill:'none',stroke:colors[2],'stroke-width':1.6});
+    if(ceramic) {
+      for(const [x,y,r] of [[-15,-8,1.1],[-9,4,.9],[-7,-13,1.2],[2,0,1.3],[10,-8,.85],[13,3,1],[-17,1,.65],[3,-10,.6]]) {
+        svgEl('circle',tile,{cx:x,cy:y,r,fill:colors[1],opacity:.74});
+      }
+      svgEl('path',tile,{d:'M-14 10 l5 1 m8 3 l5 1 m8 -5 l3 -2',stroke:colors[2],fill:'none','stroke-width':1.2});
+    } else if(jade) {
+      svgEl('path',tile,{d:'M-20 4 Q-10 3 -5 -6 T14 -12 M-3 10 Q1 4 14 -1',fill:'none',stroke:colors[2],'stroke-width':2});
+    } else if(bronze) {
+      svgEl('path',tile,{d:'M-16 2 L-2 -13 M-10 5 L6 -12 M4 3 L13 -7',stroke:colors[2],opacity:.7});
+    } else if(textile) {
+      svgEl('path',tile,{d:'M-14 -9 l-2 13 m9 -15 l-3 17 m10 -16 l-3 17 m10 -16 l-3 15 M-17 -5 l32 4 m-33 1 l30 4 m-31 1 l23 4',stroke:colors[2],fill:'none'});
+    }
+  }
+  function periodMark(g,label) {
+    const stone=label==='新石器时代';
+    g.setAttribute('data-symbol',stone?'stone-adze':'period-seal');
+    const badge=svgEl('g',g,{'stroke-linejoin':'round'});
+    svgEl('path',badge,{d:'M-20 -16 Q-20 -20 -16 -20 H16 Q20 -20 20 -16 V12 L0 22 L-20 12 Z',fill:'#eee7d8',stroke:'#8a7860','stroke-width':1.4});
+    svgEl('path',badge,{d:'M-16 10 L0 18 L16 10',stroke:'#ad9577',fill:'none','stroke-width':1.1});
+    if(stone) {
+      // A polished stone-tool emblem for the period, separate from artifact photographs.
+      svgEl('path',badge,{d:'M-3 -14 Q2 -18 6 -12 L11 5 Q3 11 -9 7 Z',fill:'#687075',stroke:'#454c50','stroke-width':1.2});
+      svgEl('path',badge,{d:'M-3 -12 L-5 4 L2 5 L4 -12 Z',fill:'#959b98'});
+      svgEl('path',badge,{d:'M-8 5 Q1 8 10 3 L11 6 Q2 12 -9 7 Z',fill:'#c1c3b8'});
+    } else {
+      const stamp=svgEl('text',badge,{'text-anchor':'middle',y:5,'font-size':14,fill:'#5b4d3d','font-weight':650});
+      const short=label.replace(/(?:时代|时期|王朝|朝|代)$/, '');
+      if(short.length>0 && short.length<=2) stamp.textContent=short;
+      else svgEl('path',badge,{d:'M-12 -2 H12 M-9 -7 V3 M0 -5 V1 M9 -7 V3',fill:'none',stroke:'#736250','stroke-width':2});
+    }
+  }
   const nodeViews=[...byId.values()].map(n=>{
-    const radius=n===center?40:n.kind==='artifact'?32:16;
+    const emblem=n.kind==='material'||n.kind==='period';
+    const radius=emblem?25:n===center?40:n.kind==='artifact'?32:16;
     const cast=svgEl('ellipse',shadows,{});
     const contact=svgEl('ellipse',shadows,{});
     const g=svgEl('g',nodeLayer,{class:'space-node','data-kind':n.kind,tabindex:0,role:'button','aria-label':[n.label,n.sub].filter(Boolean).join(' · ')});
-    svgEl('circle',g,{class:'space-rim',r:radius,cy:1.8,fill:n.image?'#a79c8e':spacePalette[n.kind][2]});
-    svgEl('circle',g,{class:'space-face',r:radius,fill:n.image?'#fffdfa':'url(#'+uid+n.kind+')',
-      stroke:n.image?'#cec7bc':spacePalette[n.kind][1],'stroke-width':.9});
-    if(n.image) {
-      const clipId=uid+'crop-'+nodeLayer.childElementCount;
-      const clip=svgEl('clipPath',defs,{id:clipId});
-      svgEl('circle',clip,{r:radius-3});
-      svgEl('image',g,{href:n.image,x:-radius,y:-radius,width:2*radius,height:2*radius,preserveAspectRatio:'xMidYMid slice','clip-path':'url(#'+clipId+')'});
+    if(n.kind==='material') materialMark(g,n.label);
+    else if(n.kind==='period') periodMark(g,n.label);
+    else if(n.kind==='concept') {
+      svgEl('rect',g,{x:-radius*.7,y:-radius*.7,width:radius*1.4,height:radius*1.4,rx:5,fill:'#dfdbd3',stroke:'#928a7c'});
+    } else {
+      svgEl('circle',g,{class:'space-rim',r:radius,cy:1.8,fill:n.image?'#a79c8e':spacePalette[n.kind][2]});
+      svgEl('circle',g,{class:'space-face',r:radius,fill:n.image?'#fffdfa':'url(#'+uid+n.kind+')',
+        stroke:n.image?'#cec7bc':spacePalette[n.kind][1],'stroke-width':.9});
+      if(n.image) {
+        const clipId=uid+'crop-'+nodeLayer.childElementCount;
+        const clip=svgEl('clipPath',defs,{id:clipId});
+        svgEl('circle',clip,{r:radius-3});
+        svgEl('image',g,{href:n.image,x:-radius,y:-radius,width:2*radius,height:2*radius,preserveAspectRatio:'xMidYMid slice','clip-path':'url(#'+clipId+')'});
+      }
     }
-    svgEl('circle',g,{class:'space-selection',r:radius+4,fill:'none','stroke-width':1.8});
+    const outline={class:'space-selection',fill:'none','stroke-width':1.8};
+    if(emblem) svgEl('rect',g,{...outline,x:-29,y:-25,width:58,height:51,rx:10});
+    else svgEl('circle',g,{...outline,r:radius+4});
     const name=svgEl('text',g,{class:'space-name','text-anchor':'middle',y:radius+20});
     name.textContent=n.label.length>15?n.label.slice(0,14)+'…':n.label;
     if(n.sub) svgEl('text',g,{class:'space-sub','text-anchor':'middle',y:radius+35}).textContent=n.sub;
@@ -192,7 +244,7 @@ function buildSpace(host,nodes,edges) {
     const dx=ev.clientX-pointer.x,dy=ev.clientY-pointer.y;
     if(!pointer.drag && Math.hypot(dx,dy)<4) return;
     pointer.drag=true; suppressClick=true;svg.setPointerCapture(ev.pointerId);
-    pointer.x=ev.clientX; pointer.y=ev.clientY;rotate(dx*.009,dy*.008);
+    pointer.x=ev.clientX; pointer.y=ev.clientY;rotate(dx*.009,-dy*.008);
   };
   svg.onpointerup=svg.onpointercancel=svg.onlostpointercapture=()=>{pointer=null;};
   svg.onpointerleave=()=>{if(!pointer?.drag) pointer=null;};

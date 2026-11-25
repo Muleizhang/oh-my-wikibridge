@@ -2,6 +2,7 @@ import { drawSpace } from './spatial-graph.js';
 
 export function drawNetwork(host,groups,picked,onPick,resolveImage=url=>url) {
   const names={decorated_with:'饰有纹样',made_of:'材质',period:'所属时代',uses_technique:'工艺'};
+  const kinds={made_of:'material',period:'period',uses_technique:'concept'};
   const current=groups.find(g=>g.some(r=>r.id===picked)) ?? groups[0];
   if (!current) return;
   // Keep a readable local view for large collections. The full relationship list remains available.
@@ -16,7 +17,7 @@ export function drawNetwork(host,groups,picked,onPick,resolveImage=url=>url) {
     const row=group[0];
     put(row.artifactId,row.artifact,'artifact',row.findspot ?? ('图 '+row.item),row.imageUrl);
     for (const r of group) {
-      if(r.predicate!=='decorated_with') put(r.objectId,r.object,'concept',names[r.predicate]);
+      if(r.predicate!=='decorated_with') put(r.objectId,r.object,kinds[r.predicate],names[r.predicate]);
       edges.push({id:r.id,from:r.artifactId,to:r.objectId,label:names[r.predicate]});
       original.set(r.id,r);
     }
