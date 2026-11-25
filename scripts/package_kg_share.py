@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Package only the current atlas, its referenced images, and selected graphs."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -50,21 +51,73 @@ def asset_urls(value):
             yield from asset_urls(child)
 
 
-def package(site, graphs, output):
+def original_pages(manifest, graphs):
+    """Relink page/proof images to unchanged originals; keep atlas thumbnails separate."""
+    volumes = manifest.get('volumes', [])
+    if len(volumes) != len(graphs):
+        raise ValueError('Each atlas volume needs its matching graph directory')
+    by_label = {volume['label']: (index, volume, path.parent)
+                for index, (volume, path) in enumerate(zip(volumes, graphs), 1)}
+    sources, replacements, indexes = {}, {}, {}
+    for label, (index, volume, root) in by_label.items():
+        image_manifest = json.loads((root / 'page-images.json').read_text())
+        indexes[label] = {'volume': label, 'pages': {}, 'source': Path(image_manifest.get('source', '')).name}
+        image_root = (root / 'images').resolve()
+        prefix = volume['prefix']
+        if not re.fullmatch(r'[\w-]+', prefix):
+            raise ValueError('Invalid volume prefix')
+        for page in (p for p in manifest['pages'] if p.get('volume') == label):
+            number = page['volumePage']
+            record = image_manifest['pages'][str(number)]
+            source = (image_root / record['file']).resolve()
+            if not source.is_relative_to(image_root) or not source.is_file():
+                raise ValueError(f'Missing original page: {label}, {number}')
+            if source.suffix.lower() not in {'.jpg', '.jpeg', '.png', '.webp'}:
+                raise ValueError('Unexpected original image format')
+            if hashlib.sha256(source.read_bytes()).hexdigest() != record['sha256']:
+                raise ValueError(f'Original image changed: {label}, {number}')
+            url = f'assets/originals/{prefix}/{source.name}'
+            replacements[page['previewUrl']] = url
+            sources[url] = source
+            page.update(imageWidth=record['width'], imageHeight=record['height'], imageSha256=record['sha256'])
+            indexes[label]['pages'][str(number)] = {**record, 'file': '../site/' + url}
+    def relink(value):
+        if isinstance(value, dict):
+            # The primary plate and proof use originals; the star map still loads small sprites.
+            if value.get('imageUrl') in replacements and not value.get('detailUrl'):
+                value['detailUrl'] = value['imageUrl']
+            for key, child in list(value.items()):
+                if key in {'previewUrl', 'imageUrl', 'captionUrl'} and isinstance(child, str) and child in replacements:
+                    value[key] = replacements[child]
+                else:
+                    relink(child)
+        elif isinstance(value, list):
+            for child in value:
+                relink(child)
+    relink(manifest)
+    manifest['imageStorage'] = {'mode': 'original_pages', 'pages': len(sources),
+                                'originalBytesPreserved': True, 'atlasThumbnailsRetained': True}
+    sidecars = [(f'graphs/vol{index}.page-images.json', json.dumps(indexes[label], ensure_ascii=False, indent=2))
+                for label, (index, _, _) in by_label.items()]
+    return sources, sidecars
+
+
+def package(site, graphs, output, image_mode='original'):
     site = site.resolve()
     manifest = json.loads((site / 'manifest.json').read_text())
     # A shared artifact needs source names, not the build machine's directory tree.
     for volume in manifest.get('volumes', []):
         if volume.get('source'):
             volume['source'] = Path(volume['source']).name
+    originals, sidecars = original_pages(manifest, graphs) if image_mode == 'original' else ({}, [])
     text = json.dumps(manifest, ensure_ascii=False, separators=(',', ':'))
     template = (ROOT / 'scripts/atlas_viewer.html').read_text()
     reasoner = re.sub(r'(?m)^export\s+', '', (ROOT / 'src/kg-reasoner.js').read_text())
     html = template.replace('__REASONER_JS__', reasoner, 1).replace('__MANIFEST_JSON__', text.replace('<', '\\u003c'), 1)
     assets = []
     for url in sorted(set(asset_urls(manifest))):
-        source = (site / url).resolve()
-        if not source.is_relative_to(site) or not source.is_file():
+        source = originals.get(url, (site / url).resolve())
+        if (url not in originals and not source.is_relative_to(site)) or not source.is_file():
             raise ValueError(f'Missing or external atlas asset: {url}')
         if source.suffix.lower() not in {'.jpg', '.jpeg', '.png', '.webp'}:
             raise ValueError(f'Unexpected atlas asset type: {url}')
@@ -97,7 +150,7 @@ def package(site, graphs, output):
 
 - `site/manifest.json`：跨册统一后的展示图谱。items 为图录条目，rows 为关系，evidence 为出处，pages 保留册数及原 PDF 页码。同名同类型概念统一，图录条目各自独立。
 - `graphs/vol1.graph.json`、`vol2.graph.json`、`vol3.graph.json`：各册当前完整候选结果，含属性、尺寸、事件、开放关系、实体提及及对齐建议等未全部绘入星图的数据。三册原生 JSON 请分别读取，不要直接拼接数组。
-- `site/assets/`：1240 页的压缩预览，供展示、对照出处。分享包不附原始 PDF 和原分辨率图片。
+- `site/assets/`：{'1240 页原尺寸页图完整保留，直接复制源图片字节，不缩放、不重新编码。原页、图录详情及证据引用使用原图；星图另用小预览加速加载。graphs/volN.page-images.json 提供各册原图路径、尺寸及 SHA-256。' if image_mode == 'original' else '1240 页的压缩预览，供展示、对照出处，不附原分辨率图片。'}分享包不附原始 PDF。
 - `share-info.json`：各册页数、图录数、候选陈述数及运行标识。
 
 全部数据仍是机器抽取候选，尚未经过独立人工验收；共享纹样或关联路径本身不能证明历史传承。
@@ -121,13 +174,17 @@ node --use-env-proxy server/atlas-server.ts --port 1423 --site /你的解压目�
                            ('start-viewer.sh', shell), ('start-viewer.py', LAUNCHER),
                            ('site/index.html', html), ('site/manifest.json', text),
                            ('share-info.json', json.dumps({'summary': manifest.get('summary'),
+                            'imageMode': image_mode, 'originalPages': len(originals),
                             'status': 'unreviewed_candidates', 'graphs': [row[2] for row in selected_graphs]}, ensure_ascii=False, indent=2))]:
+            archive.writestr(PREFIX + name, data)
+        for name, data in sidecars:
             archive.writestr(PREFIX + name, data)
         for url, source in assets:
             archive.write(source, PREFIX + 'site/' + url)
         for name, path, _ in selected_graphs:
             archive.write(path, PREFIX + name)
     print(json.dumps({'archive': str(output), 'megabytes': round(output.stat().st_size / 1e6, 1),
+                      'imageMode': image_mode, 'originalPages': len(originals),
                       'assets': len(assets), 'graphs': [row[2] for row in selected_graphs]}, ensure_ascii=False))
 
 
@@ -136,6 +193,9 @@ if __name__ == '__main__':
     parser.add_argument('--site', type=Path, default=ROOT / 'data/local-kg/merged/site')
     parser.add_argument('--graphs', type=Path, nargs='+', default=[ROOT / 'data/local-kg/graph.json',
                         ROOT / 'data/local-kg/vol2/graph.json', ROOT / 'data/local-kg/vol3/graph.json'])
-    parser.add_argument('--output', type=Path, default=ROOT / 'data/local-kg/share/wikibridge-three-volumes.zip')
+    parser.add_argument('--image-mode', choices=['original', 'preview'], default='original')
+    parser.add_argument('--output', type=Path)
     args = parser.parse_args()
-    package(args.site, args.graphs, args.output)
+    output = args.output or ROOT / ('data/local-kg/share/wikibridge-three-volumes-original-pages.zip'
+                                   if args.image_mode == 'original' else 'data/local-kg/share/wikibridge-three-volumes.zip')
+    package(args.site, args.graphs, output, args.image_mode)
