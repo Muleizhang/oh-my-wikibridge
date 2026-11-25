@@ -105,7 +105,9 @@ def build(pdf, out):
     (out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
     template = (ROOT/'scripts/book_atlas.html').read_text()
     inline = json.dumps(dict(manifest=manifest,images=assets),ensure_ascii=False).replace('<','\\u003c')
-    (out/'index.html').write_text(template.replace('__FOLIO_CSS__',(ROOT/'src/folio.css').read_text()).replace('__BOOK_DATA__',inline).replace('__DRAW_NETWORK__',(ROOT/'src/motif-network.js').read_text().replace('export function','function',1)))
+    spatial = (ROOT/'src/spatial-graph.js').read_text().replace('export function', 'function', 1)
+    network = (ROOT/'src/motif-network.js').read_text().split('\n', 1)[1].replace('export function','function',1)
+    (out/'index.html').write_text(template.replace('__FOLIO_CSS__',(ROOT/'src/folio.css').read_text()).replace('__BOOK_DATA__',inline).replace('__DRAW_NETWORK__',spatial+'\n'+network))
     return manifest
 
 

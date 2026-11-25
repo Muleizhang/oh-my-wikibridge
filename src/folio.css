@@ -38,3 +38,27 @@
   .folio .folio-caption button { margin-top:6px; }
   .folio .folio-head { margin:20px 0 14px; }
 }
+
+.space-graph { background:#152725; color:#fff0da; border:1px solid #425550; border-radius:10px; overflow:hidden; margin:12px 0; }
+.space-bar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 14px; border-bottom:1px solid #ffffff1f; }
+.space-buttons { display:flex; align-items:center; gap:3px; }
+.space-buttons button { border:1px solid #688179; background:transparent; color:#ecede4; border-radius:4px; padding:4px 9px; font:13px/1.5 system-ui,sans-serif; cursor:pointer; }
+.space-buttons button[aria-pressed=true] { background:#f2cfa9; color:#372d24; border-color:#f2cfa9; }
+.space-buttons button:disabled { opacity:.4; }
+.space-tip { margin-left:auto; font:12px system-ui,sans-serif; color:#b7cbc3; }
+.space-graph .space-stage { display:block; width:100%; height:auto; touch-action:pan-y; user-select:none; background:radial-gradient(ellipse at 48% 43%,#314640,#152825 70%,#11221f); cursor:grab; }
+.space-graph .space-stage:active { cursor:grabbing; }
+.space-stage:focus-visible,.space-graph button:focus-visible { outline:2px solid #ffc477; outline-offset:-3px; }
+.space-stage .space-node,.space-stage .space-edge { cursor:pointer; }
+.space-stage .space-name,.space-stage .space-sub { fill:#fff5df; stroke:#20312c; stroke-width:4px; paint-order:stroke; stroke-linejoin:round; font:600 15px system-ui,sans-serif; pointer-events:none; }
+.space-stage .space-sub { fill:#c7d7cd; font:11px system-ui,sans-serif; stroke-width:3px; }
+.space-stage .space-edge path:first-child { stroke:#97b9ad; stroke-width:1.5px; }
+.space-stage .space-edge path:nth-child(2) { fill:#97b9ad; }
+.space-stage .space-edge:is([data-selected=true],:hover,:focus-visible) path:first-child { stroke:#ffd092; stroke-width:3px; }
+.space-stage .space-edge:is([data-selected=true],:hover,:focus-visible) path:nth-child(2) { fill:#ffd092; }
+.space-stage .space-node:is(:hover,:focus-visible) circle:first-child { stroke:#fff0c9; }
+.space-status { border-top:1px solid #ffffff1f; padding:9px 15px; margin:0; color:#ffe1b9; font:13px/1.5 system-ui,sans-serif; }
+
+.space-stage .space-predicate { fill:#c8d9ce; stroke:#263a34; stroke-width:4px; paint-order:stroke; stroke-linejoin:round; font:11px system-ui,sans-serif; }
+.space-stage[data-labels=selected] .space-edge:not([data-selected=true]):not(:hover):not(:focus-visible) .space-predicate { display:none; }
+.space-stage .space-edge[data-selected=true] .space-predicate { fill:#ffd092; }

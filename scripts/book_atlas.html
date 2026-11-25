@@ -10,12 +10,12 @@ nav{display:flex;flex-wrap:wrap;gap:8px}.motif-tab{display:inline-flex;align-ite
 @media(max-width:760px){.columns{grid-template-columns:1fr;gap:16px}.proof{border-left:0;border-top:1px solid var(--rule);padding:15px 0}.mast span{max-width:60%;text-align:right}.network svg{min-width:440px}}
 </style></head><body class="folio">
 <header class="mast"><div class="wrap"><strong>纹样图录</strong><span>吴山编著《中国纹样全集》第一册</span></div></header>
-<main class="wrap"><header class="folio-head"><div><p class="folio-sub" id="period"></p><h1 class="folio-title" id="heading"></h1></div><nav id="motifs" aria-label="选择纹样"></nav></header>
+<main class="wrap"><header class="folio-head"><div><p class="folio-sub" id="period"></p><h1 class="folio-title" id="heading"></h1></div><div class="folio-bar"><nav id="motifs" aria-label="选择纹样"></nav><a class="folio-link" href="#relations">看知识图谱 ↓</a></div></header>
 <section aria-labelledby="compare"><div class="folio-controls"><h2 id="compare">图版对读<small id="count"></small></h2>
 <div class="switch" aria-label="图版视图"><button id="detail" type="button">纹样局部</button><button id="whole" type="button">器物全图</button></div></div>
 <div class="folio-gallery" id="plates"></div></section>
-<div class="columns"><section><div class="folio-bar"><h2 class="section-title">知识图谱</h2><button class="folio-link" id="ask">查询器物与出处</button></div>
-<div class="network"><svg id="network"></svg></div></section>
+<div class="columns" id="relations"><section><div class="folio-bar"><h2 class="section-title">知识图谱</h2><button class="folio-link" id="ask">查询器物与出处</button></div>
+<div id="network" class="space-graph"></div></section>
 <section class="proof" id="proof" tabindex="-1"><h2 class="section-title">原页证据</h2><h3 id="selected"></h3><p class="folio-sub" id="locator"></p><div class="tabs" id="edges"></div><strong id="claim"></strong><blockquote id="quote"></blockquote><img class="scan" id="caption" alt="原书文字区域"><details id="source"><summary id="proofLocator"></summary><div class="page"><img id="page" alt="完整原页"><div class="box" id="box"></div></div></details></section></div>
 <section class="result" id="answer" hidden><h2 class="section-title">器物与出处</h2><div id="lines"></div></section>
 <footer class="footnote">本选录收录四个图版条目。图像观察据扫描图，材质据器名，时代据原书图版分期。</footer></main>
@@ -78,7 +78,7 @@ function plates() {
 function show(id) {
   const group = groups.find(g => g.some(row => row.id === id));
   const r = group.find(row => row.id === id), e = refs.get(r.evidenceId);
-  drawNetwork($('network'),groups,id,show);
+  drawNetwork($('network'),groups,id,show,img);
   $('selected').textContent = r.artifact;
   $('locator').textContent = r.findspot+'出土　｜　'+r.locator;
   const edgeFocused = $('edges').contains(document.activeElement);

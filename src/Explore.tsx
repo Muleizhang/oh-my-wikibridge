@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, GitFork, Network, RefreshCw } from 'lucide-react';
+import { SpaceGraph } from './SpaceGraph';
 import { call, errorText } from './api';
 import type { Analytics, Fact } from './types';
 
@@ -12,25 +13,14 @@ export function FactGraph({ facts, onEvidence }: { facts: Fact[]; onEvidence: (i
       chosen.add(fact.object);
       return true;
     });
-    const nodes = [...chosen].map((label, index) => {
-      const angle = 2 * Math.PI * index / chosen.size - Math.PI / 2;
-      return { label, x: 330 + Math.cos(angle) * 194, y: 158 + Math.sin(angle) * 104 };
-    });
-    const byLabel = new Map(nodes.map(node => [node.label, node]));
-    const edges = [...new Map(visible.map(fact => [JSON.stringify([fact.subject, fact.object]), fact])).values()]
-      .map(fact => ({ ...fact, from: byLabel.get(fact.subject)!, to: byLabel.get(fact.object)! }));
+    const nodes = [...chosen].map(label => ({id:label,label,kind:'concept' as const}));
+    const edges = visible.map((fact,i)=>({id:String(i),from:fact.subject,to:fact.object,label:fact.relation,evidenceId:fact.evidenceId}));
     return { nodes, edges };
   }, [facts]);
   if (!nodes.length) return <div className="evidence-empty"><GitFork size={25} /><h3>没有匹配的关系</h3><p>已发布语料中的显式三元组和纹样同句共现会出现在这里。</p></div>;
   return <>
-    <div className="graph-visual">
-      <svg viewBox="0 0 660 316" role="img" aria-label="基于所选语料的关系图。连线出处见下方列表。">
-        {edges.map(edge => <line key={JSON.stringify([edge.subject, edge.object])} x1={edge.from.x} x2={edge.to.x} y1={edge.from.y} y2={edge.to.y} />)}
-        {nodes.map(node => <g key={node.label} transform={`translate(${node.x},${node.y})`}>
-          <circle r="6" /><text y="-12" textAnchor="middle">{node.label.length > 14 ? `${node.label.slice(0, 13)}…` : node.label}</text>
-        </g>)}
-      </svg>
-    </div>
+    <SpaceGraph nodes={nodes} edges={edges} picked="" onEdge={id=>onEvidence(edges[Number(id)].evidenceId)}
+      onNode={id=>{ const edge=edges.find(e=>e.from===id||e.to===id); if(edge) onEvidence(edge.evidenceId); }} />
     <div className="graph-list">{facts.map((fact, index) => <button type="button" key={index} onClick={() => onEvidence(fact.evidenceId)}>
       <strong>{fact.subject}</strong><span>{fact.relation}</span><strong>{fact.object}</strong><small>查看证据</small>
     </button>)}</div>

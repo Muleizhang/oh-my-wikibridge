@@ -88,10 +88,13 @@ export function MotifAtlas({ scope, onEvidence, onAsk }: {
   const edge = group?.find(r => r.id === activeId) ?? group?.[0];
   const lastSheet = Math.max(0, Math.ceil(groups.length/2)-1);
   const currentSheet = Math.min(sheet,lastSheet);
-  const network = useRef<SVGSVGElement>(null);
+  const network = useRef<HTMLDivElement>(null);
+  const disposeNetwork = useRef<(()=>void)|undefined>(undefined);
   useEffect(() => {
-    if (network.current && groups.length) drawNetwork(network.current, groups, edge?.id ?? '', focus);
+    if (network.current && groups.length) disposeNetwork.current = drawNetwork(network.current, groups, edge?.id ?? '', focus);
+    else { disposeNetwork.current?.(); disposeNetwork.current = undefined; }
   }, [groups, edge?.id]);
+  useEffect(() => () => disposeNetwork.current?.(), []);
   return <section className="surface atlas folio"><div className="section-heading"><h2>纹样图录</h2>
     {motif && <select aria-label="选择纹样" value={motif.id} onChange={e => { select(e.target.value); focus(''); setSheet(0); }}>
       {motifs.map(m => <option key={m.id} value={m.id}>{m.name} · {m.source}</option>)}</select>}</div>
@@ -116,7 +119,8 @@ export function MotifAtlas({ scope, onEvidence, onAsk }: {
           <div className="folio-bar"><strong>{zoom.label}</strong><button type="button" className="folio-link" onClick={() => dialog.current?.close()}>关闭</button></div>
           <img src={zoom.src} alt={zoom.label} /><p className="folio-sub">{zoom.locator}</p></>}</dialog>
         <h3 className="atlas-graph-heading">知识图谱</h3>
-        <div className="atlas-network"><svg ref={network} /></div>
+        {groups.length > 6 && <small>当前显示选中器物的关系，全部器物见下方列表。</small>}
+        <div className="space-graph" ref={network} />
         <div className="atlas-paths">{groups.map(g => <article key={g[0].artifactId} className="atlas-path">
           <div className="atlas-owner"><small>器物 · {g[0].locator ?? `第 ${g[0].page} 页图注 ${g[0].item}`}</small><strong>{g[0].artifact}</strong></div>
           <div className="atlas-edges">{g.map(r => <button key={r.id} type="button" aria-pressed={edge?.id === r.id}
