@@ -2,8 +2,8 @@
 const spaceScenes = new WeakMap();
 let spaceSerial = 0;
 const spacePalette = {
-  motif: ['#ffdaa2','#b87740','#704026'], artifact: ['#ffd0a6','#ad6141','#603b32'],
-  concept: ['#cfebe2','#579d91','#25565c']
+  motif: ['#fff5e6','#d7ae87','#866347'], artifact: ['#fffaf2','#dcc6ac','#8f7864'],
+  concept: ['#cee8e2','#70a59b','#446c68']
 };
 
 export function drawSpace(host, nodes, edges, picked, onEdge, onNode) {
@@ -48,13 +48,17 @@ function buildSpace(host,nodes,edges) {
     const grad=svgEl('radialGradient',defs,{id:uid+kind,cx:'30%',cy:'22%',r:'83%'});
     colors.forEach((c,i)=>svgEl('stop',grad,{offset:[0,.55,1][i],'stop-color':c}));
   }
-  const floor=svgEl('g',svg,{'aria-hidden':true,fill:'none',stroke:'#7eafa3','stroke-width':.8,opacity:.19});
-  const grid=[];
-  for (let i=-4;i<=4;i++) {
-    const d=i*64;
-    grid.push([svgEl('line',floor),[d,116,-255],[d,116,255]],
-              [svgEl('line',floor),[-285,116,d],[285,116,d]]);
+  // A continuous studio backdrop also provides a surface for the soft cast shadows.
+  const studio=svgEl('linearGradient',defs,{id:uid+'studio',x1:'0%',y1:'0%',x2:'80%',y2:'100%'});
+  svgEl('stop',studio,{offset:0,'stop-color':'#fdfcf9'});
+  svgEl('stop',studio,{offset:1,'stop-color':'#eeede9'});
+  const penumbra=svgEl('radialGradient',defs,{id:uid+'shadow'});
+  for (const [offset,opacity] of [[0,.68],[.42,.54],[.72,.21],[1,0]]) {
+    svgEl('stop',penumbra,{offset,'stop-color':'#4b4843','stop-opacity':opacity});
   }
+  const backdrop=svgEl('g',svg,{'aria-hidden':true,'pointer-events':'none'});
+  svgEl('rect',backdrop,{width:'100%',height:'100%',fill:'url(#'+uid+'studio)'});
+  const shadows=svgEl('g',backdrop,{fill:'url(#'+uid+'shadow)'});
   const edgeLayer=svgEl('g',svg), nodeLayer=svgEl('g',svg);
   const status=html('p',host,'space-status'); status.setAttribute('aria-live','polite');
   const tip=html('small',bar,'space-tip','拖动旋转 · 点选关系查看出处');
@@ -75,29 +79,33 @@ function buildSpace(host,nodes,edges) {
   if(center) Object.assign(center,{x:0,y:0,z:40});
   others.forEach((n,i)=>{
     const a=Math.PI+i*2*Math.PI/others.length;
-    Object.assign(n,{x:215*Math.cos(a),y:112*Math.sin(a),z:48*Math.cos(2*a+.5)});
+    Object.assign(n,{x:215*Math.cos(a),y:120*Math.sin(a),z:48*Math.cos(2*a+.5)});
   });
   function action(el,fn) {
     el.addEventListener('click',()=>{if(!suppressClick) fn();});
     el.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();ev.stopPropagation();fn();}});
   }
   const nodeViews=[...byId.values()].map(n=>{
-    const radius=n===center?35:n.kind==='artifact'?28:15;
-    const g=svgEl('g',nodeLayer,{class:'space-node',tabindex:0,role:'button','aria-label':[n.label,n.sub].filter(Boolean).join(' · ')});
-    const ring=svgEl('circle',g,{r:radius+5,fill:'none','stroke-width':1.8});
-    svgEl('circle',g,{r:radius,fill:'url(#'+uid+n.kind+')',stroke:spacePalette[n.kind][0],'stroke-width':1});
+    const radius=n===center?40:n.kind==='artifact'?32:16;
+    const cast=svgEl('ellipse',shadows,{});
+    const contact=svgEl('ellipse',shadows,{});
+    const g=svgEl('g',nodeLayer,{class:'space-node','data-kind':n.kind,tabindex:0,role:'button','aria-label':[n.label,n.sub].filter(Boolean).join(' · ')});
+    svgEl('circle',g,{class:'space-rim',r:radius,cy:1.8,fill:n.image?'#a79c8e':spacePalette[n.kind][2]});
+    svgEl('circle',g,{class:'space-face',r:radius,fill:n.image?'#fffdfa':'url(#'+uid+n.kind+')',
+      stroke:n.image?'#cec7bc':spacePalette[n.kind][1],'stroke-width':.9});
     if(n.image) {
       const clipId=uid+'crop-'+nodeLayer.childElementCount;
       const clip=svgEl('clipPath',defs,{id:clipId});
       svgEl('circle',clip,{r:radius-3});
       svgEl('image',g,{href:n.image,x:-radius,y:-radius,width:2*radius,height:2*radius,preserveAspectRatio:'xMidYMid slice','clip-path':'url(#'+clipId+')'});
     }
+    svgEl('circle',g,{class:'space-selection',r:radius+4,fill:'none','stroke-width':1.8});
     const name=svgEl('text',g,{class:'space-name','text-anchor':'middle',y:radius+20});
     name.textContent=n.label.length>15?n.label.slice(0,14)+'…':n.label;
     if(n.sub) svgEl('text',g,{class:'space-sub','text-anchor':'middle',y:radius+35}).textContent=n.sub;
     svgEl('title',g).textContent=[n.sub,n.label].filter(Boolean).join(' · ');
     action(g,()=>pickNode(n.id));
-    return {n,g,ring,radius};
+    return {n,g,radius,cast,contact};
   });
   const parallels=new Map();
   const edgeViews=edges.map(e=>{
@@ -123,13 +131,21 @@ function buildSpace(host,nodes,edges) {
   function render() {
     width=Math.max(345,Math.min(860,host.clientWidth || 720));
     svg.setAttribute('viewBox','0 0 '+width+' 390');
-    floor.setAttribute('display',spatial?'inline':'none');
-    for(const [el,a,b] of grid) {
-      const p=project(...a),q=project(...b);set(el,{x1:p.x,y1:p.y,x2:q.x,y2:q.y});
-    }
+    svg.setAttribute('data-mode',spatial?'space':'flat');
+    shadows.setAttribute('display',spatial?'inline':'none');
     const points=new Map();
     for(const view of nodeViews) {
       const {n}=view,p=project(n.x,n.y,n.z);points.set(n.id,{...p,r:view.radius*p.k});
+      if(spatial) {
+        // A fixed upper-left light: increasing separation from the backing plane
+        // widens and displaces the shadow while reducing its peak density.
+        const lift=Math.max(0,Math.min(1,(p.z+230)/460));
+        const radius=view.radius*p.k;
+        const spread=radius*(1.17+.37*lift);
+        set(view.cast,{cx:p.x+(5+15*lift)*p.k,cy:p.y+(8+18*lift)*p.k,
+          rx:spread,ry:spread*.94,opacity:.87-.24*lift});
+        set(view.contact,{cx:p.x+2*p.k,cy:p.y+4*p.k,rx:radius*1.14,ry:radius*1.13,opacity:.6-.25*lift});
+      }
       view.g.setAttribute('transform','translate('+p.x+' '+p.y+') scale('+p.k+')');
     }
     const sorted=[...nodeViews].sort((a,b)=>points.get(a.n.id).z-points.get(b.n.id).z);
@@ -194,7 +210,7 @@ function buildSpace(host,nodes,edges) {
       selected=id;pickEdge=onEdge;pickNode=onNode;
       const current=edges.find(e=>e.id===selected);
       for(const v of edgeViews) v.g.setAttribute('data-selected',String(v.e.id===selected));
-      for(const {n,ring} of nodeViews) ring.setAttribute('stroke',current&&(current.from===n.id||current.to===n.id)?'#ffc477':'transparent');
+      for(const {n,g} of nodeViews) g.setAttribute('data-selected',String(Boolean(current&&(current.from===n.id||current.to===n.id))));
       status.textContent=current?[byId.get(current.from).label,current.label,byId.get(current.to).label].join('　→　'):nodes.length+' 个实体 · '+edges.length+' 条关系';
     },
     dispose(){observer?.disconnect();host.replaceChildren();}
