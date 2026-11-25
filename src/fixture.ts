@@ -1,3 +1,5 @@
+import { bookCorpus, bookId, readBook } from './book-sample';
+import { asksForArtifacts, relations, specimens } from './motif-data';
 import type { Answer, Corpus, Evidence, Fact, SearchResult, Source } from './types';
 
 const corpus: Corpus = { id: 'sample', name: '纹样演示样本', description: '浏览器调试用的示例条目', revision: 1, documentCount: 3 };
@@ -20,14 +22,24 @@ const files: Source[] = entries.map(entry => ({
 }));
 
 export async function fixture(command: string, args: Record<string, unknown>): Promise<unknown> {
+  const scope = (args.corpusIds ?? []) as string[];
+  const usesBook = scope.includes(bookId) || args.corpusId === bookId || String(args.id ?? '').startsWith('book1:');
+  const book = (command === 'list_corpora' || usesBook) ? await readBook() : undefined;
   switch (command) {
-    case 'list_corpora': return [corpus];
-    case 'list_sources': return args.corpusId === corpus.id ? files : [];
+    case 'list_corpora': return book ? [bookCorpus, corpus] : [corpus];
+    case 'published_motifs': return book?.rows ?? [];
+    case 'list_sources': if (book && args.corpusId === bookId) return [{
+      id:bookId, name:book.title, extension:'pdf', sha256:book.evidence[0].sha256, bytes:book.evidence[0].bytes,
+      status:'published', unitCount:new Set(book.evidence.map(e=>e.ordinal)).size, createdAt:'',
+    }]; return args.corpusId === corpus.id ? files : [];
     case 'admin_exists': return false;
     case 'backend_status': return { detected: false, version: null, model: 'homo/gpt-6.1-terra', installUrl: 'https://opencode.ai/docs/', remoteAllowed: false };
-    case 'evidence': return entries.find(entry => entry.id === args.id);
-    case 'graph_library': return facts.filter(fact => !(args.evidenceIds as string[]).length || (args.evidenceIds as string[]).includes(fact.evidenceId));
-    case 'analyze_library': return {
+    case 'evidence': return [...entries, ...(book?.evidence ?? [])].find(entry => entry.id === args.id);
+    case 'graph_library': return [...(scope.includes(corpus.id) ? facts : []), ...(book?.rows ?? []).map(r => ({
+      subject: r.artifact + '（' + r.locator + '）', relation: relations[r.predicate],
+      object: r.object, evidenceId: r.evidenceId,
+    }))].filter(fact => !(args.evidenceIds as string[]).length || (args.evidenceIds as string[]).includes(fact.evidenceId));
+    case 'analyze_library': if (!scope.includes(corpus.id)) return { sampleSize:0,topTerms:[],pairs:[],projection:[],neighbors:[] }; return {
       sampleSize: entries.length, topTerms: [['纹样', 4], ['云气纹', 2], ['几何纹', 2], ['构成', 2]],
       pairs: [['云气纹', '漆器', 2], ['莲花纹', '铜镜', 1]],
       projection: [['纹样', 0.2, 0.1], ['云气纹', 0.6, 0.3], ['几何纹', 0.1, 0.7], ['构成', -0.3, 0.2]],
@@ -36,8 +48,20 @@ export async function fixture(command: string, args: Record<string, unknown>): P
     case 'search_library':
     case 'ask_library': {
       const query = String(args.query ?? args.question);
-      const selected = entries.filter((_, index) => query.includes(samples[index].title) || query.includes(samples[index].age)
+      const links = book?.rows.filter(r => r.predicate === 'decorated_with' && (args.motifId ? r.objectId === args.motifId : query.includes(r.object))) ?? [];
+      const groups = specimens(book?.rows ?? [], links);
+      if (book && command === 'ask_library' && links.some(link => asksForArtifacts(query,link.object))) {
+        const ids = [...new Set(groups.flat().map(r => r.evidenceId))];
+        const evidence = ids.map(id => book.evidence.find(e => e.id === id)!);
+        const answer = groups.map(g => '- ' + g[0].artifact + '（' + g[0].locator + '） · ' +
+          g.map(r => relations[r.predicate] + '：' + r.object + ' ['+(ids.indexOf(r.evidenceId)+1)+']').join('，')).join('\n');
+        return { answer, model:null, error:null, evidence, trace:[{tool:'book_relations',
+          detail:'由原书图版核读样本的实体和陈述生成', evidenceIds:ids}] } satisfies Answer;
+      }
+      const selected = (scope.includes(corpus.id) ? entries : []).filter((_, index) => query.includes(samples[index].title) || query.includes(samples[index].age)
         || query.includes(samples[index].material) || query.includes('纹样') || query.includes('比较'));
+      if (book) selected.push(...book.evidence.filter(e => groups.some(g=>g.some(r=>r.evidenceId===e.id))
+        || e.text.includes(query)));
       const hits = selected.map((evidence, index) => ({ evidence, score: 0.82 - index * 0.14 }));
       const trace = [{ tool: 'search_fts', detail: `测试数据返回 ${selected.length} 条证据`, evidenceIds: selected.map(x => x.id) }];
       if (command === 'search_library') return { hits, trace } satisfies SearchResult;

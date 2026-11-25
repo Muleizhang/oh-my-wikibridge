@@ -1,3 +1,4 @@
+import { MotifAtlas } from './MotifAtlas';
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { listen } from '@tauri-apps/api/event';
@@ -36,7 +37,7 @@ const descriptions: Record<Page, string> = {
 };
 const tools: Record<string, string> = {
   search_fts: '全文检索', rank_hybrid: '混合排序', rank_tfidf: 'TF-IDF 排序',
-  query_graph: 'RDF 图谱查询', opencode_generate: 'OpenCode 生成',
+  book_relations: '原书图版关系查询', reviewed_motifs: '已复核纹样关系', query_graph: 'RDF 图谱查询', opencode_generate: 'OpenCode 生成',
 };
 const choices: { label: string; value: Mode; icon: LucideIcon }[] = [
   { label: 'RAG 问答', value: 'rag', icon: Sparkles },
@@ -90,7 +91,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [exportNotice, setExportNotice] = useState('');
-  const selected = useMemo(() => (chosen ?? (corpora[0] ? [corpora[0].id] : []))
+  const selected = useMemo(() => (chosen ?? (desktop ? corpora.slice(0,1) : corpora).map(c => c.id))
     .filter(id => corpora.some(entry => entry.id === id)), [chosen, corpora]);
   const current = pages.find(entry => entry.id === page)!;
 
@@ -124,7 +125,7 @@ function App() {
     if (existing) { setEvidence(existing); return; }
     void call<Evidence>('evidence', { id, token: review ? token : undefined }).then(setEvidence).catch(error => setError(errorText(error)));
   }
-  async function search(question = input) {
+  async function search(question = input, queryMode = mode, motifId?: string) {
     const query = question.trim();
     if (!query || !selected.length || busy) return;
     setInput(query);
@@ -138,12 +139,12 @@ function App() {
     setEvidence(undefined);
     setExportNotice('');
     try {
-      if (mode === 'rag') {
-        const response = await call<Answer>('ask_library', { question: query, corpusIds: selected });
+      if (queryMode === 'rag') {
+        const response = await call<Answer>('ask_library', { question: query, corpusIds: selected, motifId });
         setAnswer(response);
         setTrace(response.trace);
       } else {
-        const response = await call<SearchResult>('search_library', { query, corpusIds: selected, mode });
+        const response = await call<SearchResult>('search_library', { query, corpusIds: selected, mode: queryMode });
         setResults(response.hits);
         setTrace(response.trace);
       }
@@ -255,7 +256,10 @@ function App() {
           </div>}
         </>}
         {page === 'library' && <KnowledgeLibrary corpora={corpora} selection={selected} />}
-        {page === 'graph' && <GraphView selection={selected} onEvidence={showEvidence} />}
+        {page === 'graph' && <><MotifAtlas key={JSON.stringify(selected)} scope={selected} onEvidence={id => {
+          void call<Evidence>('evidence', { id }).then(setEvidence).catch(e => setError(errorText(e)));
+        }} onAsk={(q, id) => { navigate('research'); setMode('rag'); void search(q, 'rag', id); }} />
+          <GraphView selection={selected} onEvidence={showEvidence} /></>}
         {page === 'localgraph' && <ReliableGraph token={token} onUnlock={() => navigate('admin')} />}
         {page === 'analytics' && <AnalyticsView selection={selected} />}
         <div hidden={page !== 'admin'}><Admin token={token} corpora={adminCorpora} refresh={refresh} onLogin={async next => {

@@ -9,6 +9,7 @@ export type Unit = { kind: string; ordinal: number; locator: string; text: strin
 export type Evidence = {
   id: string; sourceId: string; corpusId: string; corpusName: string; sourceName: string;
   extension: string; bytes: number; sha256: string; kind: string; ordinal: number;
+  previewUrl?: string; captionUrl?: string; bbox?: number[];
   locator: string; text: string; method: string; confidence: number | null;
 };
 export type Fact = { subject: string; relation: string; object: string; evidenceId: string };

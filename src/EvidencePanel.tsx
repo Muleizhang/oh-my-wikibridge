@@ -54,9 +54,11 @@ export function EvidencePanel({ evidence, token, onClose }: { evidence?: Evidenc
         <div className="evidence-body">
           <span className="evidence-corpus">{evidence.corpusName}</span>
           <h3>{evidence.sourceName}</h3><p className="locator">{evidence.locator}</p>
-          <div className="tags"><span>{evidence.method === 'ocr' ? 'OCR' : '原生文本'}</span>{evidence.confidence !== null && <span>识别置信度 {Math.round(evidence.confidence * 100)}%</span>}</div>
+          <div className="tags"><span>{evidence.method === 'ocr' ? 'OCR' : evidence.method === 'scan_read' ? '原图核读' : '原生文本'}</span>{evidence.confidence !== null && <span>识别置信度 {Math.round(evidence.confidence * 100)}%</span>}</div>
           {hasPreview && <button type="button" className="button subtle" onClick={() => showOriginal(value => !value)}>{original ? '收起原始资料' : '查看原始资料'} <ArrowUpRight size={15} /></button>}
           {original && hasPreview && (evidence.extension === 'pdf' ? <PdfPreview evidence={evidence} token={token} /> : <ImagePreview evidence={evidence} token={token} />)}
+          {evidence.captionUrl && <img className="book-caption" src={evidence.captionUrl} alt="原书文字证据" />}
+          {evidence.previewUrl && <details><summary>查看原始书页</summary><img className="book-caption" src={evidence.previewUrl} alt={evidence.locator} /></details>}
           <blockquote>{evidence.text}</blockquote>
           {desktop && <button type="button" className="button subtle" onClick={() => {
             setError('');

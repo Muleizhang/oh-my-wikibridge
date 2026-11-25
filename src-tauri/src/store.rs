@@ -296,6 +296,11 @@ impl Store {
                 target_kind TEXT NOT NULL, target_id TEXT NOT NULL, decision TEXT NOT NULL,
                 reviewer TEXT NOT NULL, note TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS kg_plate_regions(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                assertion_id TEXT NOT NULL, regions TEXT NOT NULL,
+                PRIMARY KEY(run_id,assertion_id)
+            );
             CREATE INDEX IF NOT EXISTS kg_reviews_run ON kg_reviews(run_id,target_kind,target_id);
             CREATE INDEX IF NOT EXISTS kg_mentions_entity ON kg_mentions(run_id,entity_id);
             CREATE INDEX IF NOT EXISTS kg_edges_subject ON kg_edges(run_id,subject_id);

@@ -406,7 +406,33 @@ pub fn graph(
     reviewer: bool,
     evidence: &[String],
 ) -> Result<Vec<Fact>> {
-    let facts = facts(store, ids, reviewer, evidence)?;
+    let mut facts = facts(store, ids, reviewer, evidence)?;
+    if !reviewer {
+        for row in crate::motifs::rows(store, ids)? {
+            if !evidence.is_empty() && !evidence.contains(&row.evidence_id) {
+                continue;
+            }
+            let qualifiers = row
+                .qualifiers
+                .iter()
+                .filter_map(|q| q["text"].as_str())
+                .collect::<Vec<_>>();
+            let relation = crate::motifs::relation(&row.predicate);
+            facts.push(Fact {
+                subject: format!(
+                    "{}（{}，第 {} 页图 {}）",
+                    row.artifact, row.source_name, row.page, row.item
+                ),
+                relation: if qualifiers.is_empty() {
+                    relation.to_owned()
+                } else {
+                    format!("{}（{}）", relation, qualifiers.join("、"))
+                },
+                object: row.object,
+                evidence_id: row.evidence_id,
+            });
+        }
+    }
     let rdf = as_rdf(&facts)?;
     let query = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         SELECT ?subject ?relation ?object ?evidence WHERE {

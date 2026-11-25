@@ -198,7 +198,7 @@ fn roles_and_publication_preserve_source_versions() {
     );
     assert!(facts.iter().any(|fact| fact.relation == "同句提及"));
     assert!(store.begin_import(&corpus, &path).unwrap().duplicate);
-    let response = opencode::ask(store, "云气纹", &first_scope).unwrap();
+    let response = opencode::ask(store, "云气纹", &first_scope, None).unwrap();
     assert!(response.answer.is_none());
     assert_eq!(response.model.as_deref(), Some("homo/gpt-6.1-terra"));
     assert_eq!(response.trace.last().unwrap().tool, "query_graph");
@@ -385,6 +385,7 @@ fn configured_opencode_smoke() {
         &store,
         "What is the WikiBridge fixture test color?",
         &[corpus],
+        None,
     )
     .unwrap();
     let answer = result

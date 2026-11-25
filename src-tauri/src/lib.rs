@@ -1,5 +1,6 @@
 mod ingest;
 mod knowledge;
+mod motifs;
 mod opencode;
 mod pipeline;
 mod store;
@@ -188,6 +189,25 @@ async fn graph_library(
     worker(move || knowledge::graph(&store, &corpus_ids, reviewer, &evidence_ids)).await
 }
 #[tauri::command]
+async fn published_motifs(
+    state: State<'_, AppState>,
+    corpus_ids: Vec<String>,
+) -> Result<Vec<motifs::Row>> {
+    let store = state.store.clone();
+    worker(move || motifs::rows(&store, &corpus_ids)).await
+}
+#[tauri::command]
+fn save_plate_regions(
+    state: State<AppState>,
+    token: String,
+    run_id: String,
+    assertion_id: String,
+    regions: motifs::Regions,
+) -> Result<()> {
+    state.require_admin(&token)?;
+    motifs::save_regions(&state.store, &run_id, &assertion_id, regions)
+}
+#[tauri::command]
 async fn local_pipeline_graph(
     state: State<'_, AppState>,
     token: String,
@@ -269,9 +289,10 @@ async fn ask_library(
     state: State<'_, AppState>,
     question: String,
     corpus_ids: Vec<String>,
+    motif_id: Option<String>,
 ) -> Result<opencode::Answer> {
     let store = state.store.clone();
-    worker(move || opencode::ask(&store, &question, &corpus_ids)).await
+    worker(move || opencode::ask(&store, &question, &corpus_ids, motif_id.as_deref())).await
 }
 
 fn save_as(
@@ -387,6 +408,8 @@ pub fn run() {
             search_library,
             graph_library,
             local_pipeline_graph,
+            published_motifs,
+            save_plate_regions,
             review_pipeline_item,
             local_pipeline_image,
             analyze_library,

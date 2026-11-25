@@ -10,7 +10,7 @@ pub fn latest(store: &Store) -> Result<serde_json::Value> {
 pub fn latest_version(store: &Store, version: Option<&str>) -> Result<serde_json::Value> {
     let connection = store.connect()?;
     let row: Option<(String, String)> = sql(connection.query_row(
-        "SELECT id,graph_json FROM kg_runs WHERE state='complete' AND (?1 IS NULL OR json_extract(graph_json,'$.version')=?1) ORDER BY created_at DESC, id DESC LIMIT 1",
+        "SELECT id,graph_json FROM kg_runs WHERE state='complete' AND (?1 IS NULL OR json_extract(graph_json,'$.version')=?1) ORDER BY created_at DESC, rowid DESC LIMIT 1",
         [version], |row| Ok((row.get(0)?, row.get(1)?)),
     ).optional())?;
     let (id, text) = row.ok_or("尚未生成所选版本的本地语料图谱。")?;
@@ -22,6 +22,21 @@ pub fn latest_version(store: &Store, version: Option<&str>) -> Result<serde_json
             "decision":r.get::<_,String>(3)?,"reviewer":r.get::<_,String>(4)?,"note":r.get::<_,String>(5)?,"createdAt":r.get::<_,String>(6)?
         }))))?;
         graph["reviews"] = serde_json::Value::Array(sql(rows.collect())?);
+        let mut regions =
+            sql(connection
+                .prepare("SELECT assertion_id,regions FROM kg_plate_regions WHERE run_id=?1"))?;
+        let pairs = sql(regions.query_map([&id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }))?;
+        let mut plate_regions = serde_json::Map::new();
+        for pair in pairs {
+            let (key, value) = sql(pair)?;
+            plate_regions.insert(
+                key,
+                serde_json::from_str(&value).map_err(|e| e.to_string())?,
+            );
+        }
+        graph["plateRegions"] = serde_json::Value::Object(plate_regions);
         graph["runId"] = serde_json::Value::String(id);
     }
     Ok(graph)
