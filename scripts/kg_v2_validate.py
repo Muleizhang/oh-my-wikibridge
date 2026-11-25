@@ -27,6 +27,16 @@ def validate(graph):
                 raise ValueError('Evidence bounding box outside page')
     for obj in graph['entities'] + graph['assertions'] + graph['events'] + graph['mentions']:
         for ev in obj.get('evidence', []): check_evidence(ev)
+    interpretations = graph.get('interpretations', [])
+    if len({record['id'] for record in interpretations}) != len(interpretations):
+        raise ValueError('Duplicate interpretation IDs')
+    for record in interpretations:
+        for ev in [*record['evidence'], record['subjectEvidence'], record['valueEvidence']]:
+            check_evidence(ev)
+        if record.get('extractionMethod') != 'local_uie' or record.get('reviewStatus') != 'unreviewed':
+            raise ValueError('Interpretations require model extraction and retain machine review status')
+        if not record['subject']['label'] or not record['value']:
+            raise ValueError('Empty interpretation endpoint')
     for s in statements.values():
         obj = s['object']
         if s['subject'] is not None and s['subject'] not in entities:
@@ -49,6 +59,31 @@ def validate(graph):
             if role['entityId'] not in entities: raise ValueError('Dangling event participant')
     if graph['publication']['automaticAcceptance']:
         raise ValueError('Full publication gate is not calibrated yet')
+    if graph.get('artifactIdentity'):
+        identity = graph['artifactIdentity']
+        canonical = {e['id']: e for e in identity['entities']}
+        if len(canonical) != len(identity['entities']): raise ValueError('Duplicate canonical artifacts')
+        owned, record_owned = {}, {}
+        for artifact in canonical.values():
+            if artifact.get('reviewStatus') != 'unreviewed' or artifact.get('independentHistoricalIdentityVerified'):
+                raise ValueError('Automatic identity must not forge historical/human verification')
+            for member in artifact['members']:
+                if member['sourceEntityId'] != f"{member['volume']}:{member['entityId']}":
+                    raise ValueError('Invalid artifact namespace')
+                if member['volume'] != identity['volume']: continue
+                eid, rid = member['entityId'], member['recordId']
+                if eid in owned or rid in record_owned: raise ValueError('Duplicate source artifact membership')
+                if entities.get(eid, {}).get('kind') != 'artifact' or entities[eid].get('recordId') != rid or rid not in records:
+                    raise ValueError('Dangling canonical artifact source')
+                owned[eid], record_owned[rid] = artifact['id'], artifact['id']
+                for value in member.get('dimensionEvidence', []) + member.get('propertyEvidence', []):
+                    if value['statementId'] not in statements: raise ValueError('Dangling identity statement evidence')
+                for value in member.get('locationEvidence', []):
+                    if value.get('eventId') and value['eventId'] not in events: raise ValueError('Dangling identity event')
+        if set(owned) != {e['id'] for e in entities.values() if e['kind'] == 'artifact'}:
+            raise ValueError('Incomplete canonical artifact coverage')
+        if owned != identity['sourceToCanonical'] or record_owned != identity['recordToCanonical']:
+            raise ValueError('Identity maps disagree with canonical membership')
     return {'status': 'passed', 'assertions': len(statements), 'literalEntities': 0,
         'sourceStreams': len(documents), 'automaticAcceptance': False,
         'semanticAccuracy': 'See evaluation; structural validation is not semantic verification'}

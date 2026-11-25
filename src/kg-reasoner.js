@@ -3,14 +3,70 @@
 // Zero external dependencies; runs identically in Node.js (server/tests) and Browser.
 
 export const PREDICATE_LABELS = {
+  interpretation_subject: '解释对象',
+  interpreted_as: '象征意义',
+  religious_context: '信仰语境',
+  ritual_context: '礼仪语境',
+  artifact_type: '器类',
+  belongs_to_culture: '文化归属',
+  has_composition: '构图形式',
+  decorated_part: '装饰部位',
+  decoration_role: '装饰角色',
+  excavated_at: '出土地点',
+  discovered_at: '发现地点',
+  collected_at: '采集地点',
+  held_by: '收藏单位',
   period: '所属时代',
   made_of: '材质',
+  decorated_with_material: '装饰材料',
+  has_shape: '造型',
   decorated_with: '饰有纹样',
   uses_technique: '工艺',
   period_class: '时代大类',
   made_of_class: '材质大类',
   motif_family: '纹样谱系',
 };
+
+export const EXTRA_DIMENSIONS = {
+  decoration_material: { predicate: 'decorated_with_material', field: 'decorationMaterials', label: '装饰材料' },
+  shape: { predicate: 'has_shape', field: 'shapes', label: '造型' },
+  technique: { predicate: 'uses_technique', field: 'techniques', label: '工艺' },
+  culture: { predicate: 'belongs_to_culture', field: 'cultures', label: '文化归属' },
+  composition: { predicate: 'has_composition', field: 'compositions', label: '构图形式' },
+  decoration_part: { predicate: 'decorated_part', field: 'decorationParts', label: '装饰部位' },
+  decoration_role: { predicate: 'decoration_role', field: 'decorationRoles', label: '装饰角色' },
+  place: { predicate: 'excavated_at', field: 'places', label: '出土与发现' },
+  organization: { predicate: 'held_by', field: 'holders', label: '收藏单位' },
+};
+const EXTRA_FIELDS = Object.fromEntries(Object.entries(EXTRA_DIMENSIONS).map(([kind, dim]) => [dim.predicate, [kind, dim.field]]));
+EXTRA_FIELDS.discovered_at = ['place', 'places'];
+EXTRA_FIELDS.collected_at = ['place', 'places'];
+const extraArrays = () => Object.fromEntries(Object.values(EXTRA_DIMENSIONS).map(dim => [dim.field, []]));
+
+function interpretationTriples(records = []) {
+  return records.flatMap(record => {
+    const subjectKey = `interpretation:${record.id}`;
+    const predicates = { symbolism: ['interpreted_as', 'meaning'], belief: ['religious_context', 'belief'], ritual: ['ritual_context', 'ritual'],
+      technique: ['uses_technique', 'technique'], composition: ['has_composition', 'composition'] };
+    const [predicate, kind] = predicates[record.kind] || predicates.symbolism;
+    const common = { subjectId: record.id, subjectKey, subjectKind: 'interpretation',
+      subjectLabel: `${record.subject.label} → ${record.value} · ${record.locator || record.page}`,
+      page: record.page, volume: record.volume || '', volumePage: record.volumePage || record.page,
+      sourceName: record.sourceName, locator: record.locator || `PDF 第 ${record.page} 页`,
+      quote: record.text, evidenceId: record.id, pageUrl: record.pageUrl || `/api/reasoning/page/${record.page}`,
+      isInferred: false, origin: record.origin, interpretationId: record.id,
+      modelScore: record.modelScore, extractionMethod: record.extractionMethod,
+      binding: { model: record.model, revision: record.revision } };
+    common.context = record.context || null;
+    const subjectKind = record.subject.kind || 'concept';
+    return [
+      { ...common, id: record.id+':subject', predicate: 'interpretation_subject', predicateLabel: PREDICATE_LABELS.interpretation_subject,
+        objectKey: `${subjectKind}:${record.subject.label}`, objectLabel: record.subject.label, objectKind: subjectKind },
+      { ...common, id: record.id+':value', predicate, predicateLabel: PREDICATE_LABELS[predicate],
+        objectKey: `${kind}:${record.value}`, objectLabel: record.value, objectKind: kind },
+    ];
+  });
+}
 
 export const DYNASTY_TABLE = [
   { group: '新石器时代', order: 10, re: /新石器|原始社会|仰韶|半坡|庙底沟|马家窑|半山|马厂|河姆渡|良渚|龙山|大汶口|红山|裴李岗|磁山|屈家岭|马家浜|大溪/ },
@@ -90,6 +146,8 @@ function normText(s) {
 }
 
 function predToKind(predicate) {
+  if (EXTRA_FIELDS[predicate]) return EXTRA_FIELDS[predicate][0];
+  if (predicate === 'artifact_type') return 'artifact_type';
   if (predicate === 'period' || predicate === 'period_class') return 'era';
   if (predicate === 'made_of' || predicate === 'made_of_class') return 'material';
   if (predicate === 'decorated_with' || predicate === 'motif_family') return 'motif';
@@ -101,9 +159,90 @@ function predToKind(predicate) {
  */
 export function normalizeKG(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('无效的知识图谱数据。');
-  if (Array.isArray(raw.rows) || Array.isArray(raw.items)) return normalizeManifest(raw);
-  if (Array.isArray(raw.records) && Array.isArray(raw.assertions)) return normalizeLocalGraph(raw);
+  if (Array.isArray(raw.rows) || Array.isArray(raw.items)) return applyCanonicalIdentity(normalizeManifest(raw), raw);
+  if (Array.isArray(raw.records) && Array.isArray(raw.assertions)) return applyCanonicalIdentity(normalizeLocalGraph(raw), raw);
   throw new Error('不支持的图谱数据格式（需要 manifest.json 或 graph.json）。');
+}
+
+// Identity is supplied by the auditable offline rule engine. No names or vector
+// scores are used to infer identity here; source records remain addressable.
+function applyCanonicalIdentity(kg, raw) {
+  const identity = raw.artifactIdentity;
+  const aliases = new Map();
+  const unique = values => [...new Map(values.map(value => [JSON.stringify(value), value])).values()];
+  if (!identity) {
+    kg.artifactAliases = aliases;
+    return kg;
+  }
+  const canonicalEntities = new Map((identity.entities || []).map(entity => [entity.id, entity]));
+  const recordMap = identity.recordToCanonical || {};
+  const records = new Map((raw.records || []).map(record => [record.id, record]));
+  const canonicalArtifacts = new Map();
+  for (const source of kg.artifacts.values()) {
+    // The typed graph may also contain captions that did not yield an artifact.
+    if (kg.format === 'graph' && !recordMap[source.id]) continue;
+    const id = recordMap[source.id] || source.id;
+    const entity = canonicalEntities.get(id);
+    aliases.set(source.id, id);
+    const sourceRecords = source.sourceRecords?.length ? source.sourceRecords
+      : kg.format === 'graph' ? [{...records.get(source.id), sourceRecordId: source.id,
+          volume: identity.volume || '', locator: source.locator, pageUrl: source.pageUrl}]
+        : [source];
+    for (const record of sourceRecords) {
+      for (const key of [record.sourceRecordId, record.recordId, record.artifactId, record.sourceEntityId]) {
+        if (key) aliases.set(key, id);
+      }
+    }
+    if (!canonicalArtifacts.has(id)) {
+      canonicalArtifacts.set(id, {...source, id, title: entity?.label || source.title,
+        identityDecision: entity?.decision || source.identityDecision || 'source_record_only',
+        sourceRecords: [], tripleIds: []});
+    }
+    const artifact = canonicalArtifacts.get(id);
+    artifact.sourceRecords = unique([...artifact.sourceRecords, ...sourceRecords]);
+    if (!artifact.findspot && source.findspot) artifact.findspot = source.findspot;
+    for (const field of ['periods', 'materials', 'motifs', 'techniques', 'artifactTypes',
+      ...Object.values(EXTRA_DIMENSIONS).map(dimension => dimension.field)]) {
+      artifact[field] = [...new Set([...(artifact[field] || []), ...(source[field] || [])])];
+    }
+  }
+  for (const [source, canonical] of Object.entries(identity.sourceToCanonical || {})) aliases.set(source, canonical);
+  // A split keeps an explicit list of replacements; never choose one silently.
+  for (const [previous, replacements] of Object.entries(identity.redirects || {})) {
+    if (replacements.length === 1) aliases.set(previous, replacements[0]);
+  }
+  for (const entity of canonicalEntities.values()) for (const member of entity.members || []) {
+    for (const key of [member.sourceRecordId, member.sourceEntityId]) if (key) aliases.set(key, entity.id);
+  }
+  const groups = new Map();
+  const nonArtifactTriples = [];
+  for (const source of kg.triples) {
+    const subjectId = aliases.get(source.subjectId) || source.subjectId;
+    const artifact = canonicalArtifacts.get(subjectId);
+    if (!artifact) {
+      if (source.subjectKind && source.subjectKind !== 'artifact') nonArtifactTriples.push(source);
+      continue;
+    }
+    const key = JSON.stringify([subjectId, source.predicate, source.objectKey, source.qualifiers || []]);
+    const sources = source.sources?.length ? source.sources : [{...source}];
+    if (!groups.has(key)) groups.set(key, {...source, subjectId, subjectLabel: artifact.title,
+      sources: [], supportingEvidence: [], evidenceIds: [], sourceTripleIds: []});
+    const triple = groups.get(key);
+    triple.sources = unique([...triple.sources, ...sources]);
+    triple.supportingEvidence = unique([...triple.supportingEvidence, ...(source.supportingEvidence || [])]);
+    triple.evidenceIds = [...new Set([...triple.evidenceIds, ...(source.evidenceIds || []), source.evidenceId].filter(Boolean))];
+    triple.sourceTripleIds = [...new Set([...triple.sourceTripleIds, source.id, ...sources.map(row => row.id)].filter(Boolean))];
+  }
+  const triples = [...groups.values(), ...nonArtifactTriples];
+  const tripleById = new Map();
+  for (const triple of triples) {
+    tripleById.set(triple.id, triple);
+    for (const id of triple.sourceTripleIds || []) tripleById.set(id, triple);
+    canonicalArtifacts.get(triple.subjectId)?.tripleIds.push(triple.id);
+  }
+  return {...kg, artifacts: canonicalArtifacts, triples, tripleById,
+    artifactAliases: aliases, artifactIdentity: identity,
+    sourceRecordCount: [...canonicalArtifacts.values()].reduce((count, artifact) => count + artifact.sourceRecords.length, 0)};
 }
 
 function normalizeManifest(manifest) {
@@ -131,18 +270,25 @@ function normalizeManifest(manifest) {
       quote: it.quote || ev.text || '',
       thumbUrl: it.detailUrl || it.imageUrl || ev.previewUrl || '',
       plateUrl: it.imageUrl || it.detailUrl || ev.previewUrl || '',
+      imageKind: it.imageKind || (it.imageUrl && it.imageUrl !== (it.pageUrl || ev.previewUrl) ? 'artifact' : 'page'),
+      imageCandidates: it.imageCandidates || [],
+      imageReviewStatus: it.imageReviewStatus || '',
+      sourceRecords: it.sourceRecords || [],
+      identityDecision: it.identityDecision || '',
       captionUrl: it.captionUrl || ev.captionUrl || '',
-      pageUrl: ev.previewUrl || '',
+      pageUrl: it.pageUrl || ev.previewUrl || '',
       bbox: ev.bbox || null,
       periods: [],
       materials: [],
       motifs: [],
-      techniques: [],
+      ...extraArrays(),
+      artifactTypes: it.artifactTypes || [],
       tripleIds: [],
     });
   }
 
   for (const r of (manifest.rows || [])) {
+    if (r.projectionStatus === 'superseded' || r.supersededBy?.length || r.reviewStatus === 'rejected') continue;
     const art = artifacts.get(r.artifactId);
     if (!art) continue;
     const ev = evMap.get(r.evidenceId) || {};
@@ -169,8 +315,13 @@ function normalizeManifest(manifest) {
       captionUrl: ev.captionUrl || r.captionUrl || art.captionUrl,
       isInferred: false,
       origin: r.origin || '',
+      qualifiers: r.qualifiers || [],
       binding: r.binding || null,
+      modelScore: r.modelScore ?? null,
+      extractionMethod: r.extractionMethod || '',
       supportingEvidence: r.supportingEvidence || [],
+      sources: r.sources || [],
+      evidenceIds: r.evidenceIds || [r.evidenceId].filter(Boolean),
     };
     triples.push(triple);
     art.tripleIds.push(triple.id);
@@ -178,9 +329,15 @@ function normalizeManifest(manifest) {
     else if (r.predicate === 'made_of' && !art.materials.includes(r.object)) art.materials.push(r.object);
     else if (r.predicate === 'decorated_with' && !art.motifs.includes(r.object)) art.motifs.push(r.object);
     else if (r.predicate === 'uses_technique' && !art.techniques.includes(r.object)) art.techniques.push(r.object);
+    else if (r.predicate === 'artifact_type' && !art.artifactTypes.includes(r.object)) art.artifactTypes.push(r.object);
+    const extraField = EXTRA_FIELDS[r.predicate]?.[1];
+    if (extraField && !art[extraField].includes(r.object)) art[extraField].push(r.object);
+    if (r.predicate === 'excavated_at' && !art.findspot) art.findspot = r.object;
   }
 
+  triples.push(...interpretationTriples(manifest.interpretations));
   return {
+    interpretations: manifest.interpretations || [],
     title: manifest.title || '纹样知识图谱',
     format: 'manifest',
     artifacts,
@@ -214,6 +371,7 @@ function normalizeLocalGraph(graph) {
       findspot: '',
       observation: '',
       quote: rec.text || '',
+      artifactTypes: [],
       thumbUrl: `/api/reasoning/page/${rec.page}`,
       plateUrl: `/api/reasoning/page/${rec.page}`,
       captionUrl: '',
@@ -222,13 +380,14 @@ function normalizeLocalGraph(graph) {
       periods: [],
       materials: [],
       motifs: [],
-      techniques: [],
+      ...extraArrays(),
       tripleIds: [],
     });
   }
 
   const triples = [];
   for (const fact of (graph.assertions || [])) {
+    if (fact.projectionStatus === 'superseded' || fact.supersededBy?.length) continue;
     const owner = fact.subject && artifactOwners.get(fact.subject);
     if (!owner || !artifacts.has(owner) || !fact.evidence?.length || fact.reviewStatus === 'rejected') continue;
     const art = artifacts.get(owner);
@@ -248,7 +407,7 @@ function normalizeLocalGraph(graph) {
     if (!val) continue;
     const ev = fact.evidence[0];
     if (['出土', '出土地点'].includes(fact.label) && !art.findspot) art.findspot = val;
-    if (!['period', 'made_of', 'decorated_with', 'uses_technique'].includes(fact.predicate)) continue;
+    if (!['period', 'made_of', 'decorated_with', 'artifact_type', ...Object.keys(EXTRA_FIELDS)].includes(fact.predicate)) continue;
     const kind = predToKind(fact.predicate);
     const triple = {
       id: fact.id,
@@ -267,6 +426,10 @@ function normalizeLocalGraph(graph) {
       pageUrl: `/api/reasoning/page/${ev.page || art.page}`,
       captionUrl: '',
       isInferred: false,
+      sources: [{...fact, sourceRecordId: owner, sourceEntityId: fact.subject, page: ev.page,
+        locator: `第 ${ev.page || art.page} 页`, pageUrl: `/api/reasoning/page/${ev.page || art.page}`}],
+      qualifiers: fact.qualifiers || [],
+      supportingEvidence: fact.evidence || [],
     };
     triples.push(triple);
     art.tripleIds.push(triple.id);
@@ -274,9 +437,14 @@ function normalizeLocalGraph(graph) {
     else if (fact.predicate === 'made_of' && !art.materials.includes(val)) art.materials.push(val);
     else if (fact.predicate === 'decorated_with' && !art.motifs.includes(val)) art.motifs.push(val);
     else if (fact.predicate === 'uses_technique' && !art.techniques.includes(val)) art.techniques.push(val);
+    else if (fact.predicate === 'artifact_type' && !art.artifactTypes.includes(val)) art.artifactTypes.push(val);
+    const extraField = EXTRA_FIELDS[fact.predicate]?.[1];
+    if (extraField && !art[extraField].includes(val)) art[extraField].push(val);
   }
 
+  triples.push(...interpretationTriples(graph.interpretations));
   return {
+    interpretations: graph.interpretations || [],
     title: graph.sourceContext?.title || '本地知识图谱',
     format: 'graph',
     artifacts,
@@ -345,6 +513,7 @@ export function createKGReasoner(rawData) {
   // Forward-chaining RDFS materialized triples
   const inferredTriples = [];
   for (const t of kg.triples) {
+    if (t.subjectKind === 'interpretation') continue;
     let key = t.objectKey;
     const visited = new Set([key]);
     const chain = [t.objectLabel];
@@ -399,8 +568,8 @@ export function createKGReasoner(rawData) {
       ensureNode(`artifact:${art.id}`, 'artifact', art.title, false);
     }
     for (const t of kg.triples) {
-      const sKey = `artifact:${t.subjectId}`;
-      ensureNode(sKey, 'artifact', t.subjectLabel, false);
+      const sKey = t.subjectKey || `artifact:${t.subjectId}`;
+      ensureNode(sKey, t.subjectKind || 'artifact', t.subjectLabel, false);
       ensureNode(t.objectKey, t.objectKind, t.objectLabel, false);
       addEdge(sKey, t.objectKey, {
         id: t.id,
@@ -443,6 +612,8 @@ export function createKGReasoner(rawData) {
     if (!input) return null;
     const raw = String(input).trim();
     if (g.nodes.has(raw)) return g.nodes.get(raw);
+    const canonical = kg.artifactAliases?.get(raw.replace(/^artifact:/, '')) || raw;
+    if (g.nodes.has(`artifact:${canonical}`)) return g.nodes.get(`artifact:${canonical}`);
     const nq = normText(raw);
     // Exact label match (prefer non-artifact concepts first, then artifacts)
     let artifactExact = null;
@@ -502,9 +673,9 @@ export function createKGReasoner(rawData) {
 
   function matchingArtifacts(kind, label, useOntology) {
     const accepted = expandValues(kind, label, useOntology);
-    const pred = kind === 'era' ? 'period' : (kind === 'material' ? 'made_of' : 'decorated_with');
+    const field = EXTRA_DIMENSIONS[kind]?.field || { era: 'periods', material: 'materials', motif: 'motifs', artifact_type: 'artifactTypes' }[kind];
     return allArtifacts.filter(art => {
-      const vals = pred === 'period' ? art.periods : (pred === 'made_of' ? art.materials : art.motifs);
+      const vals = art[field] || [];
       return vals.some(v => accepted.has(v));
     });
   }
@@ -523,7 +694,7 @@ export function createKGReasoner(rawData) {
     const endpointCoverage = node => {
       const arts = !node ? [] : node.kind === 'artifact'
         ? allArtifacts.filter(a => `artifact:${a.id}` === node.key)
-        : ['era', 'material', 'motif'].includes(node.kind) ? matchingArtifacts(node.kind, node.label, useOntology) : [];
+        : ['era', 'material', 'motif', 'artifact_type', ...Object.keys(EXTRA_DIMENSIONS)].includes(node.kind) ? matchingArtifacts(node.kind, node.label, useOntology) : [];
       return { total: arts.length, withMotifs: arts.filter(a => a.motifs.length).length,
         withMaterials: arts.filter(a => a.materials.length).length };
     };
@@ -633,7 +804,7 @@ export function createKGReasoner(rawData) {
           axiom: edge.axiom?.formula || null,
           evidenceRef: evRef,
           tripleId: edge.triple?.id || null,
-          artifactId: edge.triple?.subjectId || null,
+          artifactId: edge.triple?.subjectKind === 'interpretation' ? null : edge.triple?.subjectId || null,
           page: edge.triple?.page || null,
         };
       });
@@ -777,8 +948,8 @@ export function createKGReasoner(rawData) {
    */
   function compareEntities(kind, entityA, entityB, opts = {}) {
     const useOntology = opts.useOntology !== false;
-    if (!['era', 'material', 'motif'].includes(kind)) {
-      return { ok: false, error: '对比维度必须是 era、material 或 motif。' };
+    if (!['era', 'material', 'motif', 'artifact_type', ...Object.keys(EXTRA_DIMENSIONS).filter(k => k !== 'place')].includes(kind)) {
+      return { ok: false, error: '请选择时代、材质、纹样、器类、工艺、文化、构图、装饰部位/角色或收藏单位进行对比。' };
     }
     const artsA = matchingArtifacts(kind, entityA, useOntology);
     const artsB = matchingArtifacts(kind, entityB, useOntology);
@@ -791,7 +962,7 @@ export function createKGReasoner(rawData) {
 
     // Target comparison axis: Era/Material -> compare Motifs (+ secondary axis); Motif -> compare Materials + Eras
     const primaryAxis = kind === 'motif' ? 'material' : 'motif';
-    const secondaryAxis = kind === 'era' ? 'material' : 'era';
+    const secondaryAxis = kind === 'material' || kind === 'motif' ? 'era' : 'material';
 
     const collectAxis = (arts, axis) => {
       const map = new Map(); // label -> { label, count, artifacts, triples }
@@ -863,7 +1034,8 @@ export function createKGReasoner(rawData) {
     const secondary = diffAxis(secondaryAxis);
 
     const predA = kind === 'era' ? (useOntology ? ':period_class' : ':period')
-      : (kind === 'material' ? (useOntology ? ':made_of_class' : ':made_of') : ':decorated_with');
+      : (kind === 'material' ? (useOntology ? ':made_of_class' : ':made_of')
+        : kind === 'artifact_type' ? ':artifact_type' : EXTRA_DIMENSIONS[kind] ? ':'+EXTRA_DIMENSIONS[kind].predicate : ':decorated_with');
     const targetPred = primaryAxis === 'motif' ? ':decorated_with' : (primaryAxis === 'material' ? ':made_of' : ':period');
     const valA = (useOntology && kind === 'material' && materialClass(entityA)) ? materialClass(entityA) : entityA;
     const valB = (useOntology && kind === 'material' && materialClass(entityB)) ? materialClass(entityB) : entityB;
@@ -1112,17 +1284,21 @@ export function createKGReasoner(rawData) {
 
   function buildSparqlTriples(useOntology) {
     const list = [];
+    const subject = (id, label) => kg.artifactIdentity ? id : label;
     for (const art of allArtifacts) {
-      list.push({ s: art.title, p: ':label', o: art.title, artifactId: art.id });
-      list.push({ s: art.title, p: ':page', o: String(art.page), artifactId: art.id });
-      if (art.findspot) list.push({ s: art.title, p: ':findspot', o: art.findspot, artifactId: art.id });
+      list.push({ s: subject(art.id, art.title), p: ':label', o: art.title, artifactId: art.id });
+      for (const page of new Set([art.page, ...(art.sourceRecords || []).map(record => record.page)].filter(Boolean))) {
+        list.push({ s: subject(art.id, art.title), p: ':page', o: String(page), artifactId: art.id });
+      }
+      if (art.findspot) list.push({ s: subject(art.id, art.title), p: ':findspot', o: art.findspot, artifactId: art.id });
     }
     for (const t of kg.triples) {
-      list.push({ s: t.subjectLabel, p: ':' + t.predicate, o: t.objectLabel, artifactId: t.subjectId, rawTriple: t });
+      list.push({ s: t.subjectKey || subject(t.subjectId, t.subjectLabel), p: ':' + t.predicate, o: t.objectLabel,
+        artifactId: t.subjectKind === 'interpretation' ? null : t.subjectId, rawTriple: t });
     }
     if (useOntology) {
       for (const inf of inferredTriples) {
-        list.push({ s: inf.subjectLabel, p: ':' + inf.predicate, o: inf.objectLabel, artifactId: inf.subjectId, rawTriple: kg.tripleById.get(inf.premiseTripleId) });
+        list.push({ s: subject(inf.subjectId, inf.subjectLabel), p: ':' + inf.predicate, o: inf.objectLabel, artifactId: inf.subjectId, rawTriple: kg.tripleById.get(inf.premiseTripleId) });
       }
       for (const ax of axioms) {
         list.push({ s: ax.childLabel, p: 'rdfs:subClassOf', o: ax.parentLabel });
@@ -1131,17 +1307,17 @@ export function createKGReasoner(rawData) {
       for (const t of kg.triples) {
         if (t.predicate === 'period') {
           const grp = eraInfo(t.objectLabel).group;
-          list.push({ s: t.subjectLabel, p: ':period_class', o: grp, artifactId: t.subjectId, rawTriple: t });
+          list.push({ s: subject(t.subjectId, t.subjectLabel), p: ':period_class', o: grp, artifactId: t.subjectId, rawTriple: t });
         } else if (t.predicate === 'made_of') {
           const cls = materialClass(t.objectLabel) || t.objectLabel;
-          list.push({ s: t.subjectLabel, p: ':made_of_class', o: cls, artifactId: t.subjectId, rawTriple: t });
+          list.push({ s: subject(t.subjectId, t.subjectLabel), p: ':made_of_class', o: cls, artifactId: t.subjectId, rawTriple: t });
         } else if (t.predicate === 'decorated_with') {
           const fam = motifFamily(t.objectLabel) || t.objectLabel;
-          list.push({ s: t.subjectLabel, p: ':motif_family', o: fam, artifactId: t.subjectId, rawTriple: t });
+          list.push({ s: subject(t.subjectId, t.subjectLabel), p: ':motif_family', o: fam, artifactId: t.subjectId, rawTriple: t });
         }
       }
     }
-    return list;
+    return kg.artifactIdentity ? [...new Map(list.map(triple => [JSON.stringify([triple.s, triple.p, triple.o]), triple])).values()] : list;
   }
 
   function matchTerm(term, actual, env) {
@@ -1156,7 +1332,9 @@ export function createKGReasoner(rawData) {
   function matchPattern(pat, tr, env) {
     const e1 = matchTerm(pat.p, tr.p, env);
     if (!e1) return null;
-    const e2 = matchTerm(pat.s, tr.s, e1);
+    const e2 = !pat.s.startsWith('?') && tr.artifactId && kg.artifactIdentity
+      ? matchTerm(pat.s, tr.s, e1) || matchTerm(pat.s, kg.artifacts.get(tr.artifactId)?.title || '', e1)
+      : matchTerm(pat.s, tr.s, e1);
     if (!e2) return null;
     return matchTerm(pat.o, tr.o, e2);
   }
@@ -1200,7 +1378,7 @@ export function createKGReasoner(rawData) {
       ? opts.targetPredicate : 'period';
     const useOntology = opts.useOntology !== false;
     const limit = Math.max(1, Math.min(40, Number(opts.limit) || 18));
-    const filterArtifactId = opts.artifactId || null;
+    const filterArtifactId = kg.artifactAliases?.get(opts.artifactId) || opts.artifactId || null;
 
     const getTargetVals = art => {
       if (targetPredicate === 'period') {
@@ -1477,8 +1655,17 @@ export function createKGReasoner(rawData) {
     };
 
     for (const art of allArtifacts) {
-      if (filters.name && !normText(art.title).includes(normText(filters.name))) continue;
-      if (filters.place && !normText(art.findspot + ' ' + art.quote).includes(normText(filters.place))) continue;
+      if (filters.name && ![art.title, ...(art.sourceRecords || []).map(record => record.artifact || record.label || '')]
+        .some(title => normText(title).includes(normText(filters.name)))) continue;
+      if (filters.place && !normText([art.findspot, art.quote, ...(art.sourceRecords || []).map(record => record.text || record.quote || '')].join(' ')).includes(normText(filters.place))) continue;
+      if (filters.artifactType && !(art.artifactTypes || []).some(type => normText(type) === normText(filters.artifactType))) continue;
+      if (filters.technique && !art.techniques.some(technique => normText(technique).includes(normText(filters.technique)))) continue;
+      if (Object.entries(EXTRA_DIMENSIONS).some(([kind, dim]) => kind !== 'place' && filters[kind]
+          && !art[dim.field].some(value => normText(value).includes(normText(filters[kind]))))) continue;
+      if (['excavationPlace', 'discoveryPlace', 'collectionPlace'].some((field, i) => filters[field]
+          && !art.tripleIds.some(id => { const triple = kg.tripleById.get(id);
+            return triple.predicate === ['excavated_at', 'discovered_at', 'collected_at'][i]
+              && normText(triple.objectLabel).includes(normText(filters[field])); }))) continue;
       if (eraSet && !matchSet(art.periods, eraSet, filters.period)) continue;
       if (matSet && !matchSet(art.materials, matSet, filters.material)) continue;
       if (motifSet && !matchSet(art.motifs, motifSet, filters.motif)) continue;
@@ -1497,10 +1684,15 @@ export function createKGReasoner(rawData) {
         sourceName: art.sourceName,
         locator: art.locator,
         findspot: art.findspot,
+        artifactTypes: art.artifactTypes || [],
+        techniques: art.techniques,
+        ...Object.fromEntries(Object.values(EXTRA_DIMENSIONS).map(dim => [dim.field, art[dim.field]])),
         periods: art.periods,
         materials: art.materials,
         motifs: art.motifs,
         quote: art.quote,
+        sourceRecords: art.sourceRecords || [],
+        identityDecision: art.identityDecision || '',
         refs,
       });
     }
@@ -1520,7 +1712,7 @@ export function createKGReasoner(rawData) {
    */
   function inspectEvidence(query) {
     const raw = String(query || '').trim();
-    const art = kg.artifacts.get(raw)
+    const art = kg.artifacts.get(kg.artifactAliases?.get(raw) || raw)
       || allArtifacts.find(a => normText(a.title) === normText(raw))
       || allArtifacts.find(a => normText(a.title).includes(normText(raw)));
     if (!art) return { ok: false, error: `未找到器物「${query}」` };
@@ -1539,18 +1731,40 @@ export function createKGReasoner(rawData) {
   /**
    * Dynamic, book-agnostic summary + suggested reasoning showcase prompts derived from actual data.
    */
+  function queryInterpretations(filters = {}) {
+    const includes = (actual, query) => !query || normText(actual).includes(normText(query));
+    const items = kg.interpretations.filter(record => includes(record.subject.label, filters.subject)
+      && includes(record.value, filters.meaning) && (!filters.kind || record.kind === filters.kind)
+      && (!filters.volume || record.volume === filters.volume)
+      && (!filters.period || (record.context?.periods || []).some(p => includes(p, filters.period)))
+      && (!filters.culture || (record.context?.cultures || []).some(p => includes(p, filters.culture)))
+      && (!filters.certainty || record.context?.certainty === filters.certainty)
+      && includes([record.subject.label, record.value, record.text].join(' '), filters.text));
+    return { ok: true, count: items.length, items: items.slice(0, Math.min(200, Math.max(1, Number(filters.limit) || 100))) };
+  }
+
   function getCatalogSummary() {
     const eraCounts = new Map();
     const matCounts = new Map();
     const motifCounts = new Map();
+    const typeCounts = new Map();
+    const extraCounts = Object.fromEntries(Object.values(EXTRA_DIMENSIONS).map(dim => [dim.field, new Map()]));
     for (const art of allArtifacts) {
       for (const p of new Set(art.periods.map(x => eraInfo(x).group))) eraCounts.set(p, (eraCounts.get(p) || 0) + 1);
       for (const m of art.materials) matCounts.set(m, (matCounts.get(m) || 0) + 1);
       for (const mo of art.motifs) motifCounts.set(mo, (motifCounts.get(mo) || 0) + 1);
+      for (const type of art.artifactTypes) typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+      for (const dim of Object.values(EXTRA_DIMENSIONS)) {
+        const counts = extraCounts[dim.field];
+        for (const value of art[dim.field]) counts.set(value, (counts.get(value) || 0) + 1);
+      }
     }
     const eras = [...eraCounts.entries()].sort((a, b) => eraInfo(a[0]).order - eraInfo(b[0]).order).map(([name, count]) => ({ name, count }));
     const materials = [...matCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
     const motifs = [...motifCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+    const artifactTypes = [...typeCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+    const extraSummary = Object.fromEntries(Object.entries(extraCounts).map(([field, counts]) =>
+      [field, [...counts.entries()].sort((a, b) => b[1]-a[1]).map(([name, count]) => ({ name, count }))]));
 
     // Pick observed labels; this does not guarantee a connecting path or enough annotations.
     const e1 = eras[0]?.name, e2 = eras[1]?.name, eLast = eras[eras.length - 1]?.name;
@@ -1604,16 +1818,23 @@ export function createKGReasoner(rawData) {
       volumes: kg.volumes || [],
       counts: {
         artifacts: allArtifacts.length,
+        sourceRecords: kg.sourceRecordCount ?? allArtifacts.length,
         triples: kg.triples.length,
         inferredTriples: inferredTriples.length,
         axioms: axioms.length,
         eras: eras.length,
         materials: materials.length,
         motifs: motifs.length,
+        artifactTypes: artifactTypes.length,
+        interpretations: kg.interpretations.length,
+        symbolicInterpretations: kg.interpretations.filter(record => record.kind === 'symbolism').length,
+        ...Object.fromEntries(Object.entries(extraSummary).map(([field, entries]) => [field, entries.length])),
       },
       eras,
       materials,
       motifs,
+      artifactTypes,
+      ...extraSummary,
       axioms,
       suggestions,
     };
@@ -1629,6 +1850,7 @@ export function createKGReasoner(rawData) {
     runSparql,
     predictMissing,
     queryArtifacts,
+    queryInterpretations,
     inspectEvidence,
     getCatalogSummary,
   };

@@ -1,0 +1,8 @@
+# Install in an isolated environment with the existing CUDA PyTorch available.
+gliner==0.2.13
+transformers==4.38.2
+tokenizers==0.15.2
+huggingface-hub==0.36.2
+sentencepiece==0.2.3
+jieba==0.42.1
+onnxruntime>=1.17,<2

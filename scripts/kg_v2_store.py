@@ -14,17 +14,22 @@ from kg_v2.images import install_previews
 from kg_v2_validate import validate
 
 
-def persist(graph, root):
+def persist(graph, root, source_file=None):
+    parent_run = graph.get('runId')
     graph['identityReview'] = build_identity_review(graph)
     validate(graph)
     root.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(root / 'knowledge.sqlite3', timeout=30)
     conn.execute('PRAGMA foreign_keys=ON')
     conn.executescript(schema())
-    source = source_path()
+    source = Path(source_file) if source_file is not None else source_path()
     with source.open('rb') as f: digest = hashlib.file_digest(f, 'sha256').hexdigest()
     corpus, source_id = ident('corpus', 'typed-kg-v2'), ident('source', digest, 'typed-kg-v2')
     stable = [graph[k] for k in ['version', 'selection', 'records', 'entities', 'assertions', 'events', 'identityProposals']]
+    if graph.get('interpretations'):
+        stable.append(graph['interpretations'])
+    if 'artifactIdentity' in graph:
+        stable.append(graph['artifactIdentity'])
     run = ident('run', stable)
     graph['runId'] = run
     destination = root / 'sources' / (source_id + '.pdf'); destination.parent.mkdir(exist_ok=True)
@@ -42,12 +47,16 @@ def persist(graph, root):
             (source_id, corpus, source.name, 'pdf', source.stat().st_size, digest, 'draft'))
         conn.execute('INSERT INTO kg_runs(id,source_id,state,graph_json) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET graph_json=excluded.graph_json',
             (run, source_id, 'complete', json.dumps(graph, ensure_ascii=False)))
+        if parent_run and parent_run != run and conn.execute('SELECT 1 FROM kg_runs WHERE id=?', (parent_run,)).fetchone():
+            conn.execute('INSERT OR IGNORE INTO kg_identity_run_lineage VALUES (?,?)', (run, parent_run))
         source_pages = conn.execute("""SELECT s.id, MAX(json_array_length(r.graph_json,'$.selection'))
             FROM sources s JOIN kg_runs r ON r.source_id=s.id
             WHERE s.corpus_id=? AND r.state='complete' GROUP BY s.id""", (corpus,)).fetchall()
         conn.execute('UPDATE corpora SET description=? WHERE id=?',
             (f"{len(source_pages)}册、{sum(row[1] for row in source_pages)}页语料。属性、事件和实体分离；候选尚未独立验收。", corpus))
-        for table in ['kg_assertions', 'kg_events', 'kg_source_mentions', 'kg_records']:
+        conn.execute('DELETE FROM kg_artifact_identity_map WHERE run_id=?', (run,))
+        conn.execute('DELETE FROM kg_canonical_artifacts WHERE run_id=?', (run,))
+        for table in ['kg_assertions', 'kg_events', 'kg_source_mentions', 'kg_records', 'kg_interpretations']:
             conn.execute(f'DELETE FROM {table} WHERE run_id=?', (run,))
         conn.execute('DELETE FROM kg_entities WHERE run_id=?', (run,))
         for doc in graph['documents']:
@@ -71,11 +80,23 @@ def persist(graph, root):
             conn.execute('INSERT INTO kg_events VALUES (?,?,?,?)', (run,e['id'],e['kind'],json.dumps(e,ensure_ascii=False)))
         for m in graph['mentions']:
             conn.execute('INSERT INTO kg_source_mentions VALUES (?,?,?,?)', (run,m['id'],m['entityId'],json.dumps(m,ensure_ascii=False)))
+        for record in graph.get('interpretations', []):
+            conn.execute('INSERT INTO kg_interpretations VALUES (?,?,?,?,?,?)',
+                (run, record['id'], record['subject']['label'], record['kind'], record['value'], json.dumps(record,ensure_ascii=False)))
+        identity = graph.get('artifactIdentity', {})
+        for artifact in identity.get('entities', []):
+            conn.execute('INSERT INTO kg_canonical_artifacts VALUES (?,?,?,?,?)',
+                (run, artifact['id'], artifact['label'], artifact['decision'], json.dumps(artifact, ensure_ascii=False)))
+            for member in artifact['members']:
+                if member['volume'] != identity.get('volume'): continue
+                conn.execute('INSERT INTO kg_artifact_identity_map VALUES (?,?,?,?,?,?)',
+                    (run, member['entityId'], member['recordId'], artifact['id'], member['volume'], identity['version']))
         if conn.execute('PRAGMA foreign_key_check').fetchall(): raise ValueError('Foreign key violation')
     saved = json.loads(conn.execute('SELECT graph_json FROM kg_runs WHERE id=?',(run,)).fetchone()[0])
     if saved != graph: raise ValueError('Database payload mismatch')
     report = {'runId': run, 'database': str(root/'knowledge.sqlite3'), 'state': 'candidate',
         'records': len(graph['records']), 'assertions': len(graph['assertions']),
+        'interpretations': len(graph.get('interpretations', [])),
         'reviewsPreserved': conn.execute('SELECT COUNT(*) FROM kg_reviews WHERE run_id=?',(run,)).fetchone()[0],
         'foreignKeyViolations': 0}
     conn.close()

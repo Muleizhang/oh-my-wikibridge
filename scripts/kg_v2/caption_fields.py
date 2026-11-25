@@ -125,6 +125,8 @@ def caption_fields(extraction):
                 add(record, 'motif', value, base + start, base + end, 'caption_name_field')
             for match in CARRIER.finditer(line):
                 a, b = match.span('material')
+                if a and line[a-1] in '鎏镀错嵌包贴描涂泥洒':
+                    continue
                 if any(start <= a < end for start, end in motif_spans):
                     continue
                 add(record, 'material', MATERIALS[match['material']], base + a, base + b, 'caption_carrier_material')
@@ -135,6 +137,14 @@ def caption_fields(extraction):
             label, start, end = heading
             add(record, 'period', label, *record['titleSpan'], 'page_heading_inheritance',
                 {'label': label, 'span': [start, end], 'scope': 'same_page_only'})
+        if not any(f['recordId'] == record['id'] and f['kind'] == 'material' for f in fields):
+            from .name_materials import name_material
+            field, _ = name_material(record, doc)
+            if field:
+                add(record, 'material', field['label'], *field['span'], 'catalog_name_material-v1')
+        for field in fields:
+            if field['recordId'] == record['id'] and field['kind'] == 'motif' and field['label'] == '刻纹':
+                field.update(kind='technique', origin='catalog_name_process')
     return fields
 
 

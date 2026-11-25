@@ -2,13 +2,22 @@
 from .values import FIELD_LABELS
 
 RELATIONS = {
+    'artifact_type': {'label': '器类', 'subject': ['artifact'], 'object': ['artifact_type']},
     'decorated_with': {'label': '饰有纹样', 'subject': ['artifact', 'artifact_type'], 'object': ['motif']},
     'made_of': {'label': '材质', 'subject': ['artifact', 'artifact_type'], 'object': ['material']},
+    'decorated_with_material': {'label': '装饰材料', 'subject': ['artifact'], 'object': ['decoration_material']},
+    'has_shape': {'label': '造型', 'subject': ['artifact'], 'object': ['shape']},
     'uses_technique': {'label': '采用工艺', 'subject': ['artifact', 'artifact_type'], 'object': ['technique']},
     'period': {'label': '所属时代', 'subject': ['artifact', 'artifact_type', 'culture'], 'object': ['period']},
     'alias': {'label': '别名', 'subject': ['motif', 'technique', 'culture', 'artifact_type'], 'object': ['same_type']},
     'discovered_at': {'label': '发现地点', 'subject': ['artifact'], 'object': ['place']},
     'excavated_at': {'label': '出土地点', 'subject': ['artifact'], 'object': ['place']},
+    'collected_at': {'label': '采集地点', 'subject': ['artifact'], 'object': ['place']},
+    'held_by': {'label': '收藏单位', 'subject': ['artifact'], 'object': ['organization']},
+    'belongs_to_culture': {'label': '文化归属', 'subject': ['artifact'], 'object': ['culture']},
+    'has_composition': {'label': '构图形式', 'subject': ['artifact'], 'object': ['composition']},
+    'decorated_part': {'label': '装饰部位', 'subject': ['artifact'], 'object': ['decoration_part']},
+    'decoration_role': {'label': '装饰角色', 'subject': ['artifact'], 'object': ['decoration_role']},
     'distributed_in': {'label': '分布地区', 'subject': ['culture', 'motif'], 'object': ['place']},
 }
 

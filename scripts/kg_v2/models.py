@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 
 MODELS = {
+    'gliner': ('urchade/gliner_multi-v2.1', '443d26d654e0324125a96bebd8e796c14ff2efe6',
+               ['gliner_config.json', 'model.safetensors']),
     'uie': ('Casually/uie-base', '10ffc2501d5d23ccb58d54f92a586a5aeff57f57',
             ['*.json', '*.safetensors', 'vocab.txt']),
     'ltp': ('LTP/small', 'dea87bf0da3c5d054bbd426a78d7fa9efd347799',

@@ -49,11 +49,15 @@ class UIE:
                                                        trust_remote_code=False)
         self.parameters = sum(p.numel() for p in self.model.parameters())
     def query(self, text, prompts):
+        return self.query_pairs([(text, prompt) for prompt in prompts])
+
+    def query_pairs(self, pairs, batch_size=16):
+        """Batch independent (text, prompt) pairs, retaining each text's offsets."""
         import torch
         answers = []
-        for offset in range(0, len(prompts), 16):
-            batch = prompts[offset:offset + 16]
-            inputs = self.tokenizer(batch, [text] * len(batch), padding=True, truncation=False,
+        for offset in range(0, len(pairs), batch_size):
+            batch = pairs[offset:offset + batch_size]
+            inputs = self.tokenizer([prompt for text, prompt in batch], [text for text, prompt in batch], padding=True, truncation=False,
                                     return_offsets_mapping=True, return_tensors='pt')
             if inputs['input_ids'].shape[1] > 512:
                 raise ValueError('UIE prompt plus text exceeds 512 tokens; split the text first.')
@@ -63,22 +67,23 @@ class UIE:
                 starts, ends = self.model(**{k: v.to(self.device) for k, v in inputs.items()})
             starts, ends = starts.cpu().tolist(), ends.cpu().tolist()
             for row in range(len(batch)):
+                text = batch[row][0]
                 candidates = [j for j, p in enumerate(starts[row]) if p > self.threshold and sequence_ids[row][j] == 1]
                 stops = [j for j, p in enumerate(ends[row]) if p > self.threshold and sequence_ids[row][j] == 1]
                 # UIE pairs each eligible end with the nearest preceding predicted start.
-                pairs = {}
+                span_pairs = {}
                 a = b = 0
                 while a < len(candidates) and b < len(stops):
                     left, right = candidates[a], stops[b]
                     if left <= right:
-                        pairs[right] = left
+                        span_pairs[right] = left
                         a += 1
                         if left == right:
                             b += 1
                     else:
                         b += 1
                 found = []
-                for right, left in pairs.items():
+                for right, left in span_pairs.items():
                     begin, end = spans[row][left][0], spans[row][right][1]
                     if end > begin:
                         found.append({'text': text[begin:end], 'start': begin, 'end': end,

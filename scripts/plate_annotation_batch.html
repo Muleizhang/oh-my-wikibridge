@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>三册图版自动标注</title>
+<style>
+body{max-width:1100px;margin:32px auto;padding:0 20px;background:#f4f2ec;color:#29332e;font:15px/1.7 system-ui}h1{font-size:25px}a{color:#206255}progress{width:100%;height:22px}.stats{font-size:19px}table{border-collapse:collapse;width:100%;background:white}th,td{padding:8px 12px;border-bottom:1px solid #ddd;text-align:left}.note{color:#69746c}select{font:inherit;padding:5px}button{font:inherit}#error{color:#a23d23}
+</style>
+<h1>三册图版自动标注</h1>
+<p>OpenCV 图块检测 · 本地 OCR 编号识别 · 自动图注配对 · LLM 调用 0</p>
+<p class="note">结果保存为候选，不修改现有图谱。图注组不等同于实物身份；所有配对仍待核对。</p>
+<progress id="progress" max="1" value="0"></progress><p class="stats" id="stats">正在读取进度…</p>
+<p id="counts"></p><p id="volumes"></p><p id="error"></p>
+<p><a href="status.json" download>下载进度与异常记录</a> · <a href="../annotation-demo/index.html">查看最初的单页样例</a></p>
+<p><label>显示 <select id="filter"><option value="all">全部已处理页面</option><option value="needs_review">有待处理问题</option><option value="candidate">未触发问题规则</option><option value="error">运行失败</option></select></label></p>
+<table><thead><tr><th>册</th><th>PDF 页</th><th>子图框</th><th>已配对候选</th><th>状态</th></tr></thead><tbody id="pages"></tbody></table>
+<script>
+let state;const $=id=>document.getElementById(id);
+const labels={running:'运行中',complete:'处理完成',complete_with_errors:'处理完成，部分页失败',interrupted:'已中断',candidate:'候选待核对',needs_review:'有缺失或歧义',error:'运行失败'};
+function render(){
+  if(!state)return;
+  $('progress').max=state.total;$('progress').value=state.completed+state.failed;
+  $('stats').textContent=`${labels[state.status]||state.status} · ${state.completed+state.failed} / ${state.total} 页`;
+  $('counts').textContent=`${state.regions} 个子图框 · ${state.boundRegions} 个配对候选 · ${state.pagesWithIssues} 页触发缺失或歧义规则 · ${state.failed} 页运行失败`;
+  $('volumes').textContent=[1,2,3].map(v=>`第 ${v} 册已处理 ${state.pages.filter(p=>p.volume===v).length} 页`).join(' · ');
+  $('pages').replaceChildren();
+  const selected=$('filter').value;
+  for(const row of [...state.pages].reverse().filter(p=>selected==='all'||p.status===selected)){
+    const tr=document.createElement('tr');
+    for(const text of [row.volume,row.page,row.regions??'—',row.boundRegions??'—',labels[row.status]||row.status]){const td=document.createElement('td');td.textContent=text;tr.append(td)}
+    if(row.url){const a=document.createElement('a');a.href=row.url;a.textContent=String(row.page);tr.children[1].replaceChildren(a)}
+    tr.title=row.error||JSON.stringify(row.issues||[]);$('pages').append(tr);
+  }
+}
+async function refresh(){try{const response=await fetch('status.json',{cache:'no-store'});if(!response.ok)throw Error(`HTTP ${response.status}`);state=await response.json();$('error').textContent='';render()}catch(e){$('error').textContent=`进度读取失败 ${e.message}`}}
+$('filter').onchange=render;refresh();setInterval(refresh,5000);
+</script>
+</html>

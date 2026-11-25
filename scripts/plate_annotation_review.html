@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图版自动标注试验</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f1eb;color:#252927;font:15px/1.6 system-ui,sans-serif}
+header{padding:24px 30px;background:#fff;border-bottom:1px solid #d9ddd7}h1{font-size:24px;margin:0 0 8px}p{margin:8px 0}
+a{color:#206255}button{font:inherit;cursor:pointer;padding:5px 12px;border:1px solid #bdc6bf;border-radius:6px;background:#fff}
+button[aria-pressed=true]{background:#22594e;color:white}main{display:grid;grid-template-columns:minmax(380px,1fr) minmax(360px,1fr);gap:22px;padding:22px;align-items:start}
+.sheet{position:relative;line-height:0}.sheet>img{width:100%;display:block}.box,.number{position:absolute;border:2px solid var(--color);background:color-mix(in srgb,var(--color) 5%,transparent);cursor:pointer}
+.box:hover,.box.active{border-width:3px;background:color-mix(in srgb,var(--color) 15%,transparent)}.box span{position:absolute;top:0;left:0;background:var(--color);color:white;padding:3px 5px;font:bold 12px/1.1 system-ui}
+.number{border:2px dashed #aa7310;pointer-events:none}.dim{opacity:.15}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.group{background:#fff;border:1px solid #d6dbd5;border-left:5px solid var(--color);border-radius:7px;padding:14px;margin-bottom:15px;scroll-margin-top:15px}.group h2{font-size:17px;margin:0}.meta{font-size:13px;color:#65716a}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.tile{margin:0;min-width:0}.tile img{width:100%;height:170px;object-fit:contain;background:#f5f4ef;cursor:zoom-in}.tile figcaption{font-size:12px;color:#647067}
+.note{color:#75581f}.issues{color:#965020}dialog{max-width:94vw;max-height:94vh;border:0;padding:12px;border-radius:8px}dialog img{display:block;max-width:87vw;max-height:82vh;object-fit:contain}dialog::backdrop{background:#000b}
+@media(max-width:850px){main{grid-template-columns:1fr;padding:12px}header{padding:18px}.tile img{height:190px}}
+</style>
+<header>
+  <h1>图版自动标注试验</h1>
+  <p id="source"></p><p id="stats"></p>
+  <p class="note">OpenCV 图块检测 → 本地 OCR 编号识别 → 图注分组候选。全部待核对，未写入知识图谱。编号相同仅表示同一图注组，不判定同一实物。</p>
+  <p class="meta">复用已有全页 OCR，耗时包括图块检测和数字 OCR。OCR 分数不代表分组准确率，原始图注仍可能含错字。</p>
+  <a href="candidate-annotations.json" download>下载候选标注 JSON</a>
+</header>
+<main>
+  <section><div class="toolbar"><button id="showAll" type="button" aria-pressed="true">全部分组</button><button id="toggleBoxes" type="button" aria-pressed="true">显示标注框</button></div><div class="sheet" id="sheet"><img id="page" alt="原书扫描页"></div></section>
+  <section id="groups"><p class="issues" id="issues"></p></section>
+</main>
+<dialog id="zoom"><button type="button" id="closeZoom">关闭</button><img id="zoomImage" alt="原尺寸子图截图"></dialog>
+<script>
+const data=__PLATE_ANNOTATIONS__;
+const colors=['#35775b','#ad602d','#735ba0','#287c91','#a64d66','#7b751d','#3264a0','#8d5826'];
+const $=id=>document.getElementById(id);
+$('source').textContent=`${data.source} · PDF 第 ${data.page} 页`;
+$('stats').textContent=`${data.summary.regions} 个子图框 · ${data.summary.figureNumbers} 个编号 · ${data.summary.captions} 组图注 · ${data.summary.boundRegions} 个配对候选 · 用时 ${data.summary.seconds} 秒 · LLM 调用 0`;
+$('issues').textContent=data.issues.length?'存在缺失或歧义，请查看 JSON 中的 issues。':'';
+$('page').src=data.imageUrl;
+function color(item){return colors[((item||1)-1)%colors.length]}
+function focus(item,scroll=true){
+  document.querySelectorAll('.box').forEach(el=>{el.classList.toggle('dim',item!==null&&Number(el.dataset.item)!==item);el.classList.toggle('active',Number(el.dataset.item)===item)});
+  document.querySelectorAll('.group').forEach(el=>{el.style.opacity=item===null||Number(el.dataset.item)===item?'1':'.45'});
+  $('showAll').setAttribute('aria-pressed',String(item===null));
+  if(scroll&&item!==null)$(`group-${item}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function place(el,box){const[x1,y1,x2,y2]=box;Object.assign(el.style,{left:`${x1*100}%`,top:`${y1*100}%`,width:`${(x2-x1)*100}%`,height:`${(y2-y1)*100}%`})}
+for(const region of data.regions){
+  const el=document.createElement('div');el.className='box';el.dataset.item=region.item||'';el.style.setProperty('--color',color(region.item));place(el,region.normalizedBbox);
+  const label=document.createElement('span');label.textContent=`${region.item===null?'未配对':`图注 ${region.item}`} · ${region.id}`;el.append(label);el.title='点击查看配对的图注组';el.tabIndex=0;el.setAttribute('role','button');
+  el.onclick=()=>focus(region.item);el.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();focus(region.item)}};$('sheet').append(el);
+}
+for(const label of data.figureNumbers){const el=document.createElement('div');el.className='number';place(el,label.bbox.map((v,i)=>v/data.imageSize[i%2]));$('sheet').append(el)}
+function groupCard(caption,regions){
+  const card=document.createElement('article');card.className='group';card.dataset.item=caption.item||'';card.id=`group-${caption.item}`;card.style.setProperty('--color',color(caption.item));
+  const heading=document.createElement('h2');heading.textContent=`${caption.item===null?'未配对':caption.item} ${caption.label}`;card.append(heading);
+  const note=document.createElement('p');note.className='meta';note.textContent=`${regions.length} 个子图 · 自动配对待核对`;card.append(note);
+  const tiles=document.createElement('div');tiles.className='tiles';
+  for(const region of regions){const fig=document.createElement('figure');fig.className='tile';const image=document.createElement('img');image.src=region.cropUrl;image.alt=`${region.id} 子图`;image.loading='lazy';image.onclick=()=>{$('zoomImage').src=region.cropUrl;$('zoom').showModal()};const text=document.createElement('figcaption');text.textContent=`${region.id} · ${region.cropBbox[2]-region.cropBbox[0]} × ${region.cropBbox[3]-region.cropBbox[1]} px`;fig.append(image,text);tiles.append(fig)}
+  card.append(tiles);$('groups').append(card);
+}
+for(const caption of data.captions)groupCard(caption,data.regions.filter(r=>caption.regionIds.includes(r.id)));
+const unassigned=data.regions.filter(r=>r.item===null);if(unassigned.length)groupCard({item:null,label:'待配对的子图'},unassigned);
+$('showAll').onclick=()=>focus(null,false);
+$('toggleBoxes').onclick=()=>{const show=$('toggleBoxes').getAttribute('aria-pressed')!=='true';$('toggleBoxes').setAttribute('aria-pressed',String(show));document.querySelectorAll('.box,.number').forEach(el=>el.hidden=!show)};
+$('closeZoom').onclick=()=>$('zoom').close();
+$('zoom').onclick=event=>{if(event.target===$('zoom'))$('zoom').close()};
+</script>
+</html>

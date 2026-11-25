@@ -6,7 +6,8 @@ from collections import defaultdict
 from .common import ident
 
 NORMALIZATION_VERSION = 'name-format-v1'
-CONCEPT_KINDS = {'motif', 'period', 'technique', 'material', 'culture'}
+CONCEPT_KINDS = {'motif', 'period', 'technique', 'material', 'culture', 'artifact_type',
+                 'composition', 'decoration_part', 'decoration_role', 'shape', 'decoration_material'}
 HAN_GAP = re.compile(r'(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])')
 
 
@@ -100,7 +101,7 @@ def build_identity_review(graph):
             groups.append(group)
     groups.sort(key=lambda g: (-len(g['memberIds']), g['name'], g['kind']))
     concepts.sort(key=lambda g: (-len(g['memberIds']), g['name'], g['kind']))
-    return {'normalizationVersion': NORMALIZATION_VERSION,
+    review = {'normalizationVersion': NORMALIZATION_VERSION,
         'policy': 'Same-name, same-type motif/period/technique/material/culture mentions share a source-scoped concept. Artifacts, places and organizations retain separate identities. Manual same-name rejections suspend concept grouping in the graph view.',
         'sources': sources, 'groups': groups, 'concepts': concepts, 'differentNameProposalIds': different,
         'typeConflictProposalIds': conflicts,
@@ -110,3 +111,9 @@ def build_identity_review(graph):
                     'sameNamePairs': sum(len(g['proposalIds']) for g in groups),
                     'differentNamePairs': len(different), 'typeConflictPairs': len(conflicts),
                     'totalPairs': len(graph['identityProposals']), 'automaticIdentityMerges': 0}}
+    if graph.get('artifactIdentity'):
+        identity = graph['artifactIdentity']
+        review['artifactIdentityRuleVersion'] = identity['version']
+        review['summary']['automaticIdentityMerges'] = identity['summary']['automaticIdentityMerges']
+        review['policy'] += ' Strict evidence-bound artifact identities are tracked separately in artifactIdentity; original instances remain.'
+    return review

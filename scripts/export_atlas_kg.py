@@ -8,14 +8,27 @@ import re
 import shutil
 
 from PIL import Image
+from kg_v2.plate_images import attach_plate_images, source_pdf
+from kg_v2.identity_manifest import apply_manifest_identity
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA = ROOT / 'data/local-kg'
 PREDICATES = {
+    'artifact_type': 'artifact_type',
     'period': 'period',
     'decorated_with': 'motif',
     'made_of': 'material',
+    'decorated_with_material': 'decoration_material',
+    'has_shape': 'shape',
     'uses_technique': 'technique',
+    'belongs_to_culture': 'culture',
+    'has_composition': 'composition',
+    'decorated_part': 'decoration_part',
+    'decoration_role': 'decoration_role',
+    'excavated_at': 'place',
+    'discovered_at': 'place',
+    'collected_at': 'place',
+    'held_by': 'organization',
 }
 STATUS = '机器候选 · 尚未人工确认'
 PERIOD_LABEL = re.compile(
@@ -39,7 +52,7 @@ def evidence_box(evidence, documents):
     return [bbox[0] / size[0], bbox[1] / size[1], bbox[2] / size[0], bbox[3] / size[1]]
 
 
-def export(graph_path, image_manifest_path, image_dir, output):
+def export(graph_path, image_manifest_path, image_dir, output, plate_manifest_path=None):
     graph = read_json(graph_path)
     image_manifest = read_json(image_manifest_path)
     entities = {entity['id']: entity for entity in graph.get('entities', [])}
@@ -47,7 +60,7 @@ def export(graph_path, image_manifest_path, image_dir, output):
     documents = {(doc['page'], doc['engine']): doc for doc in graph.get('documents', [])}
     concept_by_member = {}
     for concept in graph.get('identityReview', {}).get('concepts', []):
-        if concept.get('kind') not in {'period', 'motif', 'material', 'technique'}:
+        if concept.get('kind') not in set(PREDICATES.values()) - {'place', 'organization'}:
             continue
         target = (concept['id'], concept['name'])
         for member_id in concept.get('memberIds', []):
@@ -153,7 +166,7 @@ def export(graph_path, image_manifest_path, image_dir, output):
                 'locator': relation['locator'],
                 'text': evidence.get('text', ''),
                 'previewUrl': evidence_preview,
-                'captionUrl': evidence_preview,
+                'captionUrl': '',
                 'bbox': evidence_box(evidence, documents),
                 'status': STATUS,
             }
@@ -176,6 +189,9 @@ def export(graph_path, image_manifest_path, image_dir, output):
                 'issues': statement.get('issues', []),
                 'status': STATUS,
                 'origin': statement.get('origin'),
+                'projectionStatus': statement.get('projectionStatus'),
+                'supersededBy': statement.get('supersededBy', []),
+                'correction': statement.get('correction'),
                 'binding': statement.get('binding'),
                 'supportingEvidence': [{**ev, 'previewUrl': preview_urls.get(int(ev['page']), ''),
                     'normalizedBbox': evidence_box(ev, documents)} for ev in statement.get('evidence', [])],
@@ -184,6 +200,7 @@ def export(graph_path, image_manifest_path, image_dir, output):
         items.append({
             'artifactId': record_id,
             'artifact': record['label'],
+            'item': record.get('item'),
             'page': page,
             'locator': f"PDF 第 {page} 页 · 图注 {record.get('item', '')}",
             'status': STATUS,
@@ -191,7 +208,10 @@ def export(graph_path, image_manifest_path, image_dir, output):
             'evidenceId': first_evidence_id,
             'imageUrl': preview,
             'detailUrl': preview,
-            'captionUrl': preview,
+            'captionUrl': '',
+            'pageUrl': preview,
+            'imageKind': 'page',
+            'detailLabel': '原书整页',
         })
 
     for page in source_pages:
@@ -227,12 +247,24 @@ def export(graph_path, image_manifest_path, image_dir, output):
         'rows': rows,
         'evidence': list(evidence_items.values()),
         'omittedPeriodCandidates': omitted_period_rows,
+        'interpretations': [{**record, 'pageUrl': preview_urls.get(record['page'], ''),
+                            'locator': f"PDF 第 {record['page']} 页"}
+                           for record in graph.get('interpretations', [])],
     }
+    explicit_plate_manifest = plate_manifest_path is not None
+    plate_manifest_path = (Path(plate_manifest_path) if plate_manifest_path else
+                           Path(graph_path).parent / 'plate-images' / 'manifest.json')
+    if plate_manifest_path.is_file():
+        attach_plate_images(manifest, plate_manifest_path, source_pdf(graph_path), output)
+    elif explicit_plate_manifest:
+        raise FileNotFoundError(plate_manifest_path)
+    apply_manifest_identity(manifest, graph.get('artifactIdentity'))
     output.mkdir(parents=True, exist_ok=True)
     (output / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False))
     shutil.copyfile(ROOT / 'scripts/atlas_viewer.html', output / 'atlas_viewer.html')
     print(json.dumps(manifest['summary'], ensure_ascii=False, indent=2))
     print(f"Star atlas ready: {output / 'atlas_viewer.html'}")
+    return manifest
 
 
 def main():
@@ -241,8 +273,10 @@ def main():
     parser.add_argument('--page-images', type=Path, default=DEFAULT_DATA / 'page-images.json')
     parser.add_argument('--image-dir', type=Path, default=DEFAULT_DATA / 'images')
     parser.add_argument('--output', type=Path, default=DEFAULT_DATA / 'star-atlas')
+    parser.add_argument('--plate-manifest', type=Path,
+                        help='Source-verified artifact/detail/caption crops; defaults to graph directory/plate-images/manifest.json')
     args = parser.parse_args()
-    export(args.graph, args.page_images, args.image_dir, args.output)
+    export(args.graph, args.page_images, args.image_dir, args.output, args.plate_manifest)
 
 
 if __name__ == '__main__':

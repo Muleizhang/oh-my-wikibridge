@@ -308,6 +308,16 @@ button:focus-visible, input:focus-visible {
   background: var(--line);
   margin: 0 4px;
 }
+.type-filter {
+  max-width: 190px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-2);
+  background: var(--bg-elev);
+  font: inherit;
+  font-size: 12px;
+}
 
 .chip {
   display: inline-flex;
@@ -396,6 +406,7 @@ button:focus-visible, input:focus-visible {
 .focus-kind.era { background: rgba(212, 166, 106, 0.18); color: var(--era-color); }
 .focus-kind.material { background: rgba(124, 168, 150, 0.18); color: var(--mat-color); }
 .focus-kind.motif { background: rgba(206, 130, 100, 0.18); color: var(--motif-color); }
+.focus-kind.artifact_type { background: rgba(158, 148, 198, 0.18); color: #9e94c6; }
 
 .focus-picker-btn {
   display: inline-flex;
@@ -680,8 +691,14 @@ button:focus-visible, input:focus-visible {
   flex-direction: column;
   gap: 14px;
 }
+.drawer-identity { font-size: 11px; line-height: 1.5; color: var(--ink-3); }
+.drawer-source { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.drawer-source[hidden] { display: none; }
+.drawer-source select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 7px;
+  color: var(--ink); background: var(--bg-elev); font: inherit; font-size: 12px; }
 .drawer-figure {
   position: relative;
+  flex-shrink: 0;
   border-radius: 12px;
   overflow: hidden;
   background: rgba(128, 128, 128, 0.08);
@@ -715,6 +732,26 @@ html[data-theme="light"] .drawer-figure.mono img {
   border: 1px solid var(--line);
   color: var(--ink-2);
 }
+.drawer-gallery {
+  display: flex;
+  flex-shrink: 0;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 2px 1px 6px;
+}
+.drawer-gallery[hidden] { display: none; }
+.drawer-gallery button {
+  flex: 0 0 64px;
+  height: 54px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg-elev);
+  cursor: pointer;
+}
+.drawer-gallery button[aria-pressed="true"] { border: 2px solid var(--ink-2); }
+.drawer-gallery button:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }
+.drawer-gallery img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 .rel-section {
   display: flex;
@@ -756,6 +793,39 @@ html[data-theme="light"] .drawer-figure.mono img {
 .jump-pill.era { border-color: rgba(212, 166, 106, 0.35); color: var(--era-color); }
 .jump-pill.material { border-color: rgba(124, 168, 150, 0.35); color: var(--mat-color); }
 .jump-pill.motif { border-color: rgba(206, 130, 100, 0.35); color: var(--motif-color); }
+.jump-pill.artifact_type { border-color: rgba(158, 148, 198, 0.35); color: #9e94c6; }
+.interpretation-card { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-card); }
+.interpretation-card h3 { font-family: var(--serif); font-size: 19px; margin: 0 0 12px; }
+.interpretation-card p { font-size: 12px; line-height: 1.7; color: var(--ink-2); white-space: pre-wrap; }
+.interpretation-card .source-label { color: var(--ink-3); font-size: 11px; }
+.interpretation-card details { margin: 12px 0; font-size: 12px; }
+.interpretation-card .dock-group { margin-top: 14px; }
+body.interpretation-view .focus-bar, body.interpretation-view #clusterSwitch,
+body.interpretation-view .graph-hud-bottom { display: none; }
+.graph-attributes { flex: 0 0 100%; pointer-events: none !important; }
+.graph-attributes[hidden] { display: none; }
+.graph-attribute-card { width: min(390px, 100%); padding: 13px 16px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--bg-elev); backdrop-filter: blur(18px); box-shadow: var(--shadow); pointer-events: auto; }
+.graph-attribute-card > summary { cursor: pointer; font: 600 14px var(--serif); color: var(--ink); }
+.graph-attribute-rows { display: grid; gap: 10px; margin-top: 13px; }
+.pattern-attribute-row { display: grid; grid-template-columns: 64px 1fr; align-items: start; gap: 9px; font-size: 12px; }
+.pattern-attribute-label { padding-top: 5px; color: var(--ink-3); }
+.pattern-attribute-values { display: flex; flex-wrap: wrap; gap: 6px; }
+.pattern-attribute { border: 1px solid rgba(214,178,112,.4); border-radius: 999px; padding: 4px 10px;
+  font-size: 12px; color: #d6b270; background: rgba(214,178,112,.08); }
+.pattern-attribute.belief { color: #b0a0d9; border-color: rgba(176,160,217,.4); background: rgba(176,160,217,.08); }
+.pattern-attribute:hover, .pattern-attribute[aria-pressed="true"] { background: var(--bg-hover); border-color: currentColor; }
+[data-theme="light"] .pattern-attribute { color: #92652d; }
+[data-theme="light"] .pattern-attribute.belief { color: #75529c; }
+.graph-attribute-evidence { border-top: 1px solid var(--line); margin-top: 13px; padding-top: 11px; max-height: min(42vh, 380px); overflow-y: auto; }
+.graph-attribute-evidence[hidden] { display: none; }
+.graph-attribute-evidence header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+.graph-attribute-evidence article { margin-top: 12px; }
+.graph-attribute-evidence .source-label { font-size: 11px; color: var(--ink-3); }
+.graph-attribute-evidence blockquote { margin: 7px 0; font-size: 12px; line-height: 1.7; color: var(--ink-2); white-space: pre-wrap; }
+.pattern-attribute-caption { font-size: 11px; color: var(--ink-3); margin: 12px 0 7px; }
+body.attribute-view .focus-bar, body.attribute-view #clusterSwitch,
+body.attribute-view .graph-hud-bottom { display: none; }
 .jump-pill::after {
   content: "↗";
   font-size: 10px;
@@ -1859,7 +1929,7 @@ html[data-theme="dark"] .proof-caption-img {
   <canvas class="canvas-layer river-flow-layer" id="riverFlowCanvas" aria-hidden="true"></canvas>
   <div class="river-hero" id="riverHero">
     <h1 id="riverHeading">纹样长河</h1>
-    <p id="riverSub">时代 · 材质 · 纹样</p>
+    <p id="riverSub">时代 · 材质 · 纹样 · 器类</p>
   </div>
   <div class="river-tools">
     <button type="button" class="chip" id="riverZoomOut" aria-label="缩小长河">−</button>
@@ -1878,6 +1948,8 @@ html[data-theme="dark"] .proof-caption-img {
     <span class="dock-sep"></span>
     <div class="dock-group" id="riverMats"></div>
     <div class="dock-group" style="margin-left:auto">
+      <label class="dock-label" for="riverTypeFilter">器类</label>
+      <select class="type-filter" id="riverTypeFilter" aria-label="长河器类筛选"></select>
       <button type="button" class="chip" id="riverDatedToggle" aria-pressed="false" title="仅显示带有明确时代标注的条目">仅已定代</button>
     </div>
   </div>
@@ -1907,6 +1979,13 @@ html[data-theme="dark"] .proof-caption-img {
       </div>
       <button type="button" class="icon-pill" id="toggleUnlabeled" aria-pressed="true" title="显示或隐藏未标注聚类项">含待补项</button>
     </div>
+    <aside class="graph-attributes" id="graphAttributes" aria-label="纹样属性" hidden>
+      <details class="graph-attribute-card" open>
+        <summary id="graphAttributeTitle"></summary>
+        <div class="graph-attribute-rows" id="graphAttributeRows"></div>
+        <div class="graph-attribute-evidence" id="graphAttributeEvidence" hidden></div>
+      </details>
+    </aside>
   </div>
 
   <div class="graph-hud-bottom">
@@ -1926,8 +2005,10 @@ html[data-theme="dark"] .proof-caption-img {
     <button type="button" data-kind="era">时代</button>
     <button type="button" data-kind="material">材质</button>
     <button type="button" data-kind="motif">纹样</button>
+    <button type="button" data-kind="artifact_type">器类</button>
   </div>
-  <input type="search" class="switcher-search" id="switcherSearch" placeholder="筛选时代、材质或纹样…">
+  <select class="type-filter" id="switcherExtraDimension" aria-label="切换其他知识维度" style="margin:8px 12px 0"></select>
+  <input type="search" class="switcher-search" id="switcherSearch" placeholder="筛选当前知识维度…">
   <div class="switcher-list" id="switcherList"></div>
 </div>
 
@@ -1940,12 +2021,24 @@ html[data-theme="dark"] .proof-caption-img {
         <button type="button" data-cat="era">按时代</button>
         <button type="button" data-cat="material">按材质</button>
         <button type="button" data-cat="motif">按纹样</button>
+        <button type="button" data-cat="artifact_type">按器类</button>
       </div>
+      <select class="type-filter" id="catalogExtraDimension" aria-label="其他图录维度"></select>
+    </div>
+    <div class="dock-group" id="interpretationTools" style="margin-bottom:18px" hidden>
+      <input type="search" class="type-filter" id="interpretationSearch" placeholder="搜索对象、工艺、构图或含义" aria-label="搜索文献关系" style="max-width:300px;width:260px">
+      <select class="type-filter" id="interpretationKind" aria-label="解释类别">
+        <option value="">全部解释</option><option value="symbolism">象征意义</option>
+        <option value="belief">信仰语境</option><option value="ritual">礼仪语境</option>
+        <option value="technique">工艺</option><option value="composition">构图形式</option>
+      </select>
+      <span class="dock-label" id="interpretationCount"></span>
     </div>
     <div class="entity-grid" id="catalogGrid"></div>
     <div class="specimen-section" id="catalogSpecimens">
       <div class="specimen-head">
         <h2 id="specimenHeading">全部条目</h2>
+        <select class="type-filter" id="specimenTypeFilter" aria-label="图录条目器类筛选"></select>
         <div class="dock-group" id="specimenPager"></div>
       </div>
       <div class="specimen-grid" id="specimenGrid"></div>
@@ -1993,10 +2086,16 @@ html[data-theme="dark"] .proof-caption-img {
     <button type="button" class="drawer-close" id="drawerClose" aria-label="关闭">✕</button>
   </div>
   <div class="drawer-body">
+    <div class="drawer-source" id="drawerSourceWrap" hidden>
+      <div class="drawer-identity" id="drawerIdentity"></div>
+      <label class="drawer-identity" for="drawerSource">选择源图录</label>
+      <select id="drawerSource" aria-label="选择源图录"></select>
+    </div>
     <div class="drawer-figure" id="drawerFig" title="点击放大">
       <img id="drawerImg" alt="">
       <span class="drawer-fig-badge" id="drawerFigBadge">点击放大</span>
     </div>
+    <div class="drawer-gallery" id="drawerGallery" hidden></div>
     <div class="rel-section" id="drawerRels"></div>
     <div class="proof-box" id="drawerProof">
       <blockquote class="proof-quote" id="drawerQuote"></blockquote>
@@ -2012,7 +2111,7 @@ html[data-theme="dark"] .proof-caption-img {
 <!-- Quick Jump Command Palette -->
 <div class="palette-backdrop" id="paletteBackdrop" hidden>
   <div class="palette" role="dialog" aria-label="快速跳转">
-    <input type="search" id="paletteInput" placeholder="搜索纹样、时代、材质、器物或页码…">
+    <input type="search" id="paletteInput" placeholder="搜索纹样、器类、工艺、文化、地点或器物…">
     <div class="palette-results" id="paletteResults"></div>
   </div>
 </div>
@@ -2063,7 +2162,7 @@ html[data-theme="dark"] .proof-caption-img {
       <!-- Lens 1: Path Form -->
       <div class="r-form" id="rFormPath">
         <div class="r-row">
-          <input class="r-input" id="rPathSrc" list="kgEntityDatalist" placeholder="起点（时代 / 材质 / 纹样）">
+          <input class="r-input" id="rPathSrc" list="kgEntityDatalist" placeholder="起点（时代 / 材质 / 纹样 / 器类）">
           <span style="color:var(--ink-3);font-size:12px">→</span>
           <input class="r-input" id="rPathDst" list="kgEntityDatalist" placeholder="终点">
           <button type="button" class="r-btn" id="rRunPath">推演</button>
@@ -2078,6 +2177,13 @@ html[data-theme="dark"] .proof-caption-img {
             <option value="era">时代</option>
             <option value="material">材质</option>
             <option value="motif">纹样</option>
+            <option value="artifact_type">器类</option>
+            <option value="technique">工艺</option>
+            <option value="culture">文化</option>
+            <option value="composition">构图</option>
+            <option value="decoration_part">部位</option>
+            <option value="decoration_role">角色</option>
+            <option value="organization">收藏</option>
           </select>
           <select class="r-select" id="rCmpA"></select>
           <span style="color:var(--ink-3);font-size:11px">vs</span>
@@ -2308,16 +2414,21 @@ __REASONER_JS__
       ? manifest.items
       : [...new Map((manifest.rows || []).map(r => [r.artifactId, r])).values()];
 
-    const items = rawItems.map((it, idx) => {
-      const rs = rowsByArt.get(it.artifactId) || [];
+    const normalizeItem = (it, idx, sourceRows = null) => {
+      const rs = sourceRows || rowsByArt.get(it.artifactId) || [];
       const periods = [...new Set(rs.filter(r => r.predicate === 'period').map(r => r.object))];
       const materials = [...new Set(rs.filter(r => r.predicate === 'made_of').map(r => r.object))];
       const motifs = [...new Set(rs.filter(r => r.predicate === 'decorated_with').map(r => r.object))];
       const techniques = [...new Set(rs.filter(r => r.predicate === 'uses_technique').map(r => r.object))];
+      const artifactTypes = [...new Set([...(it.artifactTypes || []), ...rs.filter(r => r.predicate === 'artifact_type').map(r => r.object)])];
+      const extraValues = Object.fromEntries(Object.entries(EXTRA_DIMENSIONS).map(([kind, dim]) =>
+        [dim.field, [...new Set([...(it[dim.field] || []), ...rs.filter(r => predToKind(r.predicate) === kind).map(r => r.object)])]]));
       const eraGroups = [...new Set(periods.map(p => eraChronology(p).group))];
       const ev = evMap.get(it.evidenceId) || {};
       const thumbUrl = it.detailUrl || it.imageUrl || ev.previewUrl || '';
       const plateUrl = it.imageUrl || it.detailUrl || ev.previewUrl || '';
+      const pageUrl = it.pageUrl || ev.previewUrl || '';
+      const imageKind = it.imageKind || (it.imageUrl && it.imageUrl !== pageUrl ? 'artifact' : 'page');
       return {
         idx,
         id: it.artifactId,
@@ -2336,16 +2447,57 @@ __REASONER_JS__
         materials,
         motifs,
         techniques,
+        ...extraValues,
+        artifactTypes,
         rows: rs,
         thumbUrl,
         plateUrl,
+        imageKind,
+        imageCandidates: it.imageCandidates || [],
+        imageReviewStatus: it.imageReviewStatus || '',
+        sourceRecordId: it.sourceRecordId || it.artifactId,
+        sourceEntityId: it.sourceEntityId || '',
+        canonicalId: it.canonicalArtifactId || it.artifactId,
+        identityDecision: it.identityDecision || '',
         captionUrl: it.captionUrl || ev.captionUrl || '',
-        pageUrl: ev.previewUrl || '',
+        pageUrl,
         bbox: ev.bbox || null,
         hasPeriod: periods.length > 0,
-        hasRelation: periods.length > 0 || materials.length > 0 || motifs.length > 0,
+        hasRelation: rs.length > 0,
       };
-    });
+    };
+    const items = rawItems.map((item, index) => normalizeItem(item, index));
+    const itemById = new Map(items.map(item => [item.id, item]));
+    const sourceRowsById = new Map();
+    for (const row of (manifest.sourceRows || manifest.rows || [])) {
+      if (row.projectionStatus === 'superseded' || row.supersededBy?.length || row.reviewStatus === 'rejected') continue;
+      const key = row.sourceRecordId || row.artifactId;
+      if (!sourceRowsById.has(key)) sourceRowsById.set(key, []);
+      sourceRowsById.get(key).push(row);
+    }
+    const rawSources = manifest.sourceItems || rawItems.flatMap(item => item.sourceRecords?.length ? item.sourceRecords : [item]);
+    const sourceItems = rawSources.map((source, index) => normalizeItem(source, index,
+      sourceRowsById.get(source.sourceRecordId || source.artifactId) || []));
+    const sourceById = new Map();
+    const canonicalBySource = new Map();
+    const sourcesByCanonical = new Map();
+    for (const source of sourceItems) {
+      for (const key of [source.id, source.sourceRecordId, source.sourceEntityId].filter(Boolean)) sourceById.set(key, source);
+      const canonical = itemById.get(source.canonicalId) || itemById.get(source.id);
+      if (!sourcesByCanonical.has(source.canonicalId)) sourcesByCanonical.set(source.canonicalId, []);
+      sourcesByCanonical.get(source.canonicalId).push(source);
+      if (canonical) for (const key of [source.id, source.sourceRecordId, source.sourceEntityId].filter(Boolean)) canonicalBySource.set(key, canonical);
+    }
+    for (const item of items) {
+      const raw = rawItems[item.idx];
+      item.sourceRecords = sourcesByCanonical.get(item.id) || [];
+      if (!item.sourceRecords.length && raw.sourceRecords?.length) item.sourceRecords = raw.sourceRecords.map((source, index) => {
+        const normalized = sourceById.get(source.sourceRecordId || source.artifactId) || normalizeItem(source, index);
+        canonicalBySource.set(normalized.id, item);
+        return normalized;
+      });
+      if (!item.sourceRecords.length) item.sourceRecords = [sourceById.get(item.id) || item];
+    }
 
     // Aggregate canonical Era entries (grouped cleanly by dynasty family, preserving raw sub-periods)
     const eraMap = new Map();
@@ -2390,6 +2542,29 @@ __REASONER_JS__
       .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, 'zh-Hans'))
       .map(m => ({ ...m, count: m.items.length }));
 
+    const typeMap = new Map();
+    for (const it of items) {
+      for (const type of it.artifactTypes) {
+        if (!typeMap.has(type)) typeMap.set(type, { id: type, name: type, items: [] });
+        typeMap.get(type).items.push(it);
+      }
+    }
+    const artifactTypes = [...typeMap.values()]
+      .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, 'zh-Hans'))
+      .map(type => ({ ...type, count: type.items.length }));
+    const extraEntries = {};
+    for (const [kind, dim] of Object.entries(EXTRA_DIMENSIONS)) {
+      const entries = new Map();
+      for (const item of items) for (const value of item[dim.field]) {
+        if (!entries.has(value)) entries.set(value, { id: value, name: value, items: [] });
+        entries.get(value).items.push(item);
+      }
+      const list = [...entries.values()].map(entry => ({ ...entry, count: entry.items.length }))
+        .sort((a, b) => b.count-a.count || a.name.localeCompare(b.name, 'zh-Hans'));
+      extraEntries[dim.field] = list;
+      extraEntries[kind+'ById'] = new Map(list.map(entry => [entry.id, entry]));
+    }
+
     // The river is an ordered period index, not a duration or popularity scale.
     const eraPos = new Map();
     eras.forEach((e, i) => {
@@ -2420,18 +2595,40 @@ __REASONER_JS__
       pagesByVolume.get(key).push(page);
     }
 
+    // Index document-backed pattern properties once; never inherit them onto
+    // artifact records or change the graph's nodes, edges or clustering.
+    const patternAttributes = new Map();
+    for (const record of manifest.interpretations || []) {
+      if (!['symbolism', 'belief'].includes(record.kind)) continue;
+      const subject = patternAttributeKey(record.subject.label);
+      if (!patternAttributes.has(subject)) patternAttributes.set(subject, new Map());
+      const groups = patternAttributes.get(subject), key = record.kind + ':' + patternAttributeKey(record.value, false);
+      if (!groups.has(key)) groups.set(key, { key, kind: record.kind, value: record.value,
+        label: record.kind === 'symbolism' ? '象征意义' : '信仰关联', records: [] });
+      groups.get(key).records.push(record);
+    }
+
     return {
       title: manifest.title || '纹样知识图谱',
+      interpretations: manifest.interpretations || [],
+      patternAttributes,
       volumes: manifest.volumes || [],
       pagesByVolume,
       items,
-      itemById: new Map(items.map(i => [i.id, i])),
+      itemById,
+      sourceItems,
+      sourceById,
+      canonicalBySource,
+      identityVersion: manifest.artifactIdentity?.version || null,
       eras,
       eraById: new Map(eras.map(e => [e.id, e])),
       materials,
       matById: new Map(materials.map(m => [m.id, m])),
       motifs,
       motifById: new Map(motifs.map(m => [m.id, m])),
+      artifactTypes,
+      typeById: new Map(artifactTypes.map(type => [type.id, type])),
+      ...extraEntries,
       pages,
       evMap,
     };
@@ -2859,16 +3056,18 @@ __REASONER_JS__
     riverDatedOnly: false,
     riverHighlightEra: null,
     riverHighlightMat: null,
+    riverTypeFilter: '',
     // Graph state
-    focusKind: 'era',      // 'era' | 'material' | 'motif'
+    focusKind: 'era',
     focusId: '',
-    clusterBy: 'material', // 'era' | 'material' | 'motif'
+    clusterBy: 'material',
     dim: '2d',             // '2d' | '3d'
     showUnlabeled: true,
     history: [],           // navigation trail [{kind, id, clusterBy}]
     // Catalog state
     catalogTab: 'era',
     catalogPage: 0,
+    catalogTypeFilter: '',
     // Pages state
     currentPage: 1,
     activePageItemId: null,
@@ -2878,22 +3077,114 @@ __REASONER_JS__
 
   function defaultClusterFor(kind) {
     if (kind === 'era') return 'material';   // 查看某时代的纹样 → 默认按材质聚类
-    if (kind === 'material') return 'motif'; // 查看某材质的纹样 → 默认按纹样聚类
+    if (kind !== 'motif') return 'motif';
     return 'era';                            // 查看某纹样 → 默认按时代聚类
   }
 
   function clusterOptionsFor(kind) {
-    if (kind === 'era') return [['material', '按材质'], ['motif', '按纹样']];
-    if (kind === 'material') return [['motif', '按纹样'], ['era', '按时代']];
-    return [['era', '按时代'], ['material', '按材质']];
+    const first = defaultClusterFor(kind);
+    return [first, ...Object.keys(DIMENSIONS).filter(k => k !== kind && k !== first && dimensionEntries(k).length)]
+      .map(k => [k, '按' + KIND_LABEL[k]]);
   }
 
-  const KIND_LABEL = { era: '时代', material: '材质', motif: '纹样' };
+  const DIMENSIONS = {
+    era: { label: '时代', list: 'eras', index: 'eraById', values: 'eraGroups' },
+    material: { label: '材质', list: 'materials', index: 'matById', values: 'materials' },
+    motif: { label: '纹样', list: 'motifs', index: 'motifById', values: 'motifs' },
+    artifact_type: { label: '器类', list: 'artifactTypes', index: 'typeById', values: 'artifactTypes' },
+    ...Object.fromEntries(Object.entries(EXTRA_DIMENSIONS).map(([kind, dim]) =>
+      [kind, { label: dim.label, list: dim.field, index: kind+'ById', values: dim.field }])),
+  };
+  const KIND_LABEL = Object.fromEntries(Object.entries(DIMENSIONS).map(([kind, dim]) => [kind, dim.label]));
+  const dimensionEntries = kind => G[DIMENSIONS[kind]?.list] || [];
+  const dimensionIndex = kind => G[DIMENSIONS[kind]?.index];
+  const dimensionValues = (item, kind) => item[DIMENSIONS[kind]?.values] || [];
 
   const $ = id => document.getElementById(id);
 
   function sourcePageLabel(item) {
     return `${item.volume ? item.volume + ' · ' : ''}PDF 第 ${item.volumePage || item.page} 页`;
+  }
+
+  function patternAttributeKey(label, motif = true) {
+    const value = String(label || '').normalize('NFKC').replace(/\s+/g, '');
+    return motif ? value.replace(/纹(?:样)?$/, '') : value;
+  }
+
+  function getPatternAttributes(subject) {
+    return [...(G.patternAttributes.get(patternAttributeKey(subject))?.values() || [])];
+  }
+
+  function appendPatternAttributeRows(target, subject, select) {
+    const groups = getPatternAttributes(subject);
+    for (const kind of ['symbolism', 'belief']) {
+      const values = groups.filter(group => group.kind === kind);
+      if (!values.length) continue;
+      const row = document.createElement('div'); row.className = 'pattern-attribute-row';
+      const label = document.createElement('span'); label.className = 'pattern-attribute-label'; label.textContent = values[0].label;
+      const tags = document.createElement('div'); tags.className = 'pattern-attribute-values';
+      for (const group of values) {
+        const button = document.createElement('button'); button.type = 'button';
+        button.className = 'pattern-attribute ' + kind; button.textContent = group.value;
+        button.dataset.attributeKey = group.key; button.setAttribute('aria-pressed', 'false');
+        button.title = `查看${group.records.length}处原文`; button.onclick = () => select(group);
+        tags.append(button);
+      }
+      row.append(label, tags); target.append(row);
+    }
+  }
+
+  function renderGraphPatternAttributes() {
+    const panel = $('graphAttributes');
+    const subject = stageOverlay?.type === 'attributes' ? stageOverlay.attributeSubject
+      : !stageOverlay && state.focusKind === 'motif' ? state.focusId : null;
+    const groups = subject ? getPatternAttributes(subject) : [];
+    panel.hidden = !groups.length;
+    if (!groups.length) { panel.dataset.subject = ''; return; }
+    if (panel.dataset.subject === subject) return;
+    panel.dataset.subject = subject;
+    $('graphAttributeTitle').textContent = `${subject}的属性`;
+    $('graphAttributeRows').replaceChildren();
+    $('graphAttributeEvidence').hidden = true;
+    appendPatternAttributeRows($('graphAttributeRows'), subject, group => showPatternAttributeEvidence(subject, group));
+  }
+
+  function showPatternAttributeEvidence(subject, group) {
+    const panel = $('graphAttributes'), proof = $('graphAttributeEvidence');
+    panel.querySelector('details').open = true;
+    panel.querySelectorAll('.pattern-attribute').forEach(button =>
+      button.setAttribute('aria-pressed', String(button.dataset.attributeKey === group.key)));
+    const header = document.createElement('header'), title = document.createElement('strong');
+    title.textContent = `${subject} · ${group.label} · ${group.value}`;
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'chip'; close.textContent = '收起原文';
+    close.onclick = () => { proof.hidden = true; panel.querySelectorAll('.pattern-attribute').forEach(b => b.setAttribute('aria-pressed', 'false')); };
+    header.append(title, close);
+    const sources = group.records.map(record => {
+      const article = document.createElement('article'), locator = document.createElement('span');
+      locator.className = 'source-label'; locator.textContent = record.locator || sourcePageLabel(record);
+      const quote = document.createElement('blockquote'); quote.textContent = record.text;
+      const original = document.createElement('button'); original.type = 'button'; original.className = 'chip'; original.textContent = '查看原页';
+      original.onclick = () => { clearStageOverlay(); closeDrawer(); state.currentPage = record.page; switchView('pages'); };
+      article.append(locator, quote, original); return article;
+    });
+    proof.replaceChildren(header, ...sources); proof.hidden = false;
+  }
+
+  function openPatternAttributes(subject, selectedKey = null) {
+    closeDrawer();
+    const entry = G.motifById.get(subject) || G.motifs.find(m => patternAttributeKey(m.name) === patternAttributeKey(subject));
+    if (entry) openGraph('motif', entry.id);
+    else {
+      const node = { key: 'pattern-property:' + subject, label: subject, kind: 'motif', roleTag: '纹样属性',
+        x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, baseR: 48, color: colorFor('motif', subject),
+        sx: 0, sy: 0, sz: 0, sr: 48, hint: '在左侧查看该纹样的属性与出处' };
+      applyStageOverlay({ type: 'attributes', attributeSubject: subject, banner: subject + ' · 属性与出处',
+        graphScene: { kind: 'attributes', nodes: [node], edges: [], extent: 230 } }, true);
+      renderGraphPatternAttributes();
+      syncHash();
+    }
+    const group = getPatternAttributes(subject).find(g => g.key === selectedKey);
+    if (group) showPatternAttributeEvidence(subject, group);
   }
 
   function setTheme(theme) {
@@ -2911,20 +3202,18 @@ __REASONER_JS__
   }
 
   function openGraph(kind, id, opts = {}) {
+    if (!Object.hasOwn(DIMENSIONS, kind)) kind = 'era';
     // Normalize era sub-period to macro-era group if needed
     if (kind === 'era' && !G.eraById.has(id)) {
       const grp = eraChronology(id).group;
       if (G.eraById.has(grp)) id = grp;
     }
     // Validate entity exists, fallback gracefully
-    if (kind === 'era' && !G.eraById.has(id)) id = G.eras[0]?.id || '';
-    if (kind === 'material' && !G.matById.has(id)) id = G.materials[0]?.id || '';
-    if (kind === 'motif' && !G.motifById.has(id)) id = G.motifs[0]?.id || '';
+    if (!dimensionIndex(kind).has(id)) id = dimensionEntries(kind)[0]?.id || '';
     if (!id) {
       // Fallback to whichever taxonomy has entries
-      if (G.eras.length) { kind = 'era'; id = G.eras[0].id; }
-      else if (G.materials.length) { kind = 'material'; id = G.materials[0].id; }
-      else if (G.motifs.length) { kind = 'motif'; id = G.motifs[0].id; }
+      kind = Object.keys(DIMENSIONS).find(k => dimensionEntries(k).length) || 'era';
+      id = dimensionEntries(kind)[0]?.id || '';
     }
 
     const pushHistory = opts.pushHistory !== false;
@@ -2935,7 +3224,7 @@ __REASONER_JS__
 
     state.focusKind = kind;
     state.focusId = id;
-    state.clusterBy = opts.clusterBy || defaultClusterFor(kind);
+    state.clusterBy = clusterOptionsFor(kind).some(([k]) => k === opts.clusterBy) ? opts.clusterBy : defaultClusterFor(kind);
     if (opts.dim) state.dim = opts.dim;
     if (!opts.keepOverlay && typeof clearStageOverlay === 'function') clearStageOverlay();
     closeSwitcher();
@@ -2961,8 +3250,8 @@ __REASONER_JS__
       resizeRiver();
     } else if (view === 'graph') {
       if (!state.focusId) {
-        const defaultKind = G.eras.length ? 'era' : (G.materials.length ? 'material' : 'motif');
-        const defaultId = (defaultKind === 'era' ? G.eras[0]?.id : defaultKind === 'material' ? G.materials[0]?.id : G.motifs[0]?.id) || '';
+        const defaultKind = Object.keys(DIMENSIONS).find(k => dimensionEntries(k).length) || 'era';
+        const defaultId = dimensionEntries(defaultKind)[0]?.id || '';
         state.focusKind = defaultKind;
         state.focusId = defaultId;
         state.clusterBy = defaultClusterFor(defaultKind);
@@ -2981,7 +3270,9 @@ __REASONER_JS__
 
   function syncHash() {
     let next = '#river';
-    if (state.view === 'graph' && state.focusId) {
+    if (state.view === 'graph' && stageOverlay?.type === 'attributes') {
+      next = `#graph/attributes/${encodeURIComponent(stageOverlay.attributeSubject)}?dim=${state.dim}`;
+    } else if (state.view === 'graph' && state.focusId) {
       next = `#graph/${state.focusKind}/${encodeURIComponent(state.focusId)}?by=${state.clusterBy}&dim=${state.dim}`;
     } else if (state.view === 'catalog') {
       next = `#catalog/${state.catalogTab}`;
@@ -2997,14 +3288,17 @@ __REASONER_JS__
     const [path, qs] = raw.split('?');
     const parts = path.split('/');
     const params = new URLSearchParams(qs || '');
-    if (parts[0] === 'graph' && parts[1] && parts[2]) {
+    if (parts[0] === 'graph' && parts[1] === 'attributes' && parts[2]) {
+      state.dim = params.get('dim') === '3d' ? '3d' : '2d';
+      openPatternAttributes(decodeURIComponent(parts[2]));
+    } else if (parts[0] === 'graph' && parts[1] && parts[2]) {
       openGraph(parts[1], decodeURIComponent(parts[2]), {
         clusterBy: params.get('by') || undefined,
         dim: params.get('dim') === '3d' ? '3d' : (params.get('dim') === '2d' ? '2d' : undefined),
         pushHistory: false,
       });
     } else if (parts[0] === 'catalog') {
-      state.catalogTab = ['era', 'material', 'motif'].includes(parts[1]) ? parts[1] : 'era';
+      state.catalogTab = parts[1] === 'interpretation' || Object.hasOwn(DIMENSIONS, parts[1]) ? parts[1] : 'era';
       switchView('catalog', false);
     } else if (parts[0] === 'page') {
       state.currentPage = Math.max(1, Math.min(G.pages.length, Number(parts[1]) || 1));
@@ -3038,9 +3332,7 @@ __REASONER_JS__
     river.nodes = G.items.map(it => ({ item: it, baseR: 15, sx: NaN, sy: NaN, sr: 15,
       seed: (hashStr(it.id + ':glimmer') % 10000) / 10000 }));
     river.undated = river.nodes.filter(n => !n.item.hasPeriod);
-    $('riverUndated').textContent = `时代待定 · ${river.undated.length}`;
-    $('riverUndated').hidden = !river.undated.length;
-    $('riverUndated').onclick = () => openRiverGroup({ members: river.undated, count: river.undated.length, pending: true });
+    $('riverUndated').onclick = () => openRiverGroup({ members: river.filteredUndated, count: river.filteredUndated.length, pending: true });
     $('riverGroupClose').onclick = () => { $('riverGroup').hidden = true; };
     $('riverZoomIn').onclick = () => zoomRiver(1.5);
     $('riverZoomOut').onclick = () => zoomRiver(1 / 1.5);
@@ -3050,7 +3342,33 @@ __REASONER_JS__
     resizeRiver();
   }
 
+  function matchesArtifactType(item, filter) {
+    return !filter || (filter === '__untyped__' ? !item.artifactTypes.length : item.artifactTypes.includes(filter));
+  }
+
+  function populateTypeFilter(select, value) {
+    const makeOption = (id, label) => {
+      const option = document.createElement('option'); option.value = id; option.textContent = label;
+      return option;
+    };
+    select.replaceChildren(makeOption('', '全部器类'), ...G.artifactTypes.map(type => makeOption(type.id, `${type.name} (${type.count})`)),
+      makeOption('__untyped__', `未标器类 (${G.items.filter(item => !item.artifactTypes.length).length})`));
+    select.value = value;
+  }
+
+  function updateRiverTypeFilter() {
+    river.filteredUndated = river.undated.filter(n => matchesArtifactType(n.item, state.riverTypeFilter));
+    $('riverUndated').textContent = `时代待定 · ${river.filteredUndated.length}`;
+    $('riverUndated').hidden = state.riverDatedOnly || !river.filteredUndated.length;
+    $('riverGroup').hidden = true;
+    river.hoveredItem = null;
+    river.pendingPointer = null;
+    hideTip();
+  }
+
   function renderRiverDock() {
+    populateTypeFilter($('riverTypeFilter'), state.riverTypeFilter);
+    updateRiverTypeFilter();
     const erasEl = $('riverEras');
     erasEl.replaceChildren();
     const eraLbl = document.createElement('span');
@@ -3237,7 +3555,7 @@ __REASONER_JS__
       button.type = 'button'; button.className = 'river-group-item';
       const label = document.createElement('span'); label.textContent = it.title;
       const source = document.createElement('small');
-      source.textContent = `${sourcePageLabel(it)} · ${it.periods.join('、') || '尚未标注时代'}`;
+      source.textContent = `${sourcePageLabel(it)} · ${[it.periods.join('、') || '尚未标注时代', it.artifactTypes.join('、')].filter(Boolean).join(' · ')}`;
       button.append(label, source);
       button.onclick = () => { $('riverGroup').hidden = true; openDrawer(it.id); };
       return button;
@@ -3325,7 +3643,7 @@ __REASONER_JS__
       showTip(mx, my, `<strong>${best.count} 条图录聚合</strong><div class="tip-tags">${eras.map(e => `<span class="tip-tag">${esc(e)}</span>`).join('')}</div><div class="tip-hint">点击查看全部记录 · 放大逐步展开</div>`);
     } else if (best) {
       const it = best.item;
-      showTip(mx, my, `<strong>${esc(it.title)}</strong><div class="tip-tags">${[...it.periods, ...it.materials, ...it.motifs.slice(0, 2)].map(t => `<span class="tip-tag">${esc(t)}</span>`).join('')}</div><div class="tip-hint">${esc(sourcePageLabel(it))} · 点击核读出处</div>`);
+      showTip(mx, my, `<strong>${esc(it.title)}</strong><div class="tip-tags">${[...it.periods, ...it.materials, ...it.artifactTypes, ...it.motifs.slice(0, 2)].map(t => `<span class="tip-tag">${esc(t)}</span>`).join('')}</div><div class="tip-hint">${esc(sourcePageLabel(it))} · 点击核读出处</div>`);
     } else if (river.hoveredEra) {
       const era = G.eraById.get(river.hoveredEra);
       showTip(mx, my, `<strong>${esc(era.name)}</strong><div class="tip-hint">${era.count} 条图录 · 点击进入时代星图</div>`);
@@ -3335,11 +3653,12 @@ __REASONER_JS__
   function ensureRiverGroups() {
     // World-space cells keep aggregates stable while panning. At close zoom every item is restored.
     const level = river.zoom >= 5 ? 99 : Math.floor(Math.log2(river.zoom) * 2);
-    const key = `${river.layoutVersion}:${level}`;
+    const key = `${river.layoutVersion}:${level}:${state.riverTypeFilter}`;
     if (river.groupKey === key && river.groupOverlay === stageOverlay) return;
     const cells = new Map(), cellSize = level === 99 ? 0 : 31 / Math.pow(2, level / 2);
     const forced = stageOverlay?.artifactSet;
     for (const n of river.nodes) {
+      if (!matchesArtifactType(n.item, state.riverTypeFilter)) continue;
       if (!Number.isFinite(n.wx)) continue;
       const id = !cellSize || forced?.has(n.item.id) ? n.item.id
         : `${n.item.eraGroups[0]}:${Math.floor(n.wx / cellSize)}:${Math.floor(n.wy / cellSize)}`;
@@ -3358,6 +3677,7 @@ __REASONER_JS__
       return g;
     });
     river.groupKey = key; river.groupOverlay = stageOverlay;
+    river.filteredDatedCount = river.groups.reduce((sum, group) => sum + group.count, 0);
     river.hoveredItem = null;
   }
 
@@ -3572,9 +3892,10 @@ __REASONER_JS__
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = dark ? '#efece4' : '#29261f'; ctx.fillText(e.name, x, y);
     }
     ctx.textBaseline = 'alphabetic';
-    const text = `${Math.round(river.zoom * 100)}% · 拖拽漫游`;
+    const filterLabel = state.riverTypeFilter === '__untyped__' ? '未标器类' : state.riverTypeFilter;
+    const text = `${filterLabel ? `${filterLabel} · ${river.filteredDatedCount} 条已定代 · ` : ''}${Math.round(river.zoom * 100)}% · 拖拽漫游`;
     if ($('riverDisplayStatus').textContent !== text) $('riverDisplayStatus').textContent = text;
-    $('riverUndated').hidden = state.riverDatedOnly || !river.undated.length;
+    $('riverUndated').hidden = state.riverDatedOnly || !river.filteredUndated.length;
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -3623,16 +3944,12 @@ __REASONER_JS__
   }
 
   function getFocalItems(kind, id) {
-    if (kind === 'era') return G.eraById.get(id)?.items || [];
-    if (kind === 'material') return G.matById.get(id)?.items || [];
-    if (kind === 'motif') return G.motifById.get(id)?.items || [];
-    return [];
+    return dimensionIndex(kind)?.get(id)?.items || [];
   }
 
   function clusterKeysOf(item, clusterBy) {
-    if (clusterBy === 'era') return item.eraGroups.length ? item.eraGroups : ['未标时代'];
-    if (clusterBy === 'material') return item.materials.length ? item.materials : ['未标材质'];
-    return item.motifs.length ? item.motifs : ['未标纹样'];
+    const values = dimensionValues(item, clusterBy);
+    return values.length ? values : ['未标' + KIND_LABEL[clusterBy]];
   }
 
   function rebuildGraphScene(resetCamera = true) {
@@ -3812,6 +4129,7 @@ __REASONER_JS__
   }
 
   function renderGraphHud() {
+    renderGraphPatternAttributes();
     const kindEl = $('focusKind');
     kindEl.textContent = KIND_LABEL[state.focusKind];
     kindEl.className = 'focus-kind ' + state.focusKind;
@@ -3841,7 +4159,8 @@ __REASONER_JS__
     // ClusterBy toggle buttons
     const cs = $('clusterSwitch');
     cs.replaceChildren();
-    for (const [val, lbl] of clusterOptionsFor(state.focusKind)) {
+    const clusterOptions = clusterOptionsFor(state.focusKind);
+    for (const [val, lbl] of clusterOptions.filter(([kind]) => !Object.hasOwn(EXTRA_DIMENSIONS, kind))) {
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = lbl;
@@ -3854,6 +4173,22 @@ __REASONER_JS__
         syncHash();
       };
       cs.append(b);
+    }
+    const extraOptions = clusterOptions.filter(([kind]) => Object.hasOwn(EXTRA_DIMENSIONS, kind));
+    if (extraOptions.length) {
+      const select = document.createElement('select'); select.id = 'clusterExtraDimension';
+      select.className = 'type-filter'; select.setAttribute('aria-label', '其他聚类维度');
+      const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = '更多聚类';
+      select.append(placeholder);
+      for (const [kind, label] of extraOptions) {
+        const option = document.createElement('option'); option.value = kind; option.textContent = label; select.append(option);
+      }
+      select.value = Object.hasOwn(EXTRA_DIMENSIONS, state.clusterBy) ? state.clusterBy : '';
+      select.onchange = () => {
+        if (!select.value) return;
+        state.clusterBy = select.value; rebuildGraphScene(true); renderGraphHud(); syncHash();
+      };
+      cs.append(select);
     }
 
     // 2D / 3D toggle
@@ -3946,8 +4281,9 @@ __REASONER_JS__
         if (stageOverlay?.graphScene) {
           const hit = stageOverlay.hoveredNode;
           if (hit) {
-            if (hit.artifactId) openDrawer(hit.artifactId);
-            else if (['era', 'material', 'motif'].includes(hit.kind) && !hit.isOntology) {
+            if (hit.onActivate) hit.onActivate();
+            else if (hit.artifactId) openDrawer(hit.artifactId);
+            else if (Object.hasOwn(DIMENSIONS, hit.kind) && !hit.isOntology) {
               clearStageOverlay();
               openGraph(hit.kind, hit.label);
             }
@@ -4002,7 +4338,7 @@ __REASONER_JS__
         const tags = [];
         if (best.roleTag) tags.push(`<span class="tip-tag">${esc(best.roleTag)}</span>`);
         if (best.sub) tags.push(`<span class="tip-tag">${esc(best.sub)}</span>`);
-        const hint = best.artifactId ? '点击查看原书扫描图与红框证据' : (best.isOntology ? 'RDFS 本体抽象类节点' : '点击进入该实体的聚类图谱 →');
+        const hint = best.hint || (best.artifactId ? '点击查看原书扫描图与红框证据' : (best.isOntology ? 'RDFS 本体抽象类节点' : '点击进入该实体的聚类图谱 →'));
         showTip(mx, my, `<strong>${esc(best.label)}</strong>${tags.length ? `<div class="tip-tags">${tags.join('')}</div>` : ''}<div class="tip-hint">${hint}</div>`);
       } else {
         hideTip();
@@ -4048,7 +4384,9 @@ __REASONER_JS__
       const hint = hitCluster.isUnlabeled
         ? '该条目在原数据中尚未标注此属性'
         : `点击进入「${esc(hitCluster.name)}」图谱（默认按${KIND_LABEL[nextDefault]}聚类）→`;
-      showTip(mx, my, `<strong>${esc(hitCluster.name)}</strong><div class="tip-tags"><span class="tip-tag">${KIND_LABEL[hitCluster.kind]}聚类</span><span class="tip-tag">${hitCluster.items.length} 条</span></div><div class="tip-hint">${hint}</div>`);
+      const properties = hitCluster.kind === 'motif' ? getPatternAttributes(hitCluster.name) : [];
+      const propertyTags = properties.map(p => `<span class="tip-tag">${p.label} · ${esc(p.value)}</span>`).join('');
+      showTip(mx, my, `<strong>${esc(hitCluster.name)}</strong><div class="tip-tags"><span class="tip-tag">${KIND_LABEL[hitCluster.kind]}聚类</span><span class="tip-tag">${hitCluster.items.length} 条</span>${propertyTags}</div><div class="tip-hint">${hint}</div>`);
     } else {
       hideTip();
     }
@@ -4440,12 +4778,16 @@ __REASONER_JS__
      7. VIEW 3 — MUSEO Morandi Grid Catalog
      ═══════════════════════════════════════════════════════════════ */
   function renderCatalog() {
+    const interpretations = state.catalogTab === 'interpretation';
+    $('interpretationTools').hidden = !interpretations;
+    $('catalogSpecimens').hidden = interpretations;
     $('catalogTabs').querySelectorAll('button').forEach(b => {
       b.setAttribute('aria-pressed', String(b.dataset.cat === state.catalogTab));
     });
+    $('catalogExtraDimension').value = interpretations ? 'interpretation' : Object.hasOwn(EXTRA_DIMENSIONS, state.catalogTab) ? state.catalogTab : '';
+    if (interpretations) { renderInterpretations(); return; }
 
-    const list = state.catalogTab === 'era' ? G.eras
-      : (state.catalogTab === 'material' ? G.materials : G.motifs);
+    const list = dimensionEntries(state.catalogTab);
     const nextClusterLabel = KIND_LABEL[defaultClusterFor(state.catalogTab)];
     $('catalogTitle').textContent = `${KIND_LABEL[state.catalogTab]}图录`;
 
@@ -4463,7 +4805,7 @@ __REASONER_JS__
       const subCounts = new Map();
       const subKind = defaultClusterFor(state.catalogTab);
       for (const it of ent.items) {
-        const vals = subKind === 'material' ? it.materials : (subKind === 'motif' ? it.motifs : it.eraGroups);
+        const vals = dimensionValues(it, subKind);
         for (const v of vals) subCounts.set(v, (subCounts.get(v) || 0) + 1);
       }
       const topSubs = [...subCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
@@ -4488,17 +4830,81 @@ __REASONER_JS__
       grid.append(card);
     }
 
+    populateTypeFilter($('specimenTypeFilter'), state.catalogTypeFilter);
     renderSpecimenGrid();
+  }
+
+  function openInterpretations(query = '') {
+    closeDrawer();
+    state.catalogTab = 'interpretation';
+    $('interpretationSearch').value = query;
+    $('interpretationKind').value = '';
+    switchView('catalog');
+  }
+
+  function renderInterpretations() {
+    $('catalogTitle').textContent = '文献关系';
+    const query = $('interpretationSearch').value.trim().toLowerCase();
+    const kind = $('interpretationKind').value;
+    const entries = G.interpretations.filter(record => (!kind || record.kind === kind)
+      && (!query || [record.subject.label, record.value, record.text].join(' ').toLowerCase().includes(query)));
+    $('interpretationCount').textContent = `${entries.length} 条文献解释`;
+    const cards = entries.map(record => {
+      const card = document.createElement('article'); card.className = 'interpretation-card';
+      card.dataset.interpretationId = record.id;
+      const title = document.createElement('h3'); title.textContent = `${record.subject.label} → ${record.value}`;
+      const source = document.createElement('span'); source.className = 'source-label';
+      source.textContent = `${record.relationLabel} · ${record.locator}`;
+      if (record.context) {
+        const context = record.context;
+        const scope = [...(context.cultures || []), ...(context.periods || []), ...(context.usages || [])];
+        if (context.certainty === 'hypothesis') scope.push(`推测${context.certaintyMarkers?.length ? '（'+context.certaintyMarkers.join('、')+'）' : ''}`);
+        if (scope.length) source.textContent += ` · ${scope.join(' · ')}`;
+      }
+      const proof = document.createElement('details');
+      const summary = document.createElement('summary'); summary.textContent = '原文';
+      const quote = document.createElement('p'); quote.textContent = record.text;
+      proof.append(summary, quote);
+      const actions = document.createElement('div'); actions.className = 'dock-group';
+      const original = document.createElement('button'); original.type = 'button'; original.className = 'chip'; original.textContent = '查看原页';
+      original.onclick = () => { clearStageOverlay(); state.currentPage = record.page; switchView('pages'); };
+      const graphButton = document.createElement('button'); graphButton.type = 'button'; graphButton.className = 'chip'; graphButton.textContent = '查看关系';
+      if (['symbolism', 'belief'].includes(record.kind)) graphButton.textContent = '查看属性';
+      graphButton.onclick = () => showInterpretationGraph(record);
+      actions.append(graphButton, original); card.append(title, source, proof, actions);
+      return card;
+    });
+    if (!cards.length) { const empty = document.createElement('p'); empty.textContent = '暂无匹配的文献解释'; cards.push(empty); }
+    $('catalogGrid').replaceChildren(...cards);
+  }
+
+  function showInterpretationGraph(record) {
+    if (['symbolism', 'belief'].includes(record.kind)) {
+      openPatternAttributes(record.subject.label, record.kind + ':' + patternAttributeKey(record.value, false));
+      return;
+    }
+    const makeNode = (key, label, kind, x, color) => ({ key, label, kind, roleTag: record.relationLabel,
+      sub: record.locator, x, y: 0, z: 0, tx: x, ty: 0, tz: 0, baseR: 36, color, sx: 0, sy: 0, sz: 0, sr: 36 });
+    const subject = makeNode(`${record.subject.kind}:${record.subject.label}`, record.subject.label, record.subject.kind, -170, '#d48263');
+    const valueKind = ({ symbolism: 'meaning', belief: 'belief', ritual: 'ritual', technique: 'technique', composition: 'composition' })[record.kind] || 'meaning';
+    const meaning = makeNode(`${valueKind}:${record.value}`, record.value, valueKind, 170, '#74ad99');
+    subject.hint = '点击浏览该对象的文献解释'; subject.onActivate = () => openInterpretations(record.subject.label);
+    meaning.hint = '点击浏览相关文献关系'; meaning.onActivate = () => openInterpretations(record.value);
+    applyStageOverlay({ type: 'interpretation', banner: `${record.subject.label} → ${record.value} · ${record.locator}`,
+      graphScene: { kind: 'interpretation', nodes: [subject, meaning],
+        edges: [{ from: subject, to: meaning, label: record.relationLabel, dashed: false, color: '#e2ba74', phase: 0 }], extent: 320 } }, true);
   }
 
   function renderSpecimenGrid() {
     const pageSize = 24;
-    const total = G.items.length;
+    const filteredItems = G.items.filter(item => matchesArtifactType(item, state.catalogTypeFilter));
+    const total = filteredItems.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     state.catalogPage = Math.max(0, Math.min(totalPages - 1, state.catalogPage));
-    const slice = G.items.slice(state.catalogPage * pageSize, (state.catalogPage + 1) * pageSize);
+    const slice = filteredItems.slice(state.catalogPage * pageSize, (state.catalogPage + 1) * pageSize);
 
-    $('specimenHeading').textContent = `全部条目 · ${total}`;
+    const filterLabel = state.catalogTypeFilter === '__untyped__' ? '未标器类' : state.catalogTypeFilter;
+    $('specimenHeading').textContent = `${filterLabel || '全部条目'} · ${total}`;
     const pager = $('specimenPager');
     pager.replaceChildren();
     if (totalPages > 1) {
@@ -4540,6 +4946,12 @@ __REASONER_JS__
 
       const tags = document.createElement('div');
       tags.className = 'spec-tags';
+      for (const type of it.artifactTypes) {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = type;
+        b.title = '器类';
+        b.onclick = () => openGraph('artifact_type', type);
+        tags.append(b);
+      }
       for (const e of it.eraGroups.slice(0, 1)) {
         const b = document.createElement('button'); b.type = 'button'; b.textContent = e;
         b.onclick = () => openGraph('era', e);
@@ -4580,7 +4992,7 @@ __REASONER_JS__
     $('pageScan').src = pageObj?.previewUrl || '';
     $('pageBbox').hidden = true;
 
-    const list = G.items.filter(it => it.page === state.currentPage);
+    const list = G.sourceItems.filter(it => it.page === state.currentPage);
     const box = $('pageItems');
     box.replaceChildren();
 
@@ -4615,6 +5027,10 @@ __REASONER_JS__
       const head = document.createElement('div');
       head.className = 'page-item-title';
       head.innerHTML = `<strong>${esc(it.title)}</strong><small>${esc(it.status || it.locator)}</small>`;
+      const details = document.createElement('button');
+      details.type = 'button'; details.className = 'mini-link'; details.textContent = '器物详情 ↗';
+      details.onclick = event => { event.stopPropagation(); openDrawer(it.canonicalId, it.sourceRecordId); };
+      head.append(details);
       card.append(head);
 
       if (it.quote) {
@@ -4626,6 +5042,12 @@ __REASONER_JS__
 
       const chips = document.createElement('div');
       chips.className = 'rel-chips';
+      for (const type of it.artifactTypes) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'jump-pill artifact_type'; b.textContent = type;
+        b.onclick = ev => { ev.stopPropagation(); openGraph('artifact_type', type); };
+        chips.append(b);
+      }
       for (const e of it.eraGroups) {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'jump-pill era'; b.textContent = e;
@@ -4656,12 +5078,28 @@ __REASONER_JS__
   /* ═══════════════════════════════════════════════════════════════
      9. Specimen & Proof Drawer + Entity Switcher + Command Palette
      ═══════════════════════════════════════════════════════════════ */
-  function openDrawer(itemId) {
-    const it = G.itemById.get(itemId);
-    if (!it) return;
-    state.drawerItemId = itemId;
+  function openDrawer(itemId, sourceRecordId = null) {
+    const canonical = G.itemById.get(itemId) || G.canonicalBySource.get(itemId);
+    if (!canonical) return;
+    const requested = sourceRecordId || (!G.itemById.has(itemId) ? itemId : null);
+    const it = canonical.sourceRecords.find(source => source.sourceRecordId === requested || source.id === requested)
+      || canonical.sourceRecords[0] || canonical;
+    state.drawerItemId = canonical.id;
+    state.drawerSourceRecordId = it.sourceRecordId;
+    const sourceSelect = $('drawerSource');
+    sourceSelect.replaceChildren();
+    $('drawerSourceWrap').hidden = canonical.sourceRecords.length < 2;
+    $('drawerIdentity').textContent = `按规则对齐 · ${canonical.sourceRecords.length} 条源图录 · 实物身份尚未独立核实`;
+    for (const source of canonical.sourceRecords) {
+      const option = document.createElement('option');
+      option.value = source.sourceRecordId;
+      option.textContent = `${source.locator || sourcePageLabel(source)} · ${source.title}`;
+      sourceSelect.append(option);
+    }
+    sourceSelect.value = it.sourceRecordId;
+    sourceSelect.onchange = () => openDrawer(canonical.id, sourceSelect.value);
 
-    $('drawerTitle').textContent = it.title;
+    $('drawerTitle').textContent = canonical.title;
     $('drawerLoc').textContent = [it.locator, it.findspot ? it.findspot + '出土' : ''].filter(Boolean).join(' · ');
     $('drawerGotoPage').onclick = () => {
       state.currentPage = it.page;
@@ -4672,9 +5110,33 @@ __REASONER_JS__
 
     const sp = getSprite(it.thumbUrl);
     $('drawerFig').classList.toggle('mono', Boolean(sp?.isMono));
-    $('drawerImg').src = it.plateUrl;
-    $('drawerImg').alt = it.title;
-    $('drawerFig').onclick = () => openLightbox(it.plateUrl, `${it.title} · ${it.locator}`);
+    const imageLabel = it.imageKind === 'artifact_candidate' ? '裁图 · 自动候选'
+      : it.imageKind === 'artifact' ? '器物截图' : '原书整页';
+    const gallery = $('drawerGallery');
+    gallery.replaceChildren();
+    gallery.hidden = it.imageCandidates.length < 2;
+    const showImage = (url, label) => {
+      $('drawerImg').src = url;
+      $('drawerImg').alt = `${it.title} · ${imageLabel} · ${label}`;
+      $('drawerFigBadge').textContent = `${imageLabel}${label ? ' · ' + label : ''} · 点击放大`;
+      $('drawerFig').onclick = () => openLightbox(url, `${it.title} · ${imageLabel} · ${label} · ${it.locator}`);
+      gallery.querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.url === url)));
+    };
+    if (it.imageCandidates.length > 1) {
+      const images = [{imageUrl: it.plateUrl, label: `整组 ${it.imageCandidates.length} 图`},
+        ...it.imageCandidates.map((image, index) => ({...image, label: `子图 ${index + 1}`}))];
+      for (const image of images) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.dataset.url = image.imageUrl;
+        button.title = image.label; button.setAttribute('aria-label', image.label);
+        const preview = document.createElement('img');
+        preview.src = image.imageUrl; preview.alt = image.label; preview.loading = 'lazy';
+        button.append(preview);
+        button.onclick = () => showImage(image.imageUrl, image.label);
+        gallery.append(button);
+      }
+    }
+    showImage(it.plateUrl, it.imageCandidates.length > 1 ? `整组 ${it.imageCandidates.length} 图` : '');
 
     // Clickable relation jump pills (Era -> Material -> Motif)
     const rels = $('drawerRels');
@@ -4701,16 +5163,35 @@ __REASONER_JS__
     addRelRow('时代', 'era', it.periods);
     addRelRow('材质', 'material', it.materials);
     addRelRow('纹样', 'motif', it.motifs);
-    for (const r of it.rows.filter(r => r.origin === 'page_heading_inheritance')) {
+    for (const motif of it.motifs) {
+      if (!getPatternAttributes(motif).length) continue;
+      const section = document.createElement('details'), summary = document.createElement('summary');
+      summary.className = 'pattern-attribute-caption'; summary.textContent = motif + '的文献释义';
+      section.open = true; section.append(summary);
+      appendPatternAttributeRows(section, motif, group => openPatternAttributes(motif, group.key));
+      rels.append(section);
+    }
+    addRelRow('器类', 'artifact_type', it.artifactTypes);
+    for (const [kind, dim] of Object.entries(EXTRA_DIMENSIONS)) {
+      if (kind === 'place') continue;
+      addRelRow(dim.label, kind, it[dim.field]);
+    }
+    for (const [pred, label] of [['excavated_at', '出土地点'], ['discovered_at', '发现地点'], ['collected_at', '采集地点']]) {
+      addRelRow(label, 'place', [...new Set(it.rows.filter(row => row.predicate === pred).map(row => row.object))]);
+    }
+    for (const r of it.rows.filter(r => ['page_heading_inheritance', 'catalog_section_context', 'same_page_culture_context'].includes(r.origin))) {
       const note = document.createElement('p');
       note.style.cssText = 'font-size:12px;color:var(--ink-3)';
-      note.textContent = `时代归属候选来自同页标题「${r.object}」（${sourcePageLabel(it)}），尚未人工确认。`;
+      const scope = r.binding?.scope;
+      note.textContent = r.origin === 'catalog_section_context'
+        ? `时代候选「${r.object}」来自原书分节标题（第 ${scope?.headingPage || scope?.startPage} 页），范围止于第 ${scope?.endPageExclusive} 页前，尚未人工确认。`
+        : `${r.predicate === 'period' ? '时代' : '文化'}候选来自同页标题「${r.object}」（${sourcePageLabel(it)}），尚未人工确认。`;
       rels.append(note);
     }
     if (!rels.childElementCount) {
       const p = document.createElement('div');
       p.style.fontSize = '12px'; p.style.color = 'var(--ink-3)';
-      p.textContent = '暂无已标注的时代、材质或纹样关系';
+      p.textContent = '暂无已标注的时代、材质、纹样或器类关系';
       rels.append(p);
     }
 
@@ -4742,6 +5223,7 @@ __REASONER_JS__
 
   function closeDrawer() {
     state.drawerItemId = null;
+    state.drawerSourceRecordId = null;
     $('drawer').classList.add('closed');
   }
 
@@ -4758,11 +5240,12 @@ __REASONER_JS__
   }
   function closeSwitcher() { $('switcherPop').hidden = true; }
   function renderSwitcherList() {
+    $('switcherExtraDimension').value = Object.hasOwn(EXTRA_DIMENSIONS, switcherKind) ? switcherKind : '';
     $('switcherTabs').querySelectorAll('button').forEach(b => {
       b.setAttribute('aria-selected', String(b.dataset.kind === switcherKind));
     });
     const q = $('switcherSearch').value.trim().toLowerCase();
-    const list = switcherKind === 'era' ? G.eras : (switcherKind === 'material' ? G.materials : G.motifs);
+    const list = dimensionEntries(switcherKind);
     const el = $('switcherList');
     el.replaceChildren();
     for (const ent of list) {
@@ -4825,9 +5308,20 @@ __REASONER_JS__
       .map(m => ({ label: m.name, meta: `${m.count} 条`, action: () => openGraph('material', m.id) })));
     addGroup('纹样 · 按时代聚类', G.motifs.filter(m => !q || m.name.toLowerCase().includes(q)).slice(0, 12)
       .map(m => ({ label: m.name, meta: `${m.count} 条`, action: () => openGraph('motif', m.id) })));
+    addGroup('器类 · 按纹样聚类', G.artifactTypes.filter(type => !q || type.name.toLowerCase().includes(q)).slice(0, 12)
+      .map(type => ({ label: type.name, meta: `${type.count} 条`, action: () => openGraph('artifact_type', type.id) })));
+    for (const [kind, dim] of Object.entries(EXTRA_DIMENSIONS)) {
+      if (!q && kind !== 'technique') continue;
+      addGroup(dim.label, dimensionEntries(kind).filter(entry => !q || entry.name.toLowerCase().includes(q)).slice(0, 6)
+        .map(entry => ({ label: entry.name, meta: `${entry.count} 条`, action: () => openGraph(kind, entry.id) })));
+    }
     if (q) {
-      addGroup('器物条目', G.items.filter(i => i.title.toLowerCase().includes(q)).slice(0, 10)
-        .map(i => ({ label: i.title, meta: sourcePageLabel(i), action: () => openDrawer(i.id) })));
+      addGroup('文献关系', G.interpretations.filter(record =>
+        `${record.subject.label} ${record.value}`.toLowerCase().includes(q)).slice(0, 10)
+        .map(record => ({ label: `${record.subject.label} → ${record.value}`, meta: record.locator,
+          action: () => openInterpretations(record.subject.label) })));
+      addGroup('源图录', G.sourceItems.filter(i => i.title.toLowerCase().includes(q)).slice(0, 20)
+        .map(i => ({ label: i.title, meta: sourcePageLabel(i), action: () => openDrawer(i.canonicalId, i.sourceRecordId) })));
     }
   }
 
@@ -4859,7 +5353,7 @@ __REASONER_JS__
       kind === 'river' ? view.hoveredItem?.key : view.hoveredNode?.item.id,
       kind === 'graph' ? view.hoveredNode?.cluster.id : '',
       kind === 'river' ? view.hoveredEra : view.hoveredCluster?.id,
-      state.riverHighlightEra, state.riverHighlightMat, state.riverDatedOnly,
+      state.riverHighlightEra, state.riverHighlightMat, state.riverDatedOnly, state.riverTypeFilter,
       state.focusKind, state.focusId, state.clusterBy, state.dim].join('|');
     const cameraMoving = Math.abs(view.panX - view.targetPanX) > .08
       || Math.abs(view.panY - view.targetPanY) > .08 || Math.abs(view.zoom - view.targetZoom) > .0001;
@@ -4912,6 +5406,23 @@ __REASONER_JS__
   }
 
   function bindGlobalUI() {
+    for (const [id, label] of [['catalogExtraDimension', '更多维度'], ['switcherExtraDimension', '更多维度']]) {
+      const select = $(id);
+      const makeOption = (value, text) => { const option = document.createElement('option'); option.value = value; option.textContent = text; return option; };
+      select.replaceChildren(makeOption('', label), ...Object.entries(EXTRA_DIMENSIONS).filter(([kind]) => dimensionEntries(kind).length)
+        .map(([kind, dim]) => makeOption(kind, `${dim.label} (${dimensionEntries(kind).length})`)));
+      if (id === 'catalogExtraDimension' && G.interpretations.length) select.append(makeOption('interpretation', `文献关系 (${G.interpretations.length})`));
+    }
+    $('catalogExtraDimension').onchange = () => {
+      if (!$('catalogExtraDimension').value) return;
+      state.catalogTab = $('catalogExtraDimension').value; renderCatalog(); syncHash();
+    };
+    $('interpretationSearch').oninput = renderInterpretations;
+    $('interpretationKind').onchange = renderInterpretations;
+    $('switcherExtraDimension').onchange = () => {
+      if (!$('switcherExtraDimension').value) return;
+      switcherKind = $('switcherExtraDimension').value; renderSwitcherList();
+    };
     $('brandHome').onclick = () => switchView('river');
     document.querySelectorAll('.nav-tabs button').forEach(b => {
       b.onclick = () => switchView(b.dataset.view);
@@ -4924,6 +5435,15 @@ __REASONER_JS__
     $('riverDatedToggle').onclick = () => {
       state.riverDatedOnly = !state.riverDatedOnly;
       $('riverDatedToggle').setAttribute('aria-pressed', String(state.riverDatedOnly));
+    };
+    $('riverTypeFilter').onchange = () => {
+      state.riverTypeFilter = $('riverTypeFilter').value;
+      updateRiverTypeFilter();
+    };
+    $('specimenTypeFilter').onchange = () => {
+      state.catalogTypeFilter = $('specimenTypeFilter').value;
+      state.catalogPage = 0;
+      renderSpecimenGrid();
     };
 
     $('graphBack').onclick = () => {
@@ -5055,9 +5575,14 @@ __REASONER_JS__
   }
 
   function clearStageOverlay() {
+    const wasAttributes = stageOverlay?.type === 'attributes';
     stageOverlay = null;
+    document.body.classList.remove('interpretation-view');
+    document.body.classList.remove('attribute-view');
     $('overlayBanner').hidden = true;
     hideTip();
+    renderGraphPatternAttributes();
+    if (wasAttributes && state.view === 'graph') syncHash();
   }
 
   function setOverlayBanner(text) {
@@ -5067,6 +5592,10 @@ __REASONER_JS__
 
   function applyStageOverlay(ov, autoOpenGraph = true) {
     stageOverlay = ov;
+    document.body.classList.toggle('interpretation-view', ov?.type === 'interpretation');
+    document.body.classList.toggle('attribute-view', ov?.type === 'attributes');
+    renderGraphPatternAttributes();
+    $('overlayClear').textContent = ov?.type === 'attributes' ? '返回星图' : '退出推演';
     if (!ov) { $('overlayBanner').hidden = true; return; }
     setOverlayBanner(ov.banner || '知识推演视图');
     if (autoOpenGraph && ov.graphScene) {
@@ -5429,6 +5958,8 @@ __REASONER_JS__
     rState.summary.eras.forEach(e => addOpt(e.name));
     rState.summary.materials.forEach(m => addOpt(m.name));
     rState.summary.motifs.forEach(mo => addOpt(mo.name));
+    rState.summary.artifactTypes.forEach(type => addOpt(type.name));
+    for (const dim of Object.values(EXTRA_DIMENSIONS)) rState.summary[dim.field].forEach(entry => addOpt(entry.name));
 
     // Default dynamic path & compare selections from whatever KG is loaded
     const eras = rState.summary.eras;
@@ -5511,7 +6042,7 @@ __REASONER_JS__
 
   function populateCompareSelects() {
     const kind = $('rCmpKind').value;
-    const list = kind === 'era' ? rState.summary.eras : (kind === 'material' ? rState.summary.materials : rState.summary.motifs);
+    const list = rState.summary[DIMENSIONS[kind].list];
     const fill = (sel, idx) => {
       sel.replaceChildren();
       for (const item of list) {
@@ -5683,7 +6214,7 @@ __REASONER_JS__
     b.title = label;
     b.onclick = () => {
       if (key.startsWith('artifact:')) openDrawer(key.slice(9));
-      else if (!isOnt && ['era', 'material', 'motif'].includes(kind)) { clearStageOverlay(); openGraph(kind, label); }
+      else if (!isOnt && Object.hasOwn(DIMENSIONS, kind)) { clearStageOverlay(); openGraph(kind, label); }
     };
     return b;
   }
@@ -5740,6 +6271,28 @@ __REASONER_JS__
     addBucket(`当前共有${axisLbl}（Jaccard ${res.primary.jaccard ?? '标注不足'}）`, res.primary.shared, 'shared');
     addBucket(`当前仅在「${a}」检索到`, res.primary.onlyA, 'onlyA');
     addBucket(`当前仅在「${b}」检索到`, res.primary.onlyB, 'onlyB');
+
+    const secondary = document.createElement('details');
+    const secondaryTitle = document.createElement('summary');
+    const secondaryLabel = KIND_LABEL[res.secondary.axis];
+    const secondaryCoverage = res.secondary.coverage;
+    secondaryTitle.textContent = `${secondaryLabel}对比 · 共有 ${res.secondary.shared.length} · 差集 ${res.secondary.onlyA.length}/${res.secondary.onlyB.length}`;
+    const secondaryNote = document.createElement('p');
+    secondaryNote.textContent = `${secondaryLabel}标注覆盖：${a} ${secondaryCoverage.withValuesA}/${secondaryCoverage.totalA}，${b} ${secondaryCoverage.withValuesB}/${secondaryCoverage.totalB}。`;
+    secondary.append(secondaryTitle, secondaryNote);
+    for (const [title, values] of [['共有', res.secondary.shared], [`仅在 ${a} 检索到`, res.secondary.onlyA], [`仅在 ${b} 检索到`, res.secondary.onlyB]]) {
+      const row = document.createElement('p');
+      row.append(document.createTextNode(title + '：'));
+      if (!values.length) row.append(document.createTextNode('无'));
+      for (const value of values) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'r-preset';
+        button.textContent = value.label;
+        button.onclick = () => { clearStageOverlay(); openGraph(value.kind, value.label); };
+        row.append(button);
+      }
+      secondary.append(row);
+    }
+    out.append(secondary);
 
     const askBtn = document.createElement('button');
     askBtn.type = 'button'; askBtn.className = 'mini-link';
@@ -5826,7 +6379,7 @@ __REASONER_JS__
       const tbl = document.createElement('table');
       tbl.className = 'sparql-table';
       tbl.innerHTML = `<thead><tr>${res.variables.map(v => `<th>${esc(v)}</th>`).join('')}</tr></thead>
-        <tbody>${res.rows.slice(0, 25).map(r => `<tr>${res.variables.map(v => `<td>${esc(r[v])}</td>`).join('')}</tr>`).join('')}</tbody>`;
+        <tbody>${res.rows.slice(0, 25).map(r => `<tr>${res.variables.map(v => `<td title="${esc(r[v])}">${esc(G.itemById.get(r[v])?.title || r[v])}</td>`).join('')}</tr>`).join('')}</tbody>`;
       wrap.append(tbl);
     }
     if (res.matchedArtifactIds.length) {
@@ -6147,14 +6700,14 @@ __REASONER_JS__
     const shortTitle = G.title.split('·')[0].trim() || '纹样星图';
     document.title = `${shortTitle} · 纹样星图`;
     $('brandTitle').textContent = shortTitle;
-    $('brandSub').textContent = `${G.volumes.length ? G.volumes.length + ' 册 · ' : ''}${G.pages.length} 页 · ${G.items.length} 条 · ${G.motifs.length} 纹样`;
+    $('brandSub').textContent = `${G.volumes.length ? G.volumes.length + ' 册 · ' : ''}${G.pages.length} 页 · ${G.items.length} 器物 · ${G.sourceItems.length} 图录 · ${G.motifs.length} 纹样 · ${G.artifactTypes.length} 器类`;
     $('pageVolume').replaceChildren(...[...G.pagesByVolume.keys()].map(volume => {
       const option = document.createElement('option'); option.value = volume; option.textContent = volume || '当前语料';
       return option;
     }));
     $('pageVolume').hidden = G.volumes.length < 2;
     $('riverHeading').textContent = shortTitle;
-    $('riverSub').textContent = '循时代溯源 · 滚轮放大 · 点击纹样查看图录';
+    $('riverSub').textContent = '循时代溯源 · 按器类筛选 · 点击图录核读出处';
 
     bindGlobalUI();
     initRiver();

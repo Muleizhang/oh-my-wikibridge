@@ -286,6 +286,11 @@ impl Store {
                 run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
                 id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(run_id,id)
             );
+            CREATE TABLE IF NOT EXISTS kg_interpretations(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                id TEXT NOT NULL, subject_label TEXT NOT NULL, kind TEXT NOT NULL,
+                value TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(run_id,id)
+            );
             CREATE TABLE IF NOT EXISTS kg_source_mentions(
                 run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
                 id TEXT NOT NULL, entity_id TEXT, data TEXT NOT NULL, PRIMARY KEY(run_id,id),
@@ -302,6 +307,42 @@ impl Store {
                 PRIMARY KEY(run_id,assertion_id)
             );
             CREATE INDEX IF NOT EXISTS kg_reviews_run ON kg_reviews(run_id,target_kind,target_id);
+            CREATE TABLE IF NOT EXISTS kg_canonical_artifacts(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id) ON DELETE CASCADE,
+                id TEXT NOT NULL, label TEXT NOT NULL, decision TEXT NOT NULL, data TEXT NOT NULL,
+                PRIMARY KEY(run_id,id)
+            );
+            CREATE TABLE IF NOT EXISTS kg_artifact_identity_map(
+                run_id TEXT NOT NULL, source_entity_id TEXT NOT NULL, source_record_id TEXT NOT NULL,
+                canonical_id TEXT NOT NULL, source_volume TEXT NOT NULL, rule_version TEXT NOT NULL,
+                PRIMARY KEY(run_id,source_entity_id),
+                FOREIGN KEY(run_id,source_entity_id) REFERENCES kg_entities(run_id,id) ON DELETE CASCADE,
+                FOREIGN KEY(run_id,source_record_id) REFERENCES kg_records(run_id,id) ON DELETE CASCADE,
+                FOREIGN KEY(run_id,canonical_id) REFERENCES kg_canonical_artifacts(run_id,id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS kg_identity_run_lineage(
+                run_id TEXT NOT NULL REFERENCES kg_runs(id), parent_run_id TEXT NOT NULL REFERENCES kg_runs(id),
+                PRIMARY KEY(run_id,parent_run_id)
+            );
+            CREATE TABLE IF NOT EXISTS kg_artifact_identity_operations(
+                id TEXT PRIMARY KEY, action TEXT NOT NULL, rule_version TEXT NOT NULL,
+                data TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            DROP VIEW IF EXISTS kg_canonical_assertions;
+            CREATE VIEW kg_canonical_assertions AS
+                SELECT a.run_id,m.canonical_id,a.predicate,a.object_kind,
+                    CASE WHEN a.object_kind='entity' THEN e.label ELSE a.object_json END AS object_value,
+                    json_group_array(a.id) AS source_assertion_ids,
+                    json_group_array(json(a.data)) AS source_assertions,
+                    COUNT(*) AS source_count
+                FROM kg_assertions a
+                JOIN kg_artifact_identity_map m ON m.run_id=a.run_id AND m.source_entity_id=a.subject_id
+                LEFT JOIN kg_entities e ON e.run_id=a.run_id AND e.id=json_extract(a.object_json,'$.id')
+                WHERE COALESCE(json_extract(a.data,'$.projectionStatus'),'')!='superseded'
+                    AND COALESCE(json_array_length(a.data,'$.supersededBy'),0)=0
+                    AND COALESCE(json_extract(a.data,'$.reviewStatus'),'')!='rejected'
+                GROUP BY a.run_id,m.canonical_id,a.predicate,a.object_kind,
+                    CASE WHEN a.object_kind='entity' THEN e.label ELSE a.object_json END;
             CREATE INDEX IF NOT EXISTS kg_mentions_entity ON kg_mentions(run_id,entity_id);
             CREATE INDEX IF NOT EXISTS kg_edges_subject ON kg_edges(run_id,subject_id);
             CREATE INDEX IF NOT EXISTS kg_edges_object ON kg_edges(run_id,object_id);

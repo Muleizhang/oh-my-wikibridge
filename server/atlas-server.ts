@@ -76,7 +76,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'query_graph',
-      description: '在知识图谱中按时代、材质、纹样、器物名、出土地进行组合查询与否定排除（FILTER NOT EXISTS），可选是否开启 RDFS 本体子类泛化。',
+      description: '在知识图谱中按时代、材质、纹样、器类、工艺、器物名、出土地进行组合查询与否定排除（FILTER NOT EXISTS），可选是否开启 RDFS 本体子类泛化。',
       parameters: {
         type: 'object',
         properties: {
@@ -85,6 +85,16 @@ const AGENT_TOOLS = [
           material: { type: 'string', description: '材质，如 彩陶、青铜、铜器、玉器、陶瓷类、铜器类' },
           motif: { type: 'string', description: '纹样，如 云雷纹、鸟纹、蛙纹、龙凤纹、几何纹' },
           place: { type: 'string', description: '出土地关键词' },
+          artifactType: { type: 'string', description: '器类，如盆、壶、镜、瓦当、画像石' },
+          technique: { type: 'string', description: '制作工艺关键词，如模印、鎏金、镶嵌' },
+          culture: { type: 'string', description: '原文明示的文化归属' },
+          composition: { type: 'string', description: '构图形式，如二方连续、左右对称' },
+          decoration_part: { type: 'string', description: '装饰部位，如口沿、腹部、镜背' },
+          decoration_role: { type: 'string', description: '装饰角色，如主纹、地纹、边饰' },
+          organization: { type: 'string', description: '原文记载的收藏单位' },
+          excavationPlace: { type: 'string', description: '出土地点，区别于制作地点和收藏单位' },
+          discoveryPlace: { type: 'string', description: '发现地点' },
+          collectionPlace: { type: 'string', description: '采集地点' },
           excludePeriod: { type: 'string', description: '排除此时代的条目' },
           excludeMaterial: { type: 'string', description: '排除此材质的条目' },
           excludeMotif: { type: 'string', description: '排除此纹样的条目' },
@@ -116,11 +126,11 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'compare_entities',
-      description: '对时代、材质或纹样计算当前录入记录的交集、差集与标注覆盖率。启用本体时，周代包含西周、东周及其下位时期。差集不代表历史独有，共有不证明传承。',
+      description: '对时代、材质、纹样或器类计算当前录入记录的交集、差集与标注覆盖率。器类对比展示纹样与材质的共有和差集。启用本体时，周代包含西周、东周及其下位时期。差集不代表历史独有，共有不证明传承。',
       parameters: {
         type: 'object',
         properties: {
-          kind: { type: 'string', enum: ['era', 'material', 'motif'], description: '对比维度' },
+          kind: { type: 'string', enum: ['era', 'material', 'motif', 'artifact_type', 'technique', 'culture', 'composition', 'decoration_part', 'decoration_role', 'organization'], description: '对比维度' },
           entityA: { type: 'string', description: '实体 A 名称' },
           entityB: { type: 'string', description: '实体 B 名称' },
           useOntology: { type: 'boolean', description: '是否启用 RDFS 本体归类（默认 true）' },
@@ -716,6 +726,8 @@ async function main() {
           sendJson(res, 200, reasoner.predictMissing(body));
         } else if (action === 'sparql') {
           sendJson(res, 200, reasoner.runSparql(body.query, body));
+        } else if (action === 'interpretations') {
+          sendJson(res, 200, reasoner.queryInterpretations(body));
         } else if (action === 'query') {
           sendJson(res, 200, reasoner.queryArtifacts(body));
         } else if (action === 'evidence') {

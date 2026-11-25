@@ -9,7 +9,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = 'wikibridge-three-volumes/'
-URL_FIELDS = {'previewUrl', 'imageUrl', 'detailUrl', 'captionUrl'}
+URL_FIELDS = {'previewUrl', 'imageUrl', 'detailUrl', 'captionUrl', 'pageUrl'}
 
 LAUNCHER = '''from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -87,7 +87,7 @@ def original_pages(manifest, graphs):
             if value.get('imageUrl') in replacements and not value.get('detailUrl'):
                 value['detailUrl'] = value['imageUrl']
             for key, child in list(value.items()):
-                if key in {'previewUrl', 'imageUrl', 'captionUrl'} and isinstance(child, str) and child in replacements:
+                if key in {'previewUrl', 'imageUrl', 'captionUrl', 'pageUrl'} and isinstance(child, str) and child in replacements:
                     value[key] = replacements[child]
                 else:
                     relink(child)
@@ -104,6 +104,8 @@ def original_pages(manifest, graphs):
 
 def package(site, graphs, output, image_mode='original'):
     site = site.resolve()
+    watched = [site/'manifest.json', *graphs]
+    versions = {path: (path.stat().st_size, path.stat().st_mtime_ns) for path in watched}
     manifest = json.loads((site / 'manifest.json').read_text())
     # A shared artifact needs source names, not the build machine's directory tree.
     for volume in manifest.get('volumes', []):
@@ -125,14 +127,18 @@ def package(site, graphs, output, image_mode='original'):
     selected_graphs = []
     for index, path in enumerate(graphs, 1):
         graph = json.loads(path.read_text())
+        volumes = manifest.get('volumes', [])
+        if index <= len(volumes) and volumes[index-1].get('runId') != graph.get('runId'):
+            raise ValueError(f'Atlas and volume {index} graph have different run IDs')
         selected_graphs.append((f'graphs/vol{index}.graph.json', path, {
             'volume': index, 'pages': len(graph['selection']),
             'records': len(graph['records']), 'entities': len(graph['entities']),
             'assertions': len(graph['assertions']), 'runId': graph['runId'],
+            'interpretations': len(graph.get('interpretations', [])),
         }))
     readme = f'''# 中国纹样全集 · 三册知识图谱分享包
 
-三册共 {len(manifest['pages'])} 页；星图展示 {len(manifest['items'])} 条图录、{len(manifest['rows'])} 条候选关系。
+三册共 {len(manifest['pages'])} 页；星图展示 {len(manifest['items'])} 个规范器物，保留 {len(manifest.get('sourceItems', manifest['items']))} 条源图录、{len(manifest['rows'])} 条候选关系，以及 {len(manifest.get('interpretations', []))} 条文献解释。
 
 ## 打开图谱
 
@@ -145,12 +151,13 @@ def package(site, graphs, output, image_mode='original'):
 历史长河、2D/3D 星图、原页核读和「符号推演」均在本地运行，不需要 API key。
 当前分享包未附大模型服务。使用 DeepSeek Agent 需另行克隆项目、配置自己的密钥并启动统一服务。
 主图有聚合显示，点击查看图录列表，放大后展开；未标注时代的记录从「时代待定」入口查看。
+在星图中选中纹样，左侧属性卡显示象征意义与信仰关联；点击属性标签可展开原文并跳转原页。图录的「文献关系」可按解释类别筛选。
 
 ## 数据文件
 
-- `site/manifest.json`：跨册统一后的展示图谱。items 为图录条目，rows 为关系，evidence 为出处，pages 保留册数及原 PDF 页码。同名同类型概念统一，图录条目各自独立。
+- `site/manifest.json`：跨册统一后的展示图谱。items/rows 为规范器物与有效关系，sourceItems/sourceRows 保留源图录与源陈述，evidence 为出处，interpretations 为文献解释，pages 保留册数及原 PDF 页码。器物按身份规则对齐，不能仅凭同名认定为同一件文物；已被纠正的陈述仍保留出处，不参与有效图谱查询。
 - `graphs/vol1.graph.json`、`vol2.graph.json`、`vol3.graph.json`：各册当前完整候选结果，含属性、尺寸、事件、开放关系、实体提及及对齐建议等未全部绘入星图的数据。三册原生 JSON 请分别读取，不要直接拼接数组。
-- `site/assets/`：{'1240 页原尺寸页图完整保留，直接复制源图片字节，不缩放、不重新编码。原页、图录详情及证据引用使用原图；星图另用小预览加速加载。graphs/volN.page-images.json 提供各册原图路径、尺寸及 SHA-256。' if image_mode == 'original' else '1240 页的压缩预览，供展示、对照出处，不附原分辨率图片。'}分享包不附原始 PDF。
+- `site/assets/`、`site/annotations-v2/` 等图片目录：{f"{len(originals)} 页原尺寸页图完整保留，直接复制源图片字节，不缩放、不重新编码。原页与证据引用使用原图；已标注的器物截图、纹样局部和图注独立保留，星图另用小预览加速加载。graphs/volN.page-images.json 提供各册原图路径、尺寸及 SHA-256。" if image_mode == 'original' else f"{len(manifest['pages'])} 页的压缩预览及已标注的器物、纹样、图注截图，供展示、对照出处，不附原分辨率页图。"}分享包不附原始 PDF。
 - `share-info.json`：各册页数、图录数、候选陈述数及运行标识。
 
 全部数据仍是机器抽取候选，尚未经过独立人工验收；共享纹样或关联路径本身不能证明历史传承。
@@ -169,7 +176,10 @@ node --use-env-proxy server/atlas-server.ts --port 1423 --site /你的解压目�
     windows = '@echo off\r\ncd /d "%~dp0"\r\nwhere py >nul 2>&1\r\nif %errorlevel%==0 (\r\n  py -3 start-viewer.py\r\n) else (\r\n  python start-viewer.py\r\n)\r\npause\r\n'
     shell = '#!/bin/sh\ncd "$(dirname "$0")" || exit 1\nif command -v python3 >/dev/null 2>&1; then\n  exec python3 start-viewer.py "$@"\nelse\n  exec python start-viewer.py "$@"\nfi\n'
     output.parent.mkdir(parents=True, exist_ok=True)
-    with ZipFile(output, 'w', compression=ZIP_DEFLATED, compresslevel=6) as archive:
+    if output.exists():
+        raise FileExistsError(f'Choose a new output filename: {output}')
+    temporary = output.with_suffix(output.suffix+'.tmp')
+    with ZipFile(temporary, 'w', compression=ZIP_DEFLATED, compresslevel=6) as archive:
         for name, data in [('README-使用说明.md', readme), ('启动预览.bat', windows),
                            ('start-viewer.sh', shell), ('start-viewer.py', LAUNCHER),
                            ('site/index.html', html), ('site/manifest.json', text),
@@ -183,6 +193,11 @@ node --use-env-proxy server/atlas-server.ts --port 1423 --site /你的解压目�
             archive.write(source, PREFIX + 'site/' + url)
         for name, path, _ in selected_graphs:
             archive.write(path, PREFIX + name)
+    for path, version in versions.items():
+        if (path.stat().st_size, path.stat().st_mtime_ns) != version:
+            temporary.unlink(missing_ok=True)
+            raise RuntimeError(f'Input changed while packaging; retry: {path}')
+    temporary.replace(output)
     print(json.dumps({'archive': str(output), 'megabytes': round(output.stat().st_size / 1e6, 1),
                       'imageMode': image_mode, 'originalPages': len(originals),
                       'assets': len(assets), 'graphs': [row[2] for row in selected_graphs]}, ensure_ascii=False))
