@@ -1,4 +1,4 @@
-import { cameraDistance, depthCuts, edgeDepthAt, splitByDepth } from './edge-depth.js';
+import { cameraDistance, castToFloor, coneVertices, floorY, depthCuts, splitByDepth } from './edge-depth.js';
 // A compact perspective renderer shared by the application and the single-file atlas.
 const spaceScenes = new WeakMap();
 let spaceSerial = 0;
@@ -48,7 +48,7 @@ function buildSpace(host,nodes,edges) {
     const grad=svgEl('radialGradient',defs,{id:uid+kind,cx:'30%',cy:'22%',r:'83%'});
     colors.forEach((c,i)=>svgEl('stop',grad,{offset:[0,.55,1][i],'stop-color':c}));
   }
-  // A continuous studio backdrop also provides a surface for the soft cast shadows.
+  // The background stays in screen space. The plinth and its contents share the camera.
   const studio=svgEl('linearGradient',defs,{id:uid+'studio',x1:'0%',y1:'0%',x2:'80%',y2:'100%'});
   svgEl('stop',studio,{offset:0,'stop-color':'#fdfcf9'});
   svgEl('stop',studio,{offset:1,'stop-color':'#eeede9'});
@@ -58,11 +58,17 @@ function buildSpace(host,nodes,edges) {
   }
   const backdrop=svgEl('g',svg,{'aria-hidden':true,'pointer-events':'none'});
   svgEl('rect',backdrop,{width:'100%',height:'100%',fill:'url(#'+uid+'studio)'});
-  const shadows=svgEl('g',backdrop,{fill:'url(#'+uid+'shadow)'});
-  // Blur the entire shadow pass once, including horizontal and vertical wires.
-  const blur=svgEl('filter',defs,{id:uid+'wire-blur',filterUnits:'userSpaceOnUse',x:-100,y:-100,width:1100,height:600});
-  svgEl('feGaussianBlur',blur,{stdDeviation:2.1});
-  const wireShadows=svgEl('g',backdrop,{filter:'url(#'+uid+'wire-blur)',opacity:.31,'pointer-events':'none'});
+  const plinth=svgEl('g',backdrop,{class:'space-plinth'});
+  const rim=svgEl('path',plinth,{fill:'#cbc7be',stroke:'#c6c2b8','stroke-width':.8});
+  const surface=svgEl('path',plinth,{fill:'#e8e5de',stroke:'#c9c5bc','stroke-width':1});
+  const perimeter=[[-238,-162],[238,-162],[286,-95],[286,95],[238,162],[-238,162],[-286,95],[-286,-95]];
+  const clip=svgEl('clipPath',defs,{id:uid+'receiver'});
+  const clipFace=svgEl('path',clip);
+  const ink=svgEl('g',plinth,{'clip-path':'url(#'+uid+'receiver)'});
+  const shadows=svgEl('g',ink,{fill:'url(#'+uid+'shadow)'});
+  const blur=svgEl('filter',defs,{id:uid+'wire-blur',filterUnits:'userSpaceOnUse',x:-160,y:-180,width:1280,height:850});
+  svgEl('feGaussianBlur',blur,{stdDeviation:1.5});
+  const wireShadows=svgEl('g',ink,{filter:'url(#'+uid+'wire-blur)',opacity:.29,'pointer-events':'none'});
   const scene=svgEl('g',svg,{class:'space-objects'});
   let previousOrder=[];
   const status=html('p',host,'space-status'); status.setAttribute('aria-live','polite');
@@ -81,10 +87,10 @@ function buildSpace(host,nodes,edges) {
       if (items[i]) others.push(items[i]); if (attrs[i]) others.push(attrs[i]);
     }
   }
-  if(center) Object.assign(center,{x:0,y:0,z:40});
+  if(center) Object.assign(center,{x:0,y:0,z:24,flatY:0});
   others.forEach((n,i)=>{
     const a=Math.PI+i*2*Math.PI/others.length;
-    Object.assign(n,{x:215*Math.cos(a),y:120*Math.sin(a),z:48*Math.cos(2*a+.5)});
+    Object.assign(n,{x:215*Math.cos(a),y:78*Math.sin(a),z:105*Math.sin(a)+25*Math.cos(2*a+.5),flatY:120*Math.sin(a)});
   });
   function action(el,fn) {
     el.addEventListener('click',()=>{if(!suppressClick) fn();});
@@ -137,8 +143,7 @@ function buildSpace(host,nodes,edges) {
   const nodeViews=[...byId.values()].map(n=>{
     const emblem=n.kind==='material'||n.kind==='period';
     const radius=emblem?25:n===center?40:n.kind==='artifact'?32:16;
-    const cast=svgEl('ellipse',shadows,{});
-    const contact=svgEl('ellipse',shadows,{});
+    const cast=svgEl('path',shadows,{});
     const g=svgEl('g',scene,{class:'space-node','data-kind':n.kind,tabindex:0,role:'button','aria-label':[n.label,n.sub].filter(Boolean).join(' · ')});
     if(n.kind==='material') materialMark(g,n.label);
     else if(n.kind==='period') periodMark(g,n.label);
@@ -163,7 +168,7 @@ function buildSpace(host,nodes,edges) {
     if(n.sub) svgEl('text',g,{class:'space-sub','text-anchor':'middle',y:radius+35}).textContent=n.sub;
     svgEl('title',g).textContent=[n.sub,n.label].filter(Boolean).join(' · ');
     action(g,()=>pickNode(n.id));
-    return {n,g,radius,cast,contact};
+    return {n,g,radius,cast};
   });
   const parallels=new Map();
   const edgeViews=edges.map(e=>{
@@ -187,38 +192,63 @@ function buildSpace(host,nodes,edges) {
     const k=zoom*(spatial?cameraDistance/(cameraDistance-depth):1);
     return {x:width/2+dx*k*Math.min(1,(width-115)/500),y:173+dy*k,z:depth,k};
   }
-  function shadowPoint(p) {
-    const lift=Math.max(0,Math.min(1,(p.z+230)/460));
-    const k=zoom*cameraDistance/(cameraDistance-p.z);
-    return {x:p.x+(5+15*lift)*k,y:p.y+(8+18*lift)*k,lift};
-  }
-  function edgeCurve(v,a,b) {
-    const loop=v.e.from===v.e.to;
-    const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
+  function onScreen(p) { return project(p.x,p.y,p.z); }
+  function onFloor(p) { return onScreen(castToFloor(p)); }
+  function makeCurve(v,flat) {
+    const node=id=>{
+      const n=byId.get(id);
+      return {x:n.x,y:flat?n.flatY:n.y,z:flat?0:n.z};
+    };
+    const a=node(v.e.from),b=node(v.e.to);
+    const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
     const bend=(v.index-(v.siblings.length-1)/2)*25*(v.e.from>v.e.to?-1:1);
-    if(!loop && len<=a.r+b.r+7 && Math.abs(bend)<a.r+b.r) return [];
-    const cx=(a.x+b.x)/2-bend*dy/(len||1),cy=(a.y+b.y)/2+bend*dx/(len||1);
-    const entry=loop?Math.PI:Math.atan2(cy-a.y,cx-a.x);
-    const exit=loop?1.9:Math.atan2(b.y-cy,b.x-cx);
-    const start={x:a.x+(a.r+2)*Math.cos(entry),y:a.y+(a.r+2)*Math.sin(entry)};
-    const end={x:b.x-(b.r+3)*Math.cos(exit),y:b.y-(b.r+3)*Math.sin(exit)};
-    const samples=loop?18:bend?10:2;
-    const t0=Math.min(.49,(a.r+2)/(len||1)),t1=Math.max(.51,1-(b.r+3)/(len||1));
-    return Array.from({length:samples+1},(_,i)=>{
-      const t=i/samples,u=1-t;
-      const x=loop?u**3*start.x+3*u*u*t*(a.x-65)+3*u*t*t*(a.x+40)+t**3*end.x:
-        u*u*start.x+2*u*t*(bend?cx:(start.x+end.x)/2)+t*t*end.x;
-      const y=loop?u**3*start.y+3*u*u*t*(a.y-74)+3*u*t*t*(a.y-78)+t**3*end.y:
-        u*u*start.y+2*u*t*(bend?cy:(start.y+end.y)/2)+t*t*end.y;
-      return {x,y,z:spatial?edgeDepthAt(a.z,b.z,t0+(t1-t0)*t):0};
-    });
+    const loop=v.e.from===v.e.to, norm=Math.hypot(dx,dy)||1;
+    const steps=loop?32:bend?20:2, points=[];
+    for(let i=0;i<=steps;i++) {
+      const t=i/steps, u=1-t;
+      if(loop) points.push({x:a.x+3*u*t*(-75*u+65*t),y:a.y-3*u*t*90,z:a.z+(flat?0:90*u*t)});
+      else points.push({x:a.x+t*dx-2*u*t*bend*dy/norm,y:a.y+t*dy+2*u*t*bend*dx/norm,z:a.z+t*dz});
+    }
+    // End each wire on its entity's surface in world space, including curved and self edges.
+    function trim(origin,r) {
+      const outside=points.findIndex(p=>Math.hypot(p.x-origin.x,p.y-origin.y,p.z-origin.z)>r);
+      if(outside<0) {points.length=0;return;}
+      if(outside===0) return;
+      const u=points[outside-1],v=points[outside];
+      const x=v.x-u.x,y=v.y-u.y,z=v.z-u.z;
+      const ox=u.x-origin.x,oy=u.y-origin.y,oz=u.z-origin.z;
+      const len2=x*x+y*y+z*z,dot=ox*x+oy*y+oz*z;
+      const t=(-dot+Math.sqrt(Math.max(0,dot*dot-len2*(ox*ox+oy*oy+oz*oz-r*r))))/len2;
+      points.splice(0,outside,{x:u.x+t*x,y:u.y+t*y,z:u.z+t*z});
+    }
+    trim(a,radii.get(v.e.from)+2);
+    points.reverse();trim(b,radii.get(v.e.to)+3);points.reverse();
+    return points;
   }
+  const radii=new Map(nodeViews.map(v=>[v.n.id,v.radius]));
+  function shape(v,flat) {
+    const points=makeCurve(v,flat),tip=points.at(-1);
+    return {points,head:points.length>1?coneVertices(points.at(-2),tip):[]};
+  }
+  for(const v of edgeViews) {v.spatial=shape(v,false);v.flat=shape(v,true);}
   function pathOf(points) {
     return points.map((p,i)=>(i?'L':'M')+p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' ');
   }
-  function placeArrow(el,prev,tip,scale) {
-    const angle=Math.atan2(tip.y-prev.y,tip.x-prev.x)*180/Math.PI;
-    set(el,{d:'M0 0 L-8 -3.6 L-8 3.6 Z',transform:'translate('+tip.x+' '+tip.y+') rotate('+angle+') scale('+scale+')'});
+  function silhouette(points) {
+    const sorted=[...points].sort((a,b)=>a.x-b.x||a.y-b.y);
+    function half(vertices) {
+      const h=[];
+      for(const p of vertices) {
+        while(h.length>1) {
+          const a=h[h.length-2],b=h[h.length-1];
+          if((b.x-a.x)*(p.y-a.y)>(b.y-a.y)*(p.x-a.x)) break;
+          h.pop();
+        }
+        h.push(p);
+      }
+      return h.slice(0,-1);
+    }
+    return pathOf([...half(sorted),...half(sorted.reverse())])+' Z';
   }
   function strokeAt(v,i) {
     if(v.strokes[i]) return v.strokes[i];
@@ -231,27 +261,32 @@ function buildSpace(host,nodes,edges) {
   }
   function render() {
     width=Math.max(345,Math.min(860,host.clientWidth || 720));
-    svg.setAttribute('viewBox','0 0 '+width+' 390');
+    svg.setAttribute('viewBox','0 0 '+width+(spatial?' 490':' 390'));
     svg.setAttribute('data-mode',spatial?'space':'flat');
-    shadows.setAttribute('display',spatial?'inline':'none');
-    wireShadows.setAttribute('display',spatial?'inline':'none');
+    plinth.setAttribute('display',spatial?'inline':'none');
+    if(spatial) {
+      const face=pathOf(perimeter.map(([x,z])=>project(x,floorY,z)))+' Z';
+      surface.setAttribute('d',face);clipFace.setAttribute('d',face);
+      const lower=perimeter.map(([x,z])=>project(x,floorY+4,z));
+      rim.setAttribute('d',silhouette([...lower,...perimeter.map(([x,z])=>project(x,floorY,z))]));
+    }
     const points=new Map(), paint=[];
     for(const view of nodeViews) {
-      const {n}=view,p=project(n.x,n.y,n.z);points.set(n.id,{...p,r:view.radius*p.k});
+      const {n}=view,p=project(n.x,spatial?n.y:n.flatY,spatial?n.z:0);
+      points.set(n.id,{...p,r:view.radius*p.k});
       if(spatial) {
-        // A fixed upper-left light: increasing separation from the backing plane
-        // widens and displaces the shadow while reducing its peak density.
-        const cast=shadowPoint(p),lift=cast.lift;
-        const radius=view.radius*p.k;
-        const spread=radius*(1.17+.37*lift);
-        set(view.cast,{cx:cast.x,cy:cast.y,
-          rx:spread,ry:spread*.94,opacity:.87-.24*lift});
-        set(view.contact,{cx:p.x+2*p.k,cy:p.y+4*p.k,rx:radius*1.14,ry:radius*1.13,opacity:.6-.25*lift});
+        const foot=castToFloor(n),height=floorY-n.y;
+        const r=view.radius+4+.07*height;
+        const footprint=Array.from({length:24},(_,i)=>{
+          const a=i*Math.PI/12;
+          return project(foot.x+r*Math.cos(a),floorY,foot.z+r*Math.sin(a));
+        });
+        set(view.cast,{d:pathOf(footprint)+' Z',opacity:.83-height*.0018});
       }
       paint.push({el:view.g,z:spatial?p.z:1});
       view.g.setAttribute('transform','translate('+p.x+' '+p.y+') scale('+p.k+')');
     }
-    const curves=edgeViews.map(v=>edgeCurve(v,points.get(v.e.from),points.get(v.e.to)));
+    const curves=edgeViews.map(v=>(spatial?v.spatial:v.flat).points.map(onScreen));
     const cuts=spatial?depthCuts(curves,[...points.values()].map(p=>p.z)):[];
     edgeViews.forEach((v,i)=>{
       const curve=curves[i],shown=curve.length>0,display=shown?'inline':'none';
@@ -265,15 +300,14 @@ function buildSpace(host,nodes,edges) {
       }
       for(let j=pieces.length;j<v.strokes.length;j++) v.strokes[j].g.setAttribute('display','none');
       if(!shown) return;
-      const tip=curve[curve.length-1],before=curve[curve.length-2],mid=curve[Math.floor(curve.length/2)];
-      const size=spatial?zoom*cameraDistance/(cameraDistance-tip.z):zoom;
-      placeArrow(v.arrow,before,tip,size);
+      const tip=curve[curve.length-1],mid=curve[Math.floor(curve.length/2)];
+      const geometry=spatial?v.spatial:v.flat;
+      v.arrow.setAttribute('d',silhouette(geometry.head.map(onScreen)));
       set(v.caption,{x:mid.x,y:mid.y-6});
       paint.push({el:v.g,z:tip.z+.0001},{el:v.caption,z:mid.z+.0001});
       if(spatial) {
-        const shadow=curve.map(shadowPoint);
-        set(v.shade,{d:pathOf(shadow),'stroke-width':2*size});
-        placeArrow(v.arrowShade,shadow[shadow.length-2],shadow[shadow.length-1],size);
+        set(v.shade,{d:pathOf(geometry.points.map(onFloor)),'stroke-width':1.8*zoom});
+        v.arrowShade.setAttribute('d',silhouette(geometry.head.map(onFloor)));
       }
     });
     paint.sort((a,b)=>a.z-b.z);
@@ -290,9 +324,9 @@ function buildSpace(host,nodes,edges) {
     tip.textContent=on?'拖动旋转 · 点选关系查看出处':'点选关系查看出处';
     reset();
   }
-  function reset() {yaw=spatial ? -.16 : 0; pitch=spatial ? .19 : 0;zoom=1;render();}
+  function reset() {yaw=spatial ? -.16 : 0; pitch=spatial ? -.56 : 0;zoom=spatial ? .87 : 1;render();}
   function magnify(d) {zoom=Math.max(.7,Math.min(1.45,zoom+d));render();}
-  function rotate(dx,dy){yaw+=dx;pitch=Math.max(-1,Math.min(1,pitch+dy));render();}
+  function rotate(dx,dy){yaw+=dx;pitch=Math.max(-1.03,Math.min(-.12,pitch+dy));render();}
   svg.onpointerdown=ev=>{
     if(ev.button!==0||!ev.isPrimary) return;
     suppressClick=false;

@@ -54,3 +54,24 @@ export function splitByDepth(points,cuts) {
   }
   return pieces;
 }
+
+// Positive y points down. The receiver and directional light are in world units.
+export const floorY=122;
+export function castToFloor(p) {
+  const height=floorY-p.y;
+  return {x:p.x+.21*height,y:floorY,z:p.z+.17*height};
+}
+
+// Arrowheads are small cones. Their silhouette and its cast shadow use the same vertices.
+export function coneVertices(before,tip) {
+  const length=Math.hypot(tip.x-before.x,tip.y-before.y,tip.z-before.z);
+  if(length<1e-7) return [tip];
+  const dx=(tip.x-before.x)/length,dy=(tip.y-before.y)/length,dz=(tip.z-before.z)/length;
+  const horizontal=Math.hypot(dx,dz);
+  const ux=horizontal>1e-7?dz/horizontal:1, uz=horizontal>1e-7?-dx/horizontal:0;
+  const vx=dy*uz,vy=dz*ux-dx*uz,vz=-dy*ux;
+  return [tip,...Array.from({length:8},(_,i)=>{
+    const a=i*Math.PI/4,c=3.7*Math.cos(a),s=3.7*Math.sin(a);
+    return {x:tip.x-9*dx+c*ux+s*vx,y:tip.y-9*dy+s*vy,z:tip.z-9*dz+c*uz+s*vz};
+  })];
+}
