@@ -1109,6 +1109,7 @@ html[data-theme="dark"] .proof-caption-img {
   font-weight: 600;
   letter-spacing: 0.08em;
 }
+#catalogTabs { max-width: 100%; flex-wrap: wrap; border-radius: 18px; }
 
 .entity-grid {
   display: grid;
@@ -2199,6 +2200,7 @@ html[data-theme="dark"] .proof-caption-img {
       <details class="graph-attribute-card" open>
         <summary id="graphAttributeTitle"></summary>
         <div class="graph-attribute-rows" id="graphAttributeRows"></div>
+        <div class="graph-attribute-evidence" id="graphDocumentRecords" hidden></div>
         <div class="graph-attribute-evidence" id="graphAttributeEvidence" hidden></div>
       </details>
     </aside>
@@ -2238,6 +2240,10 @@ html[data-theme="dark"] .proof-caption-img {
         <button type="button" data-cat="material">按材质</button>
         <button type="button" data-cat="motif">按纹样</button>
         <button type="button" data-cat="artifact_type">按器类</button>
+        <button type="button" data-cat="technique">工艺</button>
+        <button type="button" data-cat="composition">构图</button>
+        <button type="button" data-cat="symbolism">象征意义</button>
+        <button type="button" data-cat="belief">信仰关联</button>
       </div>
       <select class="type-filter" id="catalogExtraDimension" aria-label="其他图录维度"></select>
     </div>
@@ -2666,6 +2672,7 @@ __REASONER_JS__
     const evMap = new Map((manifest.evidence || []).map(e => [e.id, e]));
     const rowsByArt = new Map();
     for (const r of (manifest.rows || [])) {
+      if (r.projectionStatus === 'superseded' || r.supersededBy?.length || r.reviewStatus === 'rejected') continue;
       if (!rowsByArt.has(r.artifactId)) rowsByArt.set(r.artifactId, []);
       rowsByArt.get(r.artifactId).push(r);
     }
@@ -2677,20 +2684,28 @@ __REASONER_JS__
 
     const normalizeItem = (it, idx, sourceRows = null) => {
       const rs = sourceRows || rowsByArt.get(it.artifactId) || [];
-      const periods = [...new Set(rs.filter(r => r.predicate === 'period').map(r => r.object))];
-      const materials = [...new Set(rs.filter(r => r.predicate === 'made_of').map(r => r.object))];
-      const motifs = [...new Set(rs.filter(r => r.predicate === 'decorated_with').map(r => r.object))];
-      const techniques = [...new Set(rs.filter(r => r.predicate === 'uses_technique').map(r => r.object))];
+      const values = (field, predicate) => [...new Set([...(it[field] || []),
+        ...rs.filter(r => r.predicate === predicate).map(r => r.object)].filter(Boolean))];
+      const periods = values('periods', 'period');
+      const materials = values('materials', 'made_of');
+      const motifs = values('motifs', 'decorated_with');
       const artifactTypes = [...new Set([...(it.artifactTypes || []), ...rs.filter(r => r.predicate === 'artifact_type').map(r => r.object)])];
       const extraValues = Object.fromEntries(Object.entries(EXTRA_DIMENSIONS).map(([kind, dim]) =>
         [dim.field, [...new Set([...(it[dim.field] || []), ...rs.filter(r => predToKind(r.predicate) === kind).map(r => r.object)])]]));
       const eraGroups = [...new Set(periods.map(p => eraChronology(p).group))];
       const ev = evMap.get(it.evidenceId) || {};
-      const original = it.pageUrl || ev.previewUrl;
-      const thumbUrl = mediaURL(it.detailUrl || it.imageUrl || original);
-      const plateUrl = mediaURL(it.imageUrl || it.detailUrl || original);
+      // Older importers kept crop fields on a relation or source record only.
+      // Bind by record ID; names and page numbers are not unique across books.
+      const mediaSources = [it, ...(it.sourceRecords || []), ...rs.filter(row =>
+        !it.sourceRecordId || (row.sourceRecordId || row.artifactId) === it.sourceRecordId)];
+      const media = mediaSources.find(source => ['artifact', 'artifact_candidate'].includes(source.imageKind)
+        && (source.imageUrl || source.detailUrl))
+        || mediaSources.find(source => source.imageUrl || source.detailUrl) || it;
+      const original = media.pageUrl || it.pageUrl || ev.previewUrl;
+      const thumbUrl = mediaURL(media.detailUrl || media.imageUrl || original);
+      const plateUrl = mediaURL(media.imageUrl || media.detailUrl || original);
       const pageUrl = mediaURL(original);
-      const imageKind = it.imageKind || (it.imageUrl && it.imageUrl !== original ? 'artifact' : 'page');
+      const imageKind = media.imageKind || (media.imageUrl && media.imageUrl !== original ? 'artifact' : 'page');
       return {
         idx,
         id: it.artifactId,
@@ -2708,16 +2723,15 @@ __REASONER_JS__
         eraGroups,
         materials,
         motifs,
-        techniques,
         ...extraValues,
         artifactTypes,
         rows: rs,
         thumbUrl,
         plateUrl,
         imageKind,
-        imageCandidates: (it.imageCandidates || []).filter(image => image.imageUrl)
+        imageCandidates: (media.imageCandidates || it.imageCandidates || []).filter(image => image.imageUrl)
           .map(image => ({ ...image, imageUrl: mediaURL(image.imageUrl) })),
-        imageReviewStatus: it.imageReviewStatus || '',
+        imageReviewStatus: media.imageReviewStatus || '',
         sourceRecordId: it.sourceRecordId || it.artifactId,
         sourceEntityId: it.sourceEntityId || '',
         canonicalId: it.canonicalArtifactId || it.artifactId,
@@ -2833,6 +2847,15 @@ __REASONER_JS__
         if (!entries.has(value)) entries.set(value, { id: value, name: value, items: [] });
         entries.get(value).items.push(item);
       }
+      // Text discusses techniques/compositions at concept level too. Keep those
+      // sources visible without turning them into facts about every artifact.
+      for (const record of manifest.interpretations || []) {
+        if (record.kind !== kind) continue;
+        const value = record.value;
+        if (!entries.has(value)) entries.set(value, { id: value, name: value, items: [] });
+        const entry = entries.get(value);
+        (entry.documentRecords ||= []).push(record);
+      }
       const list = [...entries.values()].map(entry => ({ ...entry, count: entry.items.length }))
         .sort((a, b) => b.count-a.count || a.name.localeCompare(b.name, 'zh-Hans'));
       extraEntries[dim.field] = list;
@@ -2929,10 +2952,12 @@ __REASONER_JS__
 
     // Index document-backed pattern properties once; never inherit them onto
     // artifact records or change the graph's nodes, edges or clustering.
-    const patternAttributes = new Map();
+    const patternAttributes = new Map(), interpretationsBySubject = new Map();
     for (const record of manifest.interpretations || []) {
-      if (!['symbolism', 'belief'].includes(record.kind)) continue;
       const subject = patternAttributeKey(record.subject.label);
+      if (!interpretationsBySubject.has(subject)) interpretationsBySubject.set(subject, []);
+      interpretationsBySubject.get(subject).push(record);
+      if (!['symbolism', 'belief'].includes(record.kind)) continue;
       if (!patternAttributes.has(subject)) patternAttributes.set(subject, new Map());
       const groups = patternAttributes.get(subject), key = record.kind + ':' + patternAttributeKey(record.value, false);
       if (!groups.has(key)) groups.set(key, { key, kind: record.kind, value: record.value,
@@ -2944,6 +2969,7 @@ __REASONER_JS__
       title: manifest.title || '纹样知识图谱',
       interpretations: manifest.interpretations || [],
       patternAttributes,
+      interpretationsBySubject,
       volumes: manifest.volumes || [],
       pagesByVolume,
       items,
@@ -3433,6 +3459,7 @@ __REASONER_JS__
       [kind, { label: dim.label, list: dim.field, index: kind+'ById', values: dim.field }])),
   };
   const KIND_LABEL = Object.fromEntries(Object.entries(DIMENSIONS).map(([kind, dim]) => [kind, dim.label]));
+  const INTERPRETATION_CATALOGS = { interpretation: '文献关系', symbolism: '象征意义', belief: '信仰关联' };
   const dimensionEntries = kind => G[DIMENSIONS[kind]?.list] || [];
   const dimensionIndex = kind => G[DIMENSIONS[kind]?.index];
   const dimensionValues = (item, kind) => item[DIMENSIONS[kind]?.values] || [];
@@ -3476,14 +3503,35 @@ __REASONER_JS__
     const subject = stageOverlay?.type === 'attributes' ? stageOverlay.attributeSubject
       : !stageOverlay && state.focusKind === 'motif' ? state.focusId : null;
     const groups = subject ? getPatternAttributes(subject) : [];
-    panel.hidden = !groups.length;
-    if (!groups.length) { panel.dataset.subject = ''; return; }
-    if (panel.dataset.subject === subject) return;
-    panel.dataset.subject = subject;
-    $('graphAttributeTitle').textContent = `${subject}的属性`;
+    const documents = subject
+      ? (G.interpretationsBySubject.get(patternAttributeKey(subject)) || []).filter(record => !['symbolism', 'belief'].includes(record.kind))
+      : !stageOverlay ? dimensionIndex(state.focusKind)?.get(state.focusId)?.documentRecords || [] : [];
+    panel.hidden = !groups.length && !documents.length;
+    if (panel.hidden) { panel.dataset.subject = ''; return; }
+    const key = subject ? 'subject:' + subject : state.focusKind + ':' + state.focusId;
+    if (panel.dataset.subject === key) return;
+    panel.dataset.subject = key;
+    $('graphAttributeTitle').textContent = subject ? `${subject}的属性` : `${state.focusId}的文献记载`;
     $('graphAttributeRows').replaceChildren();
     $('graphAttributeEvidence').hidden = true;
-    appendPatternAttributeRows($('graphAttributeRows'), subject, group => showPatternAttributeEvidence(subject, group));
+    if (subject) appendPatternAttributeRows($('graphAttributeRows'), subject, group => showPatternAttributeEvidence(subject, group));
+    const documentPanel = $('graphDocumentRecords');
+    documentPanel.hidden = !documents.length;
+    documentPanel.replaceChildren(...documents.map(record => interpretationSourceArticle(record, true)));
+  }
+
+  function interpretationSourceArticle(record, showRelation = false) {
+    const article = document.createElement('article'), locator = document.createElement('span');
+    locator.className = 'source-label'; locator.textContent = record.locator || sourcePageLabel(record);
+    if (showRelation) {
+      const title = document.createElement('strong'); title.style.fontSize = '12px';
+      title.textContent = `${record.subject.label} · ${record.relationLabel || KIND_LABEL[record.kind] || '文献记载'} · ${record.value}`;
+      article.append(title, document.createElement('br'));
+    }
+    const quote = document.createElement('blockquote'); quote.textContent = record.text;
+    const original = document.createElement('button'); original.type = 'button'; original.className = 'chip'; original.textContent = '查看原页';
+    original.onclick = () => { clearStageOverlay(); closeDrawer(); state.currentPage = record.page; switchView('pages'); };
+    article.append(locator, quote, original); return article;
   }
 
   function showPatternAttributeEvidence(subject, group) {
@@ -3496,14 +3544,7 @@ __REASONER_JS__
     const close = document.createElement('button'); close.type = 'button'; close.className = 'chip'; close.textContent = '收起原文';
     close.onclick = () => { proof.hidden = true; panel.querySelectorAll('.pattern-attribute').forEach(b => b.setAttribute('aria-pressed', 'false')); };
     header.append(title, close);
-    const sources = group.records.map(record => {
-      const article = document.createElement('article'), locator = document.createElement('span');
-      locator.className = 'source-label'; locator.textContent = record.locator || sourcePageLabel(record);
-      const quote = document.createElement('blockquote'); quote.textContent = record.text;
-      const original = document.createElement('button'); original.type = 'button'; original.className = 'chip'; original.textContent = '查看原页';
-      original.onclick = () => { clearStageOverlay(); closeDrawer(); state.currentPage = record.page; switchView('pages'); };
-      article.append(locator, quote, original); return article;
-    });
+    const sources = group.records.map(record => interpretationSourceArticle(record));
     proof.replaceChildren(header, ...sources); proof.hidden = false;
   }
 
@@ -3645,7 +3686,7 @@ __REASONER_JS__
         pushHistory: false,
       });
     } else if (parts[0] === 'catalog') {
-      state.catalogTab = parts[1] === 'interpretation' || Object.hasOwn(DIMENSIONS, parts[1]) ? parts[1] : 'era';
+      state.catalogTab = Object.hasOwn(INTERPRETATION_CATALOGS, parts[1]) || Object.hasOwn(DIMENSIONS, parts[1]) ? parts[1] : 'era';
       switchView('catalog', false);
     } else if (parts[0] === 'page') {
       state.currentPage = Math.max(1, Math.min(G.pages.length, Number(parts[1]) || 1));
@@ -5252,9 +5293,10 @@ __REASONER_JS__
     $('focusLabel').textContent = state.focusId;
     const baseCount = getFocalItems(state.focusKind, state.focusId).length;
     const shownCount = getFilteredFocalItems(state.focusKind, state.focusId).length;
-    $('focusMeta').textContent = activeGraphFilterCount()
+    const documentCount = dimensionIndex(state.focusKind)?.get(state.focusId)?.documentRecords?.length || 0;
+    $('focusMeta').textContent = (activeGraphFilterCount()
       ? `${shownCount} / ${baseCount} 条 · ${graph.clusters.length} 簇`
-      : `${baseCount} 条 · ${graph.clusters.length} 簇`;
+      : `${baseCount} 条 · ${graph.clusters.length} 簇`) + (documentCount ? ` · ${documentCount} 处文献` : '');
     $('graphBack').hidden = state.history.length === 0;
     $('graphBack').disabled = state.history.length === 0;
 
@@ -6045,13 +6087,15 @@ __REASONER_JS__
      7. VIEW 3 — MUSEO Morandi Grid Catalog
      ═══════════════════════════════════════════════════════════════ */
   function renderCatalog() {
-    const interpretations = state.catalogTab === 'interpretation';
+    const interpretations = Object.hasOwn(INTERPRETATION_CATALOGS, state.catalogTab);
     $('interpretationTools').hidden = !interpretations;
     $('catalogSpecimens').hidden = interpretations;
     $('catalogTabs').querySelectorAll('button').forEach(b => {
       b.setAttribute('aria-pressed', String(b.dataset.cat === state.catalogTab));
     });
-    $('catalogExtraDimension').value = interpretations ? 'interpretation' : Object.hasOwn(EXTRA_DIMENSIONS, state.catalogTab) ? state.catalogTab : '';
+    $('catalogExtraDimension').value = state.catalogTab === 'interpretation' ? 'interpretation'
+      : ['technique', 'composition'].includes(state.catalogTab) ? ''
+      : Object.hasOwn(EXTRA_DIMENSIONS, state.catalogTab) ? state.catalogTab : '';
     if (interpretations) { renderInterpretations(); return; }
 
     const list = dimensionEntries(state.catalogTab);
@@ -6080,16 +6124,19 @@ __REASONER_JS__
       const thumbsHtml = ent.items.slice(0, 4).map(it =>
         `<img src="${esc(it.thumbUrl)}" alt="" loading="lazy">`
       ).join('');
+      const documentCount = ent.documentRecords?.length || 0;
+      const properties = state.catalogTab === 'motif' ? getPatternAttributes(ent.name) : [];
+      const propertyChips = properties.slice(0, 4).map(group => `<span>${esc(group.label)} · ${esc(group.value)}</span>`).join('');
 
       card.innerHTML = `
         <div class="entity-card-top">
           <h3>${esc(ent.name)}</h3>
-          <span class="entity-count">${ent.count}</span>
+          <span class="entity-count">${ent.count} 件${documentCount ? ` · ${documentCount} 处文献` : ''}</span>
         </div>
         <div class="entity-thumbs">${thumbsHtml}</div>
-        <div class="entity-subchips">${topSubs.map(([k, v]) => `<span>${esc(k)} ${v}</span>`).join('') || '<span>图录条目</span>'}</div>
+        <div class="entity-subchips">${topSubs.map(([k, v]) => `<span>${esc(k)} ${v}</span>`).join('')}${propertyChips}${documentCount ? '<span>保留正文对象与出处</span>' : ''}</div>
         <div class="entity-cta">
-          <span>按${nextClusterLabel}聚类查看</span>
+          <span>${ent.count ? `按${nextClusterLabel}聚类查看` : '查看文献记载与出处'}</span>
           <span>2D / 3D ↗</span>
         </div>
       `;
@@ -6110,9 +6157,10 @@ __REASONER_JS__
   }
 
   function renderInterpretations() {
-    $('catalogTitle').textContent = '文献关系';
+    $('catalogTitle').textContent = INTERPRETATION_CATALOGS[state.catalogTab] || '文献关系';
     const query = $('interpretationSearch').value.trim().toLowerCase();
-    const kind = $('interpretationKind').value;
+    const kind = state.catalogTab === 'interpretation' ? $('interpretationKind').value : state.catalogTab;
+    $('interpretationKind').value = kind;
     const entries = G.interpretations.filter(record => (!kind || record.kind === kind)
       && (!query || [record.subject.label, record.value, record.text].join(' ').toLowerCase().includes(query)));
     $('interpretationCount').textContent = `${entries.length} 条文献解释`;
@@ -6694,7 +6742,8 @@ __REASONER_JS__
     for (const [id, label] of [['catalogExtraDimension', '更多维度'], ['switcherExtraDimension', '更多维度']]) {
       const select = $(id);
       const makeOption = (value, text) => { const option = document.createElement('option'); option.value = value; option.textContent = text; return option; };
-      select.replaceChildren(makeOption('', label), ...Object.entries(EXTRA_DIMENSIONS).filter(([kind]) => dimensionEntries(kind).length)
+      select.replaceChildren(makeOption('', label), ...Object.entries(EXTRA_DIMENSIONS)
+        .filter(([kind]) => dimensionEntries(kind).length && !(id === 'catalogExtraDimension' && ['technique', 'composition'].includes(kind)))
         .map(([kind, dim]) => makeOption(kind, `${dim.label} (${dimensionEntries(kind).length})`)));
       if (id === 'catalogExtraDimension' && G.interpretations.length) select.append(makeOption('interpretation', `文献关系 (${G.interpretations.length})`));
     }
@@ -6703,7 +6752,11 @@ __REASONER_JS__
       state.catalogTab = $('catalogExtraDimension').value; renderCatalog(); syncHash();
     };
     $('interpretationSearch').oninput = renderInterpretations;
-    $('interpretationKind').onchange = renderInterpretations;
+    $('interpretationKind').onchange = () => {
+      const kind = $('interpretationKind').value;
+      state.catalogTab = ['symbolism', 'belief'].includes(kind) ? kind : 'interpretation';
+      renderCatalog(); syncHash();
+    };
     $('switcherExtraDimension').onchange = () => {
       if (!$('switcherExtraDimension').value) return;
       switcherKind = $('switcherExtraDimension').value; renderSwitcherList();

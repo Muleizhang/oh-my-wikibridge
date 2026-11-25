@@ -27,6 +27,8 @@ npm run atlas -- --port 1423 --site data/local-kg/share/wikibridge-three-volumes
 
 三册站点从 `site/manifest.json` 读取器物和裁图关联，并从同一个 `site/` 目录加载 `annotations-v2/` 与 `assets/`。只使用第一册样本时，可将 `--site` 改为 `data/local-kg/atlas-100/site`。
 
+已有分享包时，`--site` 也可直接指定解压目录，服务会寻找其中的 `site/manifest.json`；不传 `--site` 时优先加载本机 `data/local-kg/merged/site`。图录提供工艺、构图、象征意义、信仰关联入口；工艺和构图同时列出器物字段与正文记载，并分别计数。前端对接方式见 [图片与分类适配说明](docs/atlas-frontend-adaptation.md)。
+
 历史长河用 SVG 河道按时代展示纹样。同一时代、同名纹样聚成一簇，孤例和未标纹样的条目独立显示。悬停可查看其他时代的同名纹样连线，点击可查看簇内图录或单件出处。未标注时代的条目从「时代待定」入口查看。
 
 三册处理完成后，可运行 `python3 scripts/package_kg_share.py` 生成 `data/local-kg/share/wikibridge-three-volumes-original-pages.zip` 发给组员。包内含统一星图、三册全部原尺寸页图（直接复制，不缩放或重新编码）、当前完整候选图谱和启动说明；星图另保留小预览加速，原页和证据使用原图。解压后 Windows 双击「启动预览.bat」，macOS / Linux 运行 `sh start-viewer.sh`（需要 Python 3）。浏览及符号推演无需密钥，大模型服务需各自配置。打包采用固定文件清单，不读取环境配置或历史实验目录；需要轻量预览版时加 `--image-mode preview`。

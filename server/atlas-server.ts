@@ -10,6 +10,7 @@ import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMPARISON_DIMENSIONS, EXTRA_DIMENSIONS, PREDICTION_DIMENSIONS, createKGReasoner } from '../src/kg-reasoner.js';
 import { assessAgentAnswer, comparisonSummary, hasToolMarkup, readAgentCompletion, recoverToolCalls, resolveCompareIntent, resolvePathIntent, pathSearchSummary } from './agent-answer.js';
+import { defaultAtlasSite, resolveAtlasSite } from './atlas-site.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -799,16 +800,14 @@ function parseCliArgs() {
   const args = process.argv.slice(2);
   let port = Number(process.env.PORT || 1422);
   let host = process.env.HOST || '127.0.0.1';
-  const sharedSite = resolve(ROOT, 'data/local-kg/share/wikibridge-three-volumes/site');
-  const defaultSite = existsSync(resolve(sharedSite, 'manifest.json')) ? sharedSite : resolve(ROOT, 'data/local-kg/atlas-100/site');
-  let siteDir = process.env.ATLAS_SITE_DIR || defaultSite;
+  let siteDir = process.env.ATLAS_SITE_DIR || defaultAtlasSite(ROOT);
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--port' && args[i + 1]) port = Number(args[++i]);
     else if (args[i] === '--host' && args[i + 1]) host = args[++i];
     else if (args[i] === '--site' && args[i + 1]) siteDir = resolve(args[++i]);
   }
-  return { port, host, siteDir };
+  return { port, host, siteDir: resolveAtlasSite(siteDir) };
 }
 
 async function readJsonBody(req: IncomingMessage, maxBytes = 64_000): Promise<any> {
