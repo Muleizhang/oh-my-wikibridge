@@ -72,9 +72,12 @@ function buildSpace(host,nodes,edges) {
   const scene=svgEl('g',svg,{class:'space-objects'});
   let previousOrder=[];
   const status=html('p',host,'space-status'); status.setAttribute('aria-live','polite');
-  const tip=html('small',bar,'space-tip','拖动旋转 · 点选关系查看出处');
+  const tip=html('small',bar,'space-tip','拖动旋转 · 点选关系');
   let width=720, yaw, pitch, zoom, spatial=true, selected='', pickEdge, pickNode;
   let pointer=null, suppressClick=false;
+  const dense=nodes.length>=15;
+  const glyphScale=dense?Math.min(.65,2.8/Math.sqrt(nodes.length)):1;
+  svg.setAttribute('data-density',dense?'dense':'regular');
   const byId=new Map(nodes.map(n=>[n.id,{...n,degree:0}]));
   for (const e of edges) { byId.get(e.from).degree++; byId.get(e.to).degree++; }
   const center=[...byId.values()].find(n=>n.kind==='motif') ?? [...byId.values()].sort((a,b)=>b.degree-a.degree)[0];
@@ -89,6 +92,14 @@ function buildSpace(host,nodes,edges) {
   }
   if(center) Object.assign(center,{x:0,y:0,z:24,flatY:0});
   others.forEach((n,i)=>{
+    if(dense) {
+      // Fill the footprint instead of stacking every sample on one perimeter.
+      const distance=Math.sqrt((i+1)/others.length);
+      const angle=i*Math.PI*(3-Math.sqrt(5));
+      const x=245*distance*Math.cos(angle),flatY=155*distance*Math.sin(angle);
+      Object.assign(n,{x,flatY,y:.56*flatY,z:.67*flatY+26*Math.sin(i*1.7)});
+      return;
+    }
     const a=Math.PI+i*2*Math.PI/others.length;
     Object.assign(n,{x:215*Math.cos(a),y:78*Math.sin(a),z:105*Math.sin(a)+25*Math.cos(2*a+.5),flatY:120*Math.sin(a)});
   });
@@ -164,11 +175,15 @@ function buildSpace(host,nodes,edges) {
     if(emblem) svgEl('rect',g,{...outline,x:-29,y:-25,width:58,height:51,rx:10});
     else svgEl('circle',g,{...outline,r:radius+4});
     const name=svgEl('text',g,{class:'space-name','text-anchor':'middle',y:radius+20});
+    if(dense) {
+      name.setAttribute('transform','translate(0 '+(radius+15/glyphScale)+') scale('+(1/glyphScale)+')');
+      name.setAttribute('y',0);
+    }
     name.textContent=n.label.length>15?n.label.slice(0,14)+'…':n.label;
     if(n.sub) svgEl('text',g,{class:'space-sub','text-anchor':'middle',y:radius+35}).textContent=n.sub;
     svgEl('title',g).textContent=[n.sub,n.label].filter(Boolean).join(' · ');
     action(g,()=>pickNode(n.id));
-    return {n,g,radius,cast};
+    return {n,g,radius:radius*glyphScale,cast};
   });
   const parallels=new Map();
   const edgeViews=edges.map(e=>{
@@ -284,10 +299,14 @@ function buildSpace(host,nodes,edges) {
         set(view.cast,{d:pathOf(footprint)+' Z',opacity:.83-height*.0018});
       }
       paint.push({el:view.g,z:spatial?p.z:1});
-      view.g.setAttribute('transform','translate('+p.x+' '+p.y+') scale('+p.k+')');
+      view.g.setAttribute('transform','translate('+p.x+' '+p.y+') scale('+(p.k*glyphScale)+')');
     }
     const curves=edgeViews.map(v=>(spatial?v.spatial:v.flat).points.map(onScreen));
-    const cuts=spatial?depthCuts(curves,[...points.values()].map(p=>p.z)):[];
+    const bounds=dense?nodeViews.map(({n})=>{
+      const p=points.get(n.id),half=Math.max(p.r+8,Math.min(n.label.length,15)*8*p.k);
+      return {left:p.x-half,right:p.x+half,top:p.y-p.r-8,bottom:p.y+p.r+32*p.k,z:p.z};
+    }):[];
+    const cuts=spatial?depthCuts(curves,dense?[]:[...points.values()].map(p=>p.z),bounds):[];
     edgeViews.forEach((v,i)=>{
       const curve=curves[i],shown=curve.length>0,display=shown?'inline':'none';
       for(const el of [v.g,v.caption,v.shade,v.arrowShade]) el.setAttribute('display',display);
@@ -321,7 +340,7 @@ function buildSpace(host,nodes,edges) {
   }
   function mode(on) {
     spatial=on;space.setAttribute('aria-pressed',String(on));flat.setAttribute('aria-pressed',String(!on));
-    tip.textContent=on?'拖动旋转 · 点选关系查看出处':'点选关系查看出处';
+    tip.textContent=on?'拖动旋转 · 点选关系':'点选关系';
     reset();
   }
   function reset() {yaw=spatial ? -.16 : 0; pitch=spatial ? -.56 : 0;zoom=spatial ? .87 : 1;render();}

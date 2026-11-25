@@ -10,6 +10,11 @@ from tempfile import TemporaryDirectory
 
 from PIL import Image
 
+if __package__:
+    from .build_graph_trial import build_graph_trial
+else:
+    from build_graph_trial import build_graph_trial
+
 ROOT = Path(__file__).resolve().parents[1]
 DIGEST = 'b5b81b330f9b12ef102fbeed95094d54a51476dfce95900ee8afca0cc6298b23'
 TITLE = '中国纹样全集 1 · 新石器时代和商·西周·春秋卷'
@@ -109,6 +114,7 @@ def build(pdf, out):
     spatial = (ROOT/'src/spatial-graph.js').read_text().split('\n', 1)[1].replace('export function', 'function', 1)
     network = (ROOT/'src/motif-network.js').read_text().split('\n', 1)[1].replace('export function','function',1)
     (out/'index.html').write_text(template.replace('__FOLIO_CSS__',(ROOT/'src/folio.css').read_text()).replace('__BOOK_DATA__',inline).replace('__DRAW_NETWORK__','\n'.join((geometry, spatial, network))))
+    build_graph_trial(out / '多节点测试.html')
     return manifest
 
 

@@ -45,3 +45,11 @@ test('arrow silhouette and shadow share the same three-dimensional cone',()=>{
     assert.equal(castToFloor(p).y,floorY);
   }
 });
+
+test('only potentially overlapping node bounds split a wire',()=>{
+  const wire=[{x:0,y:0,z:-140},{x:100,y:0,z:100}];
+  assert.deepEqual(depthCuts([wire],[],[
+    {left:30,right:50,top:-5,bottom:8,z:0},
+    {left:20,right:40,top:60,bottom:80,z:40}
+  ]),[[0]]);
+});

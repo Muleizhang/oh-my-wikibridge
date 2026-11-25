@@ -1,3 +1,4 @@
+import { mountGraphTrial } from './graph-trial.js';
 import { drawNetwork } from './motif-network.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { call, desktop, errorText } from './api';
@@ -57,6 +58,17 @@ function Plate({ row, view, onZoom }: { row: MotifRow; view: View; onZoom: (valu
       : <span className="atlas-source">{error || '此条目的图像可从原页证据查看。'}</span>}
     {(image || ready) && <button className="folio-zoom" type="button" aria-label={'放大'+description} onClick={enlarge}>放大</button>}
   </div>;
+}
+
+function GraphTrial() {
+  const [open,setOpen]=useState(false);
+  const host=useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    if(open && host.current) return mountGraphTrial(host.current);
+  },[open]);
+  return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>多节点测试</summary>
+    <p>模拟器物与关系仅用于测试显示。可拖动旋转、点选关系，或查看一跳邻域。</p>
+    <div ref={host} /></details>;
 }
 
 export function MotifAtlas({ scope, onEvidence, onAsk }: {
@@ -121,6 +133,7 @@ export function MotifAtlas({ scope, onEvidence, onAsk }: {
         <h3 className="atlas-graph-heading">知识图谱</h3>
         {groups.length > 6 && <small>当前显示选中器物的关系，全部器物见下方列表。</small>}
         <div className="space-graph" ref={network} />
+        <GraphTrial />
         <div className="atlas-paths">{groups.map(g => <article key={g[0].artifactId} className="atlas-path">
           <div className="atlas-owner"><small>器物 · {g[0].locator ?? `第 ${g[0].page} 页图注 ${g[0].item}`}</small><strong>{g[0].artifact}</strong></div>
           <div className="atlas-edges">{g.map(r => <button key={r.id} type="button" aria-pressed={edge?.id === r.id}

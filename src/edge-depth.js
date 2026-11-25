@@ -1,6 +1,6 @@
 // Split projected curves into depth intervals. A node defines one boundary;
 // a crossing defines another between the two wires at their point of overlap.
-export function depthCuts(curves, nodeDepths) {
+export function depthCuts(curves, nodeDepths, nodeBounds=[]) {
   const cuts=curves.map(()=>new Set(nodeDepths));
   const segments=[];
   for(const [wire,points] of curves.entries()) {
@@ -8,6 +8,12 @@ export function depthCuts(curves, nodeDepths) {
       const a=points[i-1], b=points[i];
       segments.push({wire,a,b,left:Math.min(a.x,b.x),right:Math.max(a.x,b.x),
         top:Math.min(a.y,b.y),bottom:Math.max(a.y,b.y)});
+    }
+  }
+  for(const segment of segments) {
+    for(const box of nodeBounds) {
+      if(segment.right+7>=box.left && segment.left-7<=box.right &&
+          segment.bottom+7>=box.top && segment.top-7<=box.bottom) cuts[segment.wire].add(box.z);
     }
   }
   segments.sort((a,b)=>a.left-b.left);
@@ -23,7 +29,10 @@ export function depthCuts(curves, nodeDepths) {
       if(t<0||t>1||u<0||u>1) continue;
       const z1=edgeDepthAt(p.a.z,p.b.z,t), z2=edgeDepthAt(q.a.z,q.b.z,u);
       if(Math.abs(z1-z2)>1e-6) {
-        const boundary=(z1+z2)/2;
+        const middle=(z1+z2)/2;
+        // Reuse a separating plane where possible. Close crossings retain their own cut.
+        const shared=Math.round(middle/8)*8;
+        const boundary=curves.length>24 && shared>Math.min(z1,z2) && shared<Math.max(z1,z2)?shared:middle;
         cuts[p.wire].add(boundary);cuts[q.wire].add(boundary);
       }
     }
