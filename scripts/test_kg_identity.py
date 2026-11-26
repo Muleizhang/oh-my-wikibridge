@@ -4,6 +4,8 @@ import unittest
 from kg_v2.common import OUT, load
 from kg_v2.identity import build_identity_review, lexical_candidates, normalize_name
 
+requires_graph = unittest.skipUnless((OUT / 'graph.json').is_file(), 'Rebuild the first-volume graph to run this test')
+
 
 class IdentityReviewTests(unittest.TestCase):
     def test_formatting_does_not_join_latin_words_or_rewrite_names(self):
@@ -20,7 +22,8 @@ class IdentityReviewTests(unittest.TestCase):
                     {'label': '其他器物', 'aliases': []}]
         self.assertEqual(lexical_candidates(entities, 0), [1, 2])
 
-    def test_real_candidates_are_partitioned_without_mutation_or_merges(self):
+    @requires_graph
+    def test_real_candidates_are_partitioned_without_changing_identity(self):
         graph = load(OUT / 'graph.json'); before = copy.deepcopy(graph)
         review = build_identity_review(graph)
         ids = [pid for group in review['groups'] for pid in group['proposalIds']]
@@ -28,8 +31,10 @@ class IdentityReviewTests(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(set(ids), {p['id'] for p in graph['identityProposals']})
         self.assertEqual(graph, before)
-        self.assertEqual(review['summary']['automaticIdentityMerges'], 0)
+        self.assertEqual(review['summary']['automaticIdentityMerges'],
+                         graph.get('artifactIdentity', {}).get('summary', {}).get('automaticIdentityMerges', 0))
 
+    @requires_graph
     def test_same_named_artifacts_retain_individual_sources_and_ids(self):
         graph = load(OUT / 'graph.json'); review = build_identity_review(graph)
         group = next(g for g in review['groups'] if g['name'] == '商代玉器玉人')
@@ -41,6 +46,7 @@ class IdentityReviewTests(unittest.TestCase):
         for source in sources:
             self.assertEqual(source['rawName'], source['evidence'][0]['text'])
 
+    @requires_graph
     def test_source_context_belongs_to_its_caption(self):
         graph = load(OUT / 'graph.json'); review = build_identity_review(graph)
         records = {r['id']: r for r in graph['records']}
@@ -53,10 +59,14 @@ class IdentityReviewTests(unittest.TestCase):
                 ev = source['evidence'][0]
                 self.assertTrue(record['span'][0] <= ev['span'][0] < ev['span'][1] <= record['span'][1])
 
+    @requires_graph
     def test_concept_policy_unifies_period_occurrences_but_not_artifacts(self):
-        review = build_identity_review(load(OUT / 'graph.json'))
+        graph = load(OUT / 'graph.json')
+        review = build_identity_review(graph)
         shang = next(c for c in review['concepts'] if c['name'] == '商代' and c['kind'] == 'period')
-        self.assertEqual(len(shang['memberIds']), 22)
+        occurrences = {e['id'] for e in graph['entities'] if e['kind'] == 'period' and normalize_name(e['label']) == '商代'}
+        self.assertGreater(len(occurrences), 1)
+        self.assertEqual(set(shang['memberIds']), occurrences)
         self.assertEqual({review['sources'][eid]['conceptId'] for eid in shang['memberIds']}, {shang['id']})
         artifacts = [s for s in review['sources'].values() if s['kind'] == 'artifact']
         self.assertTrue(artifacts)

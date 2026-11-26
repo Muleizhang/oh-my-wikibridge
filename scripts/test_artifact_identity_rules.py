@@ -1,7 +1,11 @@
 """Only the exact identity acceptance/rejection boundary and reversibility."""
 from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
+from apply_artifact_identity import registry_with_holds
 from kg_v2.artifact_identity import name_key, quantity_key, compare, plan, VERSION
 from kg_v2.values import parse_quantity
 
@@ -16,6 +20,14 @@ def profile(key, value='19', *, location='陕西西安半坡'):
 
 
 class ExactArtifactIdentityTest(unittest.TestCase):
+    def test_clean_checkout_retains_the_six_review_holds(self):
+        with TemporaryDirectory() as directory, patch('apply_artifact_identity.DATA', Path(directory)):
+            registry = registry_with_holds(Path(directory) / 'registry.json')
+        holds = registry['holds']
+        self.assertEqual(len({hold['sourceRecordId'] for hold in holds}), 6)
+        self.assertTrue(all(hold['active'] and not hold['humanIdentityVerified'] for hold in holds))
+        self.assertEqual({hold['basis']['group'] for hold in holds}, {'G005', 'G036', 'G071'})
+
     def test_only_whitelisted_view_notes_disappear(self):
         self.assertEqual(name_key(' 人面鱼纹彩陶盆（上：俯视图） '), '人面鱼纹彩陶盆')
         self.assertEqual(name_key('盆（残片）'), '盆(残片)')

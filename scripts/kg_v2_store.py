@@ -8,13 +8,13 @@ import sqlite3
 from pathlib import Path
 
 from kg_v2.schema import schema
-from kg_v2.common import OUT, ident, load, save, source_path
+from kg_v2.common import DATABASE_ROOT, OUT, ident, load, save, source_path
 from kg_v2.identity import build_identity_review
 from kg_v2.images import install_previews
 from kg_v2_validate import validate
 
 
-def persist(graph, root, source_file=None):
+def persist(graph, root, source_file=None, *, data_root=OUT):
     parent_run = graph.get('runId')
     graph['identityReview'] = build_identity_review(graph)
     validate(graph)
@@ -22,7 +22,7 @@ def persist(graph, root, source_file=None):
     conn = sqlite3.connect(root / 'knowledge.sqlite3', timeout=30)
     conn.execute('PRAGMA foreign_keys=ON')
     conn.executescript(schema())
-    source = Path(source_file) if source_file is not None else source_path()
+    source = Path(source_file) if source_file is not None else source_path(data_root)
     with source.open('rb') as f: digest = hashlib.file_digest(f, 'sha256').hexdigest()
     corpus, source_id = ident('corpus', 'typed-kg-v2'), ident('source', digest, 'typed-kg-v2')
     stable = [graph[k] for k in ['version', 'selection', 'records', 'entities', 'assertions', 'events', 'identityProposals']]
@@ -35,7 +35,7 @@ def persist(graph, root, source_file=None):
     destination = root / 'sources' / (source_id + '.pdf'); destination.parent.mkdir(exist_ok=True)
     if not destination.exists():
         temporary = destination.with_suffix('.pdf.tmp'); shutil.copyfile(source, temporary); temporary.replace(destination)
-    install_previews(graph, root)
+    install_previews(graph, root, data_root)
     backup = root / 'backups/before-typed-kg-v2.sqlite3'
     if not backup.exists():
         backup.parent.mkdir(exist_ok=True)
@@ -104,6 +104,6 @@ def persist(graph, root, source_file=None):
 
 
 if __name__ == '__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--database-root',type=Path,default=Path.home()/'.local/share/cn.wikibridge.desktop')
+    parser=argparse.ArgumentParser();parser.add_argument('--database-root',type=Path,default=DATABASE_ROOT)
     args=parser.parse_args();graph=load(OUT/'graph.json');report=persist(graph,args.database_root)
     save(OUT/'graph.json',graph);save(OUT/'database-import.json',report);print(report)

@@ -1,32 +1,8 @@
-# 可扩展多模态知识工程项目
+# WikiBridge 文档
 
-本项目构建一个可扩展的多模态知识工程系统，包含文档检索、结构化知识、关系图谱、图像关联和 RAG 问答。三册《中国纹样全集》是初始示例语料，用户可以继续添加其他文档和媒体资料。
-
-当前示例语料覆盖以下历史范围：
-
-- 新石器时代、商、西周、春秋
-- 战国、秦、汉
-- 魏晋南北朝、隋、唐、五代
-
-系统设计支持继续添加 PDF、DOCX、PPTX、XLSX、Markdown、HTML、TXT、CSV、图片、EPUB、ODT、RTF、XML、JSON、压缩包，以及需要 OCR、语音识别或视频关键帧提取的资料。
-
-项目重点是从图书资料中抽取可追溯的知识，表达纹样与时代、地域、器物、材质、题材、构成和技法之间的关系，并通过检索增强问答和可视化分析展示结果。
-
-## 文档
-
-- [总体设计](design.md)
-- [技术架构](technical-architecture.md)
-- [资料摄取与格式适配](ingestion.md)
-- [OpenCode 后端集成](opencode-backend.md)
-- [User Story Map](user-stories.md)
-- [课堂方法结合方案](classroom-methods.md)
-- [知识模型与数据结构](data-model.md)
-- [检索、RAG 与评价方案](evaluation.md)
-
-## 项目原则
-
-1. 每条结构化知识保留来源卷册、页面和证据类型。
-2. 文本检索、向量检索、图谱查询和图像检索共同服务于 RAG。
-3. 关系图和统计结论来自可查询的数据集，并能回溯到原始页面。
-4. 课堂方法以可解释的模块形式组合，保留传统检索和图谱查询作为对照。
-5. 三册资料统一建模，同时保留历史时期和卷册边界。
+- [从三册 PDF 重建星图和 SQLite](reliable-pipeline.md)
+- [总体设计](design.md)、[技术架构](technical-architecture.md)、[用户流程](user-stories.md)
+- [资料摄取](ingestion.md)、[知识模型](data-model.md)、[图片与分类适配](atlas-frontend-adaptation.md)
+- [名称材质补充](name-material-extraction.md)、[图录结构补充](catalog-structure-enrichment.md)、[后续纹样维度](pattern-knowledge-extension.md)
+- [桌面 OpenCode 后端](opencode-backend.md)、[课堂方法](classroom-methods.md)、[评价方案](evaluation.md)
+- [推理演示稿](reasoning-deck.html)

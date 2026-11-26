@@ -6,6 +6,8 @@ src-tauri/gen/
 .DS_Store
 data/corpus/
 data/local-kg/
+/source/*.pdf
+/docs/reasoning-deck.pdf
 .venv/
 __pycache__/
 *.py[cod]

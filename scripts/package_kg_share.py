@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 from zipfile import ZIP_DEFLATED, ZipFile
+from kg_v2.atlas_site import render_atlas
 
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = 'wikibridge-three-volumes/'
@@ -113,9 +114,7 @@ def package(site, graphs, output, image_mode='original'):
             volume['source'] = Path(volume['source']).name
     originals, sidecars = original_pages(manifest, graphs) if image_mode == 'original' else ({}, [])
     text = json.dumps(manifest, ensure_ascii=False, separators=(',', ':'))
-    template = (ROOT / 'scripts/atlas_viewer.html').read_text()
-    reasoner = re.sub(r'(?m)^export\s+', '', (ROOT / 'src/kg-reasoner.js').read_text())
-    html = template.replace('__REASONER_JS__', reasoner, 1).replace('__MANIFEST_JSON__', text.replace('<', '\\u003c'), 1)
+    html = render_atlas(text)
     assets = []
     for url in sorted(set(asset_urls(manifest))):
         source = originals.get(url, (site / url).resolve())

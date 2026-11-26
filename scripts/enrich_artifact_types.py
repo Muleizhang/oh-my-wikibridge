@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
 
-from kg_v2.common import ROOT, load, save
+from kg_v2.atlas_site import render_atlas
+from kg_v2.common import DATA_ROOT, ROOT, VOLUME_ROOTS, load, save
 from kg_v2.artifact_types import enrich_types
 from kg_v2_validate import validate
 
@@ -65,16 +65,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--write', action='store_true')
     parser.add_argument('--persist', action='store_true')
-    parser.add_argument('--site', type=Path, default=ROOT/'data/local-kg/merged/site')
+    parser.add_argument('--site', type=Path, default=DATA_ROOT/'merged/site')
     args = parser.parse_args()
     site = args.site.resolve()
     manifest = load(site/'manifest.json')
-    backup = ROOT/'data/local-kg/archive'/('before-artifact-types-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
+    backup = DATA_ROOT/'archive'/('before-artifact-types-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
     if args.write:
         backup.mkdir(parents=True)
         shutil.copyfile(site/'manifest.json', backup/'manifest.json')
     graphs, reports = [], []
-    for index, root in enumerate([ROOT/'data/local-kg', ROOT/'data/local-kg/vol2', ROOT/'data/local-kg/vol3'], 1):
+    for index, root in enumerate(VOLUME_ROOTS, 1):
         graph = load(root/'graph.json')
         report = enrich_types(graph, root/'extractions')
         report['validation'] = validate(graph)
@@ -92,11 +92,8 @@ def main():
     added = update_atlas(manifest, graphs)
     if args.write:
         save(site/'manifest.json', manifest)
-        reasoner = re.sub(r'(?m)^export\s+', '', (ROOT/'src/kg-reasoner.js').read_text())
-        template = (ROOT/'scripts/atlas_viewer.html').read_text()
-        embedded = json.dumps(manifest, ensure_ascii=False).replace('<', '\\u003c')
-        (site/'index.html').write_text(template.replace('__REASONER_JS__', reasoner, 1).replace('__MANIFEST_JSON__', embedded, 1))
-        save(ROOT/'data/local-kg/artifact-type-batch.json', {'volumes': reports, 'atlasAdded': added})
+        (site/'index.html').write_text(render_atlas(json.dumps(manifest, ensure_ascii=False)))
+        save(DATA_ROOT/'artifact-type-batch.json', {'volumes': reports, 'atlasAdded': added})
     print(json.dumps({'written': args.write, 'newAtlasEdges': added,
                       'artifactTypeItems': manifest['summary']['artifactTypeItems']}, ensure_ascii=False), flush=True)
 

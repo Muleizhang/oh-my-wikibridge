@@ -9,7 +9,7 @@ import os
 import time
 from pathlib import Path
 
-from kg_v2.common import OUT, load, save, selected_pages, source_path
+from kg_v2.common import LAYOUT_MODEL_ROOT, OUT, load, save, selected_pages, source_path
 from kg_v2.images import layout_input_signature, ocr_image_file
 
 MODELS = {'layout_detection': 'PP-DocLayout_plus-L', 'region_detection': 'PP-DocBlockLayout',
@@ -67,8 +67,9 @@ def main():
                       HF_HUB_OFFLINE='1', TOKENIZERS_PARALLELISM='false')
     models, hashes = {}, {}
     for role, name in MODELS.items():
-        path = Path.home() / '.paddlex/official_models' / name
-        if not (path / 'inference.pdiparams').exists():
+        path = LAYOUT_MODEL_ROOT / name
+        weights = path / 'inference.pdiparams'
+        if not weights.is_file() or not weights.stat().st_size:
             raise RuntimeError(f'Missing local model: {path}; prepare public model weights first')
         models[role + '_model_dir'] = str(path)
         hashes[name] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in path.iterdir()
@@ -111,7 +112,8 @@ def main():
     save(OUT / 'layout-run.json', {'engine': 'PP-StructureV3', 'versions': {
         x: importlib.metadata.version(x) for x in ['paddleocr', 'paddlex', 'paddlepaddle']},
         'modelsSha256': hashes, 'settings': config, 'workers': args.workers, 'pages': stats,
-        'wallSeconds': round(time.perf_counter() - started, 3), 'network': 'unshare -n',
+        'wallSeconds': round(time.perf_counter() - started, 3),
+        'network': os.environ.get('WIKIBRIDGE_KG_NETWORK_MODE', 'offline model settings'),
         'compatibility': 'Skip eager Chart2Table initialization when use_chart_recognition=False in PaddleX 3.3.13',
         'disabledModules': ['table recognition', 'formula recognition', 'chart recognition', 'seal recognition']})
 

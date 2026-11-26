@@ -197,6 +197,7 @@ const AGENT_TOOLS = [
 ];
 
 const SYSTEM_PROMPT = `你是「中国纹样全集」的器物史与纹样史研究助手。先利用图谱工具核对器物、年代、材质或纹样，再用自然的中文直接回答问题。
+按历史时期或器物用途提问时，用组合条件分别检索两组器物，再核对代表器物的图注。材质或纹样检索为空时，可以用器类、器名或原书使用的纹样异名查找。只有问题需要集合差异或路径时才使用对应工具。
 选一两件最能说明问题的器物。把主要篇幅用在解释：器物用在哪里，工艺如何影响纹样，礼仪、观看场景或文化交流能否解释变化。可运用你的历史知识交代背景。用「从历史背景看」「一种可能是」等自然措辞标出背景和假说，并说明什么发现可以检验它们。图谱材料较少时，仍可提供有条件的历史解释，并说明目前能核对到哪里。
 避免逐条复述数据和重复结论。通常用二至四个短段落，标题和列表按需使用。图谱事实就地用工具提供的 [E1] 等编号，图谱推论用 [R1] 等编号。背景知识可直接交代，引用编号只用于它实际对应的图谱结果。引用逐个书写，馆藏、出土信息和书目须有依据。
 图谱收录的是待核对的候选记录。比较时交代标注覆盖率，从 totals 读取总数。路径的每一段有不同意义，例如共同年代只表明年代标签相同，共有题材只能提出关联线索。讨论传承和方向时，指出还需要怎样的年代、形态或交流证据。
@@ -502,19 +503,29 @@ export async function runDeepSeekAgent(
 
   const timeout = AbortSignal.timeout(120_000);
   const deadline = signal ? AbortSignal.any([timeout, signal]) : timeout;
+  let retryWithResults = false;
 
   for (let round = 0; round < 6; round++) {
     signal?.throwIfAborted();
-    const finalize = Boolean(selectedPath) || round >= 4 && trace.length > 0;
-    const finalInstruction = finalize ? '\n\n请给出带合法 [E#]/[R#] 引用的简短结论，说明数据缺项。' : '';
+    const synthesisOnly = retryWithResults || round >= 4 && trace.length > 0;
+    const finalize = Boolean(selectedPath) || synthesisOnly;
+    const finalInstruction = finalize ? '\n\n请依据已有结果直接回答当前问题。引用实际结果中的编号，例如 [E1] 或 [R1]。结束工具调用，不输出任何工具标记。' : '';
+    // A fresh turn prevents DeepSeek from continuing the preceding tool protocol.
+    const input = synthesisOnly ? [{
+      role: 'user',
+      content: question.content + '\n\n本轮已执行的工具结果（每行一条）\n'
+        + messages.filter(message => message.role === 'tool').map(message => message.content).join('\n'),
+    }] : messages;
     const body: Record<string, unknown> = {
       model,
-      messages: [{ role: 'system', content: guidance.join('\n\n') + finalInstruction }, ...messages],
+      messages: [{ role: 'system', content: guidance.join('\n\n') + finalInstruction }, ...input],
       stream: true,
       max_tokens: 8192,
     };
-    body.tools = allowedTools;
-    body.tool_choice = finalize ? 'none' : 'auto';
+    if (!synthesisOnly) {
+      body.tools = allowedTools;
+      body.tool_choice = finalize ? 'none' : 'auto';
+    }
     if (provider === 'openrouter') {
       body.provider = { require_parameters: true };
       body.reasoning = { enabled: true, effort: 'medium' };
@@ -552,10 +563,10 @@ export async function runDeepSeekAgent(
 
     const msg: ChatMsg | undefined = choice?.message;
     if (!msg) throw new Error('DeepSeek 返回空消息。');
-    if (!msg.tool_calls?.length && hasToolMarkup(msg.content)) {
+    if (!finalize && !msg.tool_calls?.length && hasToolMarkup(msg.content)) {
       try {
         const recovered = recoverToolCalls(msg.content, allowedTools, `dsml_${round}`);
-        if (recovered.length && !finalize) {
+        if (recovered.length) {
           msg.tool_calls = recovered;
           msg.content = null;
         }
@@ -564,7 +575,7 @@ export async function runDeepSeekAgent(
       }
     }
 
-    if (!msg.tool_calls?.length) {
+    if (synthesisOnly || !msg.tool_calls?.length) {
       const validE = new Set([...citations.values()].map(c => c.ref));
       const validR = new Set([...inferences.values()].map(r => r.ref));
       const verdict = assessAgentAnswer(msg, choice.finish_reason, {
@@ -572,11 +583,14 @@ export async function runDeepSeekAgent(
       });
       if (!verdict.ok) {
         console.warn('[atlas-agent] Answer rejected:', { round, reason: verdict.reason, tools: trace.map(step => step.tool) });
-        if (fallbackAnswer && (round >= 3 || verdict.reason === 'tool_markup' || verdict.reason === 'truncated')) {
-          return completed(fallbackAnswer, 'tool_summary');
+        if (round === 5) {
+          if (fallbackAnswer) return completed(fallbackAnswer, 'tool_summary');
+          throw new Error('模型未生成完整且引用有效的结论，请使用符号推演查看已计算结果。');
         }
-        if (round === 5) throw new Error('模型未生成完整且引用有效的结论，请使用符号推演查看已计算结果。');
-        guidance.push(`回答核验失败（${verdict.reason}）。请使用 API tool_calls 调用工具，或依据已返回结果输出完整中文结论。禁止输出工具标记。引用仅允许：${[...validE, ...validR].join('、') || '尚无，须先调用工具'}。`);
+        retryWithResults = validE.size > 0 || validR.size > 0 || trace.some(step => !step.error);
+        guidance.push(retryWithResults
+          ? `上一次回答未通过核验（${verdict.reason}）。依据下方工具结果重写，引用须逐个写成 [E编号] 或 [R编号]，只能使用结果中出现的编号。`
+          : '请先使用 API tool_calls 检索相关图谱证据，再回答问题。');
         continue;
       }
       if (comparisonDisplayItems.size && !stageAction?.displayLabels && !finalize) {

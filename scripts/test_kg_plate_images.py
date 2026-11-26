@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from kg_v2.images import install_previews
 from kg_v2.plate_images import attach_plate_images
 from merge_kg_volumes import merge_volumes
 from package_kg_share import asset_urls, original_pages
@@ -85,6 +86,18 @@ class AtlasPlateImagesTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'different source PDF'):
             attach_plate_images(self.manifest, self.annotation_path, self.pdf, self.site)
         self.assertEqual(self.manifest, original)
+
+    def test_desktop_import_keeps_same_numbered_pages_in_their_own_volume(self):
+        database = self.root / 'database'
+        for volume in ['v1', 'v2']:
+            data_root = self.root / volume
+            images = data_root / 'images'
+            images.mkdir(parents=True)
+            (images / 'p0001.jpg').write_bytes(volume.encode())
+            (data_root / 'page-images.json').write_text('{"pages":{"1":{"file":"p0001.jpg"}}}')
+            install_previews({'selection': [1], 'runId': volume}, database, data_root=data_root)
+        for volume in ['v1', 'v2']:
+            self.assertEqual((database / 'pipeline-pages' / volume / 'p0001.jpg').read_bytes(), volume.encode())
 
     def test_name_mismatch_or_ambiguous_position_does_not_guess_an_image(self):
         self.manifest['items'][0]['artifact'] = '另一件器物'

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Anonymous downloads only; fixed revisions for the four local parsing models."""
 import os
-from pathlib import Path
+from kg_v2.common import LAYOUT_MODEL_ROOT
 
 os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN']='1'
 os.environ['HF_HUB_DISABLE_XET']='1'
@@ -16,6 +16,6 @@ if __name__=='__main__':
  from huggingface_hub import snapshot_download
  for name,revision in MODELS.items():
   snapshot_download('PaddlePaddle/'+name,revision=revision,token=False,
-   local_dir=Path.home()/'.paddlex/official_models'/name,max_workers=2,
+   local_dir=LAYOUT_MODEL_ROOT/name,max_workers=2,
    allow_patterns=['inference.*','config.json'])
   print(name,revision)

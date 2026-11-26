@@ -15,15 +15,16 @@ import subprocess
 import sys
 
 from kg_v2.artifact_identity import VERSION, compare, plan, profiles, project_identity
-from kg_v2.common import ROOT, ident, load, save
+from kg_v2.common import DATABASE_ROOT, DATA_ROOT, ROOT, VOLUME_ROOTS, ident, load, save
+from kg_v2.atlas_site import render_atlas
 from kg_v2.identity_manifest import apply_manifest_identity, combine_identities
 from kg_v2_validate import validate
 from kg_v2.projection import active_assertion
 
-DATA = ROOT / 'data/local-kg'
-VOLUMES = [('v1', DATA, DATA/'atlas-vol1'), ('v2', DATA/'vol2', DATA/'vol2/star-atlas'),
-           ('v3', DATA/'vol3', DATA/'vol3/star-atlas')]
-DATABASE = Path.home()/'.local/share/cn.wikibridge.desktop/knowledge.sqlite3'
+DATA = DATA_ROOT
+VOLUMES = [(f'v{number}', root, root / ('atlas-vol1' if number == 1 else 'star-atlas'))
+           for number, root in enumerate(VOLUME_ROOTS, 1)]
+DATABASE = DATABASE_ROOT / 'knowledge.sqlite3'
 REGISTRY = DATA/'artifact-identity/registry.json'
 REPORT = DATA/'report/artifact-identity-applied.json'
 
@@ -41,18 +42,31 @@ def payload_fingerprint(graph):
 def registry_with_holds(path=REGISTRY):
     registry = load(path) if path.exists() else {'version': VERSION, 'holds': [], 'rejectedPairs': [], 'history': []}
     audit_path = DATA/'report/artifact-identity-reliability-audit.json'
-    audit = load(audit_path)
-    # Persist known unresolved problems separately; do not silently clear an OCR flag.
-    for group_id, reason in [('G005', 'ocr_numeric_review_pending'), ('G036', 'image_caption_correspondence_pending'),
-                             ('G071', 'catalog_record_segmentation_pending')]:
-        group = next(g for g in audit['groups'] if g['groupId'] == group_id)
-        for member in group['members']:
-            sid = f"{member['volume']}:{member['recordId']}"
-            if any(h['sourceRecordId'] == sid and h['reason'] == reason for h in registry['holds']): continue
-            registry['holds'].append({'sourceRecordId': sid, 'name': group['name'], 'reason': reason,
-                'active': True, 'basis': {'report': str(audit_path.relative_to(ROOT)),
-                    'sha256': digest(audit_path), 'group': group_id, 'note': group['audit']['note']},
-                'status': 'unresolved', 'humanIdentityVerified': False})
+    seed_path = ROOT/'data/artifact-identity-holds.json'
+    seeds = load(seed_path)
+    reasons = {hold['group']: hold['reason'] for hold in seeds}
+    if audit_path.is_file():
+        report = {'report': str(audit_path.relative_to(ROOT)), 'sha256': digest(audit_path)}
+        groups = {group['groupId']: group for group in load(audit_path)['groups']}
+        holds = [
+            {'sourceRecordId': f"{member['volume']}:{member['recordId']}", 'name': group['name'],
+             'reason': reasons[group['groupId']],
+             'basis': {**report, 'group': group['groupId'], 'note': group['audit']['note']}}
+            for group in (groups[group_id] for group_id in reasons)
+            for member in group['members']
+        ]
+    else:
+        holds = [
+            {'sourceRecordId': seed['sourceRecordId'], 'name': seed['name'], 'reason': seed['reason'],
+             'basis': {'report': str(seed_path.relative_to(ROOT)), 'group': seed['group']}}
+            for seed in seeds
+        ]
+    existing = {(hold['sourceRecordId'], hold['reason']) for hold in registry['holds']}
+    for hold in holds:
+        key = (hold['sourceRecordId'], hold['reason'])
+        if key not in existing:
+            registry['holds'].append({**hold, 'active': True, 'status': 'unresolved', 'humanIdentityVerified': False})
+            existing.add(key)
     return registry
 
 
@@ -97,7 +111,10 @@ def rejected_reviews(graphs, database):
 def audit_versions(graphs):
     result = {}
     for filename in ['artifact-identity-candidate-audit.json', 'artifact-identity-reliability-audit.json']:
-        report = load(DATA/'report'/filename)
+        path = DATA/'report'/filename
+        if not path.is_file():
+            continue
+        report = load(path)
         result[filename] = [{'volume': x['volume'], 'reportedRunId': x['runId'],
             'reportedSha256': x['sha256'], 'currentRunId': graphs[x['volume']]['runId'],
             'currentSha256': digest(ROOT/x['path']), 'unchanged': digest(ROOT/x['path']) == x['sha256']}
@@ -158,9 +175,7 @@ def write_site(site, manifest):
     serialized = json.dumps(manifest, ensure_ascii=False, separators=(',', ':'))
     path = site/'manifest.json'; temp = path.with_suffix('.json.identity.tmp')
     temp.write_text(serialized); temp.replace(path)
-    template = (ROOT/'scripts/atlas_viewer.html').read_text()
-    reasoner = (ROOT/'src/kg-reasoner.js').read_text().replace('export ', '')
-    html = template.replace('__MANIFEST_JSON__', serialized.replace('<', '\\u003c'), 1).replace('__REASONER_JS__', reasoner, 1)
+    html = render_atlas(serialized)
     for name in ['atlas_viewer.html', 'index.html']:
         if name == 'index.html' and not (site/name).exists(): continue
         temp = site/(name+'.identity.tmp'); temp.write_text(html); temp.replace(site/name)
@@ -215,7 +230,9 @@ def main():
         validate(g)
     by_id = {p['id']: p for p in all_profiles}
     historical = []
-    for group in load(DATA/'report/artifact-identity-reliability-audit.json')['groups']:
+    audit_path = DATA/'report/artifact-identity-reliability-audit.json'
+    audited_groups = load(audit_path)['groups'] if audit_path.is_file() else []
+    for group in audited_groups:
         members = [by_id.get(f"{m['volume']}:{m['entityId']}") for m in group['members']]
         pairs = [compare(a,b,{frozenset(x['members']) for x in registry['rejectedPairs'] if x.get('active', True)})
                  for a,b in combinations([m for m in members if m],2)]

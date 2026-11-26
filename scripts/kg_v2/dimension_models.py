@@ -3,6 +3,7 @@ import gc
 import json
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from .common import ident, save
 from .models import model_spec
@@ -37,8 +38,16 @@ def extract(jobs, directory, batch_size=16):
             else:
                 from gliner import GLiNER
                 from gliner.data_processing.tokenizer import WordsSplitter
-                model = GLiNER.from_pretrained(spec['path'], local_files_only=True, proxies=None,
-                                              resume_download=False).to('cuda' if torch.cuda.is_available() else 'cpu').eval()
+                # GLiNER otherwise looks up its tokenizer and encoder config by Hub name.
+                weights = Path(spec['path'])
+                config = json.loads((weights/'gliner_config.json').read_text())
+                config['model_name'] = model_spec('gliner_encoder')['path']
+                with TemporaryDirectory() as model_directory:
+                    local = Path(model_directory)
+                    (local/'gliner_config.json').write_text(json.dumps(config))
+                    (local/'model.safetensors').symlink_to(weights/'model.safetensors')
+                    model = GLiNER.from_pretrained(str(local), local_files_only=True)
+                model = model.to('cuda' if torch.cuda.is_available() else 'cpu').eval()
                 model.data_processor.words_splitter = WordsSplitter('jieba')
             print(json.dumps({'model': spec['model'], 'uncachedRecords': len(pending)}, ensure_ascii=False), flush=True)
             with cache_file.open('a') as output:

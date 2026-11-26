@@ -77,7 +77,8 @@ def main():
                       'proseWindows': len(result['prose']), 'seconds': result['seconds'], 'cached': previous is result})
         print(f'Typed extraction {len(stats)}/{len(pages)}: page {page}, {len(result["records"])} records', flush=True)
     save(OUT / 'extraction-run.json', {'pages': stats, 'wallSeconds': round(time.perf_counter() - started, 3),
-        'codeSha256': code_hash, 'network': 'unshare -n', 'domainFinetuned': False,
+        'codeSha256': code_hash, 'network': os.environ.get('WIKIBRIDGE_KG_NETWORK_MODE', 'offline model settings'),
+        'domainFinetuned': False,
         'coverage': {'platePagesWithoutNumberedRecord': [s['page'] for s in stats if s['pageKind']=='plate' and not s['records']],
                      'pagesWithoutExtractionUnits': [s['page'] for s in stats if not s['records'] and not s['proseWindows']],
                      'interpretation': 'All selected pages processed. These counts are routing diagnostics, not measured semantic recall.'}})

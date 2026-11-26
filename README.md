@@ -1,85 +1,49 @@
 # WikiBridge
 
-WikiBridge 是一个本地优先的多模态知识工程与纹样知识图谱工作台，使用 React、Tauri 2、Rust Core 与独立星图推理服务，支持多格式资料入库、可追溯图谱抽取、2D/3D 聚类星图浏览，以及「无 LLM 符号推演 + DeepSeek Agent」双模知识推理。
+WikiBridge 将多格式资料整理成可追溯的知识库。三册《中国纹样全集》星图提供历史长河、2D/3D 聚类、图录、原页核读、符号推演和 DeepSeek 问答。React/Tauri 工作台用于导入、检索、审核和发布资料。
 
-## 核心能力
+## 从 GitHub 克隆后复现三册
 
-- **工作台与入库**：Tauri 桌面端与浏览器演示模式，支持 PDF/图片 OCR 及多格式原生抽取、草稿审核发布、SQLite / FTS5 / TF-IDF / 共现矩阵 / SVD 与 OpenCode RAG 问答。
-- **纹样星图前端（通用三册架构）**：全屏历史长河时间线、2D/3D 聚类星图（按时代默认材质聚类、按材质默认纹样聚类、按纹样默认时代聚类）、图录索引、原页扫描红框核读与深空/宣纸明暗双主题。
-- **双模知识推理**：
-  - **无 LLM 符号推演（[src/kg-reasoner.js](src/kg-reasoner.js)）**：RDFS 时代/材质/纹样本体闭包、K-Shortest 多跳演化路径与 Horn 规则证明链、双实体交差集对比与原生 `SPARQL-lite`（支持 `FILTER NOT EXISTS`）、基于关联规则与共同邻居（PathSim）的缺失知识补全。
-  - **DeepSeek 神经-符号 Agent（[server/atlas-server.ts](server/atlas-server.ts)）**：多步 Function Calling 调度符号引擎、代码级三态核验（`[实证 E#]` / `[推论 R#]` / 图谱未载），并实时驱动 2D/3D 画布光轨与原页红框溯源。
+1. 将三个 PDF 放入仓库的 `source/`，命名为 `第一册.pdf`、`第二册.pdf`、`第三册.pdf`。
+2. 按[复现说明](docs/reliable-pipeline.md)准备 Node.js 24、OCR 工具、仓库内的 venv 和模型权重。
+3. 执行以下命令。
 
-## 快速启动
-
-需要 Node.js 24（桌面端另需 Rust 与系统 WebView；图谱流水线需 Python 3）。
-
-### 1. 启动纹样星图与双模推理服务
-
-在仓库根目录创建 `.env.local`（已被 `.gitignore` 忽略）配置 DeepSeek Key（不配置时无 LLM 符号推演模式仍完整可用）：
-
-```bash
-echo "DEEPSEEK_API_KEY=你的密钥" > .env.local
-npm run atlas -- --port 1423 --site data/local-kg/share/wikibridge-three-volumes/site
-```
-
-启动后访问 `http://127.0.0.1:1423/`，按 **`R`** 或点击顶栏 **「推理」** 打开双模推理工作台。
-
-三册站点从 `site/manifest.json` 读取器物和裁图关联，并从同一个 `site/` 目录加载 `annotations-v2/` 与 `assets/`。只使用第一册样本时，可将 `--site` 改为 `data/local-kg/atlas-100/site`。
-
-已有分享包时，`--site` 也可直接指定解压目录，服务会寻找其中的 `site/manifest.json`；不传 `--site` 时优先加载本机 `data/local-kg/merged/site`。图录提供工艺、构图、象征意义、信仰关联入口；工艺和构图同时列出器物字段与正文记载，并分别计数。前端对接方式见 [图片与分类适配说明](docs/atlas-frontend-adaptation.md)。
-
-历史长河用 SVG 河道按时代展示纹样。同一时代、同名纹样聚成一簇，孤例和未标纹样的条目独立显示。悬停可查看其他时代的同名纹样连线，点击可查看簇内图录或单件出处。未标注时代的条目从「时代待定」入口查看。
-
-三册处理完成后，可运行 `python3 scripts/package_kg_share.py` 生成 `data/local-kg/share/wikibridge-three-volumes-original-pages.zip` 发给组员。包内含统一星图、三册全部原尺寸页图（直接复制，不缩放或重新编码）、当前完整候选图谱和启动说明；星图另保留小预览加速，原页和证据使用原图。解压后 Windows 双击「启动预览.bat」，macOS / Linux 运行 `sh start-viewer.sh`（需要 Python 3）。浏览及符号推演无需密钥，大模型服务需各自配置。打包采用固定文件清单，不读取环境配置或历史实验目录；需要轻量预览版时加 `--image-mode preview`。
-
-也支持通过 OpenRouter 调用 DeepSeek。在 `.env.local` 中设置 `ATLAS_AGENT_PROVIDER=openrouter`、`OPENROUTER_API_KEY` 和可选的 `OPENROUTER_MODEL`（默认 `deepseek/deepseek-v3.2`），然后重启服务。密钥仅在服务端使用。
-
-星图的 AI 对话默认请求 Thinking 模式。直连 DeepSeek 时默认使用 `deepseek-flash`，旧配置中的 `deepseek-chat` 和 `deepseek-reasoner` 也会自动映射到该模型。「思维过程」会显示模型接口提供的推理文本和图谱工具调用进度。
-
-### 2. 启动主工作台（Vite / Tauri）
-
-```bash
-npm install
-npm run dev          # 浏览器开发模式（http://localhost:1420）
-npm run tauri dev    # 桌面工作台模式
-```
-
-## 本地知识图谱流水线与跨册合库
-
-流水线从原书 PDF 抽取器物属性、事件与坐标证据，原始 PDF、扫描页与模型权重均不提交到 Git（详阅 [docs/reliable-pipeline.md](docs/reliable-pipeline.md)）。
-
-```bash
-# 1. 下载本地 NLP 权重（国内环境建议配镜像）
-HF_ENDPOINT=https://hf-mirror.com python3 scripts/download_kg_v2_models.py
-
-# 2. 按册独立提取（通过 WIKIBRIDGE_KG_DATA 隔离目录）
-WIKIBRIDGE_KG_DATA=data/local-kg/vol1 python3 scripts/prepare_kg_v2_data.py --source /path/to/第一册.pdf
-WIKIBRIDGE_KG_DATA=data/local-kg/vol1 npm run pipeline:reliable
-
-# 3. 将多册（graph.json 或 manifest.json）合并为跨册总图谱并生成站点
-python3 scripts/merge_kg_volumes.py \
-  --volumes 第一册=data/local-kg/vol1 第二册=data/local-kg/vol2 第三册=data/local-kg/vol3 \
-  --output data/local-kg/merged/site
-
-# 4. 加载跨三册总图谱
+~~~bash
+bash scripts/rebuild_atlas.sh
 npm run atlas -- --port 1423 --site data/local-kg/merged/site
-```
+~~~
 
-## 测试与构建
+已有三册分享包时，完整解压后将 `--site` 指向包内 `site/`。保留同一包的 `manifest.json`、`assets/` 和 `annotations-v2/`。更换清单后重启服务。[图片字段说明](docs/atlas-frontend-adaptation.md)
 
-```bash
-node --test scripts/test_kg_reasoner.mjs
-node scripts/test_edge_depth.mjs && node scripts/test_graph_trial.mjs
-python3 -m unittest scripts/test_merge_kg_volumes.py
-npm run test:kg
+## DeepSeek 问答
+
+在仓库根目录的 `.env.local` 中设置以下变量。
+
+~~~dotenv
+ATLAS_AGENT_PROVIDER=deepseek
+DEEPSEEK_API_KEY=你的密钥
+~~~
+
+启动后打开星图，按 `R` 进入推理面板。网页和 API 由同一进程提供。[本机星图](http://127.0.0.1:1423/)
+
+默认模型是 `deepseek-flash`。可用 `DEEPSEEK_MODEL` 指定模型，或通过 `ATLAS_AGENT_PROVIDER=openrouter`、`OPENROUTER_API_KEY` 和可选的 `OPENROUTER_MODEL` 使用 OpenRouter。浏览和符号推演无需密钥。
+
+用 `curl -fsS http://127.0.0.1:1423/api/kg/status` 查看服务状态。`deepseekReady` 表示已读取密钥，实际回答和引用核验结果见「AI 对话」。
+
+## 工作台与检查
+
+~~~bash
+npm ci
+npm run dev                      # 浏览器工作台，1420
+npm run tauri dev                # 桌面工作台，需 Rust 和系统 WebView
 npm run build
-```
+node --test scripts/test_*.mjs
+~~~
 
-## 目录说明
+Python 测试使用[复现流程配置的 venv](docs/reliable-pipeline.md#检查)。
 
-- `src/` React 工作台、2D/3D 空间渲染与共享符号推理核心（`kg-reasoner.js`）
-- `server/` 统一星图与 DeepSeek Agent 服务（`atlas-server.ts`）及 Vite 推理插件
-- `scripts/` 通用星图前端模板（`atlas_viewer.html`）、图谱抽取流水线、跨册合库脚本（`merge_kg_volumes.py`）与测试
-- `src-tauri/src/` Rust Core、SQLite、本地抽取与 OpenCode 适配器
-- `docs/` 设计文档、课堂方法映射与流水线说明
+- `src/` 和 `src-tauri/` 包含工作台和共享推理器。
+- `server/` 提供星图和 DeepSeek API。
+- `scripts/` 包含抽取、入库、导出、打包及测试。
+- `source/` 放 PDF，`data/local-kg/` 放生成数据。PDF 和生成数据由 Git 忽略。
+- [文档目录](docs/README.md)

@@ -12,6 +12,8 @@ from kg_v2.records import attributes
 from kg_v2.values import parse_quantity, extract_quantities
 from kg_v2_validate import validate
 
+requires_graph = unittest.skipUnless((OUT / 'graph.json').is_file(), 'Rebuild the first-volume graph to run this test')
+
 
 def document(text):
     return {'page': 1, 'pageKind': 'plate', 'engine': 'test', 'text': text,
@@ -67,6 +69,7 @@ class TypedPipelineTests(unittest.TestCase):
         self.assertFalse(publication_gate({'referenceAuthority':'independent_human',
             'factPrecisionLower95':1,'mergePrecisionLower95':1,'coverageMeasured':False})['automaticAcceptance'])
 
+    @requires_graph
     def test_real_corpus_typed_values_and_event_time(self):
         graph=load(OUT/'graph.json');validate(graph)
         owner=next(r for r in graph['records'] if r['page']==3 and r['item']==3)
@@ -76,20 +79,27 @@ class TypedPipelineTests(unittest.TestCase):
         self.assertEqual(values[0]['object']['value'],'16.5')
         self.assertFalse(any(e['label']=='16.5厘米' for e in graph['entities']))
         self.assertTrue(any(e['time'] and '1974' in e['time']['raw'] and e['kind']=='collection' for e in graph['events']))
-        self.assertFalse(any(s['predicate']=='period' and '1974' in str(s['object']) for s in graph['assertions']))
+        labels = {entity['id']: entity['label'] for entity in graph['entities']}
+        self.assertFalse(any(s['predicate'] == 'period' and '1974' in labels.get(s['object'].get('id'), '')
+                             for s in graph['assertions']))
 
     def test_illustrated_prose_pages_are_not_skipped(self):
-        for page in [32,40,42,52,78,94,100]:
-            extraction=load(OUT/f'extractions/v1-p{page:04d}.json')
+        paths = [OUT / f'extractions/v1-p{page:04d}.json' for page in (32, 40, 42, 52, 78, 94, 100)]
+        if not all(path.is_file() for path in paths):
+            self.skipTest('Rebuild the first-volume page extractions to run this test')
+        for path in paths:
+            extraction = load(path)
             self.assertEqual(extraction['document']['pageKind'],'prose')
             self.assertGreater(len(extraction['prose']),0)
             self.assertEqual(extraction['records'],[])
 
+    @requires_graph
     def test_corrupt_source_span_is_rejected(self):
         graph=load(OUT/'graph.json');broken=copy.deepcopy(graph)
         broken['assertions'][0]['evidence'][0]['text']='invented evidence'
         with self.assertRaises(ValueError):validate(broken)
 
+    @requires_graph
     def test_repeat_import_preserves_review_history(self):
         from kg_v2_store import persist
         graph=load(OUT/'graph.json')

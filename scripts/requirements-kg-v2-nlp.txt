@@ -1,5 +1,6 @@
 torch==2.6.0
 transformers==4.38.2
+huggingface-hub==0.36.2
 ltp==4.2.14
 ltp-core==0.1.4
 ltp-extension==0.1.13

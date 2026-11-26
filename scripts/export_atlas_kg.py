@@ -5,9 +5,9 @@ from collections import Counter, defaultdict
 import json
 from pathlib import Path
 import re
-import shutil
 
 from PIL import Image
+from kg_v2.atlas_site import render_atlas
 from kg_v2.plate_images import attach_plate_images, source_pdf
 from kg_v2.identity_manifest import apply_manifest_identity
 
@@ -261,7 +261,7 @@ def export(graph_path, image_manifest_path, image_dir, output, plate_manifest_pa
     apply_manifest_identity(manifest, graph.get('artifactIdentity'))
     output.mkdir(parents=True, exist_ok=True)
     (output / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False))
-    shutil.copyfile(ROOT / 'scripts/atlas_viewer.html', output / 'atlas_viewer.html')
+    (output / 'atlas_viewer.html').write_text(render_atlas(''), encoding='utf-8')
     print(json.dumps(manifest['summary'], ensure_ascii=False, indent=2))
     print(f"Star atlas ready: {output / 'atlas_viewer.html'}")
     return manifest

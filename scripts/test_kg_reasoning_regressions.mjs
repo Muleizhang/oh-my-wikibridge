@@ -160,6 +160,7 @@ test('DSML and incomplete generations cannot be returned as a final answer', () 
   const context = { citations: new Set(['E1']), inferences: new Set(['R1']), toolCount: 1 };
   const leaked = '<｜DSML｜function_calls><｜DSML｜invoke name="run_sparql">...</｜DSML｜invoke></｜DSML｜function_calls>';
   assert.equal(assessAgentAnswer({ content: leaked }, 'stop', context).reason, 'tool_markup');
+  assert.equal(assessAgentAnswer({ content: '记录[E1]。<｜｜DSML｜｜ calls>…' }, 'stop', context).reason, 'tool_markup');
   assert.equal(assessAgentAnswer({ content: '根据记录[E1]，尚需' }, 'length', context).reason, 'truncated');
   assert.equal(assessAgentAnswer({ content: '根据记录[E9]' }, 'stop', context).reason, 'unknown_reference');
   assert.equal(assessAgentAnswer({ content: '有共同纹样' }, 'stop', context).reason, 'missing_reference');
@@ -417,7 +418,7 @@ test('a comparison tool attempt cannot replace a bound path result or its fallba
     for await (const chunk of req) body += chunk;
     const payload = JSON.parse(body);
     requests++;
-    assert.ok(payload.tools.every(t => t.function.name !== 'compare_entities'));
+    assert.ok((payload.tools || []).every(t => t.function.name !== 'compare_entities'));
     if (requests === 2) assert.match(payload.messages.at(-1).content, /不属于本轮路径任务/);
     const message = requests === 1 ? { role: 'assistant', content: null, tool_calls: [{
       id: 'rogue-comparison', type: 'function', function: { name: 'compare_entities', arguments: JSON.stringify({
@@ -434,7 +435,7 @@ test('a comparison tool attempt cannot replace a bound path result or its fallba
       provider: 'deepseek', apiKey: 'local-test-placeholder', model: 'local-test',
       completionUrl: `http://127.0.0.1:${provider.address().port}/chat/completions`,
     });
-    assert.equal(requests, 2);
+    assert.equal(requests, 6);
     assert.equal(output.stageAction.overlay, 'path');
     assert.equal(output.stageAction.searchResults.length, 2);
     assert.ok(output.stageAction.paths.length > 0);
@@ -447,4 +448,38 @@ test('a comparison tool attempt cannot replace a bound path result or its fallba
     provider.closeAllConnections();
     await new Promise(resolve => provider.close(resolve));
   }
+});
+
+test('retries a leaked tool response in a fresh turn with the checked graph results', async (t) => {
+  let requests = 0;
+  let ref;
+  t.mock.method(globalThis, 'fetch', async (_url, request) => {
+    const body = JSON.parse(request.body);
+    let message;
+    switch (++requests) {
+      case 1:
+        message = { tool_calls: [{ id: 'query', type: 'function', function: {
+          name: 'query_graph', arguments: '{"period":"殷代"}',
+        } }] };
+        break;
+      case 2:
+        ref = JSON.parse(body.messages.at(-1).content).items[0].evidenceRefs[0];
+        message = { content: '<｜｜DSML｜｜ calls>…</｜｜DSML｜｜ calls>' };
+        break;
+      default:
+        assert.equal(body.tools, undefined);
+        assert.equal(body.tool_choice, undefined);
+        assert.deepEqual(body.messages.map(msg => msg.role), ['system', 'user']);
+        assert.match(body.messages[1].content, new RegExp(`"evidenceRefs":\\["${ref}"`));
+        message = { content: `商代器物有云雷纹记录。[${ref}]` };
+    }
+    return Response.json({ choices: [{ message, finish_reason: requests === 1 ? 'tool_calls' : 'stop' }] });
+  });
+  const result = await runDeepSeekAgent(createKGReasoner(fixture()), [{ role: 'user', content: '商代有哪些纹样？' }], {
+    provider: 'deepseek', apiKey: 'test', model: 'test', completionUrl: 'http://127.0.0.1:1/test',
+  });
+  assert.equal(requests, 3);
+  assert.equal(result.responseMode, 'model');
+  assert.match(result.answer, /云雷纹/);
+  assert.equal(result.trace.length, 1);
 });

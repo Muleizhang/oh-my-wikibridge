@@ -16,13 +16,12 @@ import re
 import shutil
 from pathlib import Path
 from typing import Any
+from kg_v2.atlas_site import REASONER_JS, TEMPLATE, render_atlas
 from kg_v2.identity import normalize_name
 from kg_v2.plate_images import attach_plate_images, source_pdf
 from kg_v2.identity_manifest import apply_manifest_identity, combine_identities, is_artifact_row
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "scripts" / "atlas_viewer.html"
-REASONER_JS = ROOT / "src" / "kg-reasoner.js"
 
 UNUSABLE_ISSUES = {
     "unresolved_subject",
@@ -629,12 +628,7 @@ def merge_volumes(
     manifest_out.write_text(manifest_text, encoding="utf-8")
 
     if build_html and TEMPLATE.is_file() and REASONER_JS.is_file():
-        template = TEMPLATE.read_text(encoding="utf-8")
-        reasoner_src = re.sub(r"(?m)^export\s+", "", REASONER_JS.read_text(encoding="utf-8"))
-        html = template.replace("__REASONER_JS__", reasoner_src, 1).replace(
-            "__MANIFEST_JSON__", manifest_text.replace("<", "\\u003c"), 1
-        )
-        (output_dir / "index.html").write_text(html, encoding="utf-8")
+        (output_dir / "index.html").write_text(render_atlas(manifest_text), encoding="utf-8")
 
     return merged
 

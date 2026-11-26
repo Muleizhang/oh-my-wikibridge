@@ -12,13 +12,11 @@ import subprocess
 import sys
 import time
 
-from kg_v2.common import ROOT, ident, load, save
+from kg_v2.atlas_site import render_atlas
+from kg_v2.common import DATA_ROOT, ROOT, VOLUME_ROOTS, ident, load, save
 from kg_v2.model_dimensions import VERSION, DIMENSIONS, Enricher, model_records
 from kg_v2.dimension_models import extract
 from kg_v2_validate import validate
-
-DATA = ROOT/'data/local-kg'
-
 
 def update_atlas(manifest, graphs):
     items = {item['artifactId']: item for item in manifest['items']}
@@ -81,14 +79,14 @@ def main():
     parser.add_argument('--write', action='store_true')
     parser.add_argument('--persist', action='store_true')
     parser.add_argument('--batch-size', type=int, default=32)
-    parser.add_argument('--site', type=Path, default=DATA/'merged/site')
+    parser.add_argument('--site', type=Path, default=DATA_ROOT/'merged/site')
     args = parser.parse_args()
     started = time.monotonic()
-    run_dir = DATA/'dimension-enrichment'
+    run_dir = DATA_ROOT/'dimension-enrichment'
     run_dir.mkdir(exist_ok=True)
     status_path = run_dir/'status.json'
     graphs, enrichers, pending = [], [], []
-    for number, root in enumerate([DATA, DATA/'vol2', DATA/'vol3'], 1):
+    for number, root in enumerate(VOLUME_ROOTS, 1):
         graph = load(root/'graph.json')
         enricher = Enricher(graph)
         for page in graph['selection']:
@@ -106,10 +104,10 @@ def main():
         reports.append(report)
     manifest = load(args.site/'manifest.json')
     if args.write:
-        backup = DATA/'archive'/('before-simple-dimensions-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
+        backup = DATA_ROOT/'archive'/('before-simple-dimensions-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
         backup.mkdir(parents=True)
         shutil.copyfile(args.site/'manifest.json', backup/'manifest.json')
-        for index, (root, graph, report) in enumerate(zip([DATA, DATA/'vol2', DATA/'vol3'], graphs, reports), 1):
+        for index, (root, graph, report) in enumerate(zip(VOLUME_ROOTS, graphs, reports), 1):
             shutil.copyfile(root/'graph.json', backup/f'vol{index}.graph.json')
             save(root/'graph.json', graph)
             save(root/'simple-dimension-enrichment.json', report)
@@ -120,10 +118,7 @@ def main():
     atlas_added = update_atlas(manifest, graphs)
     if args.write:
         save(args.site/'manifest.json', manifest)
-        template = (ROOT/'scripts/atlas_viewer.html').read_text()
-        reasoner = re.sub(r'(?m)^export\s+', '', (ROOT/'src/kg-reasoner.js').read_text())
-        embedded = json.dumps(manifest, ensure_ascii=False).replace('<', '\\u003c')
-        (args.site/'index.html').write_text(template.replace('__REASONER_JS__', reasoner, 1).replace('__MANIFEST_JSON__', embedded, 1))
+        (args.site/'index.html').write_text(render_atlas(json.dumps(manifest, ensure_ascii=False)))
     result = {'state': 'complete' if args.write else 'dry_run', 'volumes': reports, 'atlasAdded': atlas_added,
               'seconds': round(time.monotonic()-started, 1), 'ocrRerun': False, 'llmCalls': 0}
     save(status_path, result)

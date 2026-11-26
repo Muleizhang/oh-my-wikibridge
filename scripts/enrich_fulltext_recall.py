@@ -4,19 +4,16 @@ import argparse
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 import json
-from pathlib import Path
-import re
 import shutil
 
-from kg_v2.common import ROOT, ident, load, save
+from kg_v2.atlas_site import render_atlas
+from kg_v2.common import DATABASE_ROOT, DATA_ROOT as DATA, ROOT, VOLUME_ROOTS, ident, load, save
 from kg_v2.identity import normalize_name
 from kg_v2.identity_manifest import apply_manifest_identity
 from kg_v2.recall_extraction import RecallExtractor, VERSION, labels
 from kg_v2_validate import validate
 from kg_v2_store import persist
 
-DATA = ROOT/'data/local-kg'
-ROOTS = [DATA, DATA/'vol2', DATA/'vol3']
 FIELDS = {'technique': ('uses_technique', 'techniques'), 'composition': ('has_composition', 'compositions')}
 
 
@@ -170,7 +167,7 @@ def main():
     output = DATA/'fulltext-recall'
     output.mkdir(exist_ok=True)
     if args.refresh or not (output/'artifact-candidates.json').exists():
-        graphs = [load(root/'graph.json') for root in ROOTS]
+        graphs = [load(root/'graph.json') for root in VOLUME_ROOTS]
         artifacts, concepts, report = RecallExtractor(output, args.batch_size).run(graphs)
         save(output/'artifact-candidates.json', artifacts); save(output/'concept-candidates.json', concepts)
         save(output/'report.json', report)
@@ -189,9 +186,9 @@ def main():
         return accepted
     artifacts, concepts = screen(artifacts), screen(concepts)
     report['writeScreeningRejected'] = dict(screened)
-    watched = [root/'graph.json' for root in ROOTS]+[DATA/'merged/site/manifest.json']
+    watched = [root/'graph.json' for root in VOLUME_ROOTS] + [DATA/'merged/site/manifest.json']
     versions = {path: (path.stat().st_size, path.stat().st_mtime_ns) for path in watched}
-    graphs = [load(root/'graph.json') for root in ROOTS]
+    graphs = [load(root/'graph.json') for root in VOLUME_ROOTS]
     reports = [apply_candidates(graph, [v for v in artifacts if v['volumeNumber'] == volume],
                                 [v for v in concepts if v['volumeNumber'] == volume])
                for volume, graph in enumerate(graphs, 1)]
@@ -206,12 +203,10 @@ def main():
         backup.mkdir(parents=True)
         shutil.copyfile(DATA/'merged/site/manifest.json', backup/'manifest.json')
         if not baseline_path.exists(): save(baseline_path, {**baseline, 'backup': str(backup.relative_to(ROOT))})
-        for volume, (root, graph) in enumerate(zip(ROOTS, graphs), 1):
+        for volume, (root, graph) in enumerate(zip(VOLUME_ROOTS, graphs), 1):
             shutil.copyfile(root/'graph.json', backup/f'vol{volume}.graph.json')
             if args.persist:
-                source_path = Path(load(root/'source.json')['path'])
-                if not source_path.is_absolute(): source_path = ROOT/source_path
-                database_report = persist(graph, Path.home()/'.local/share/cn.wikibridge.desktop', source_file=source_path)
+                database_report = persist(graph, DATABASE_ROOT, data_root=root)
                 save(root/'database-import.json', database_report)
             save(root/'graph.json', graph)
             save(root/'summary.json', graph['summary'])
@@ -222,10 +217,7 @@ def main():
         if (path.stat().st_size, path.stat().st_mtime_ns) != versions[path]:
             raise RuntimeError('Concurrent atlas update; rerun with cached predictions')
         save(path, manifest)
-        reasoner = re.sub(r'(?m)^export\s+', '', (ROOT/'src/kg-reasoner.js').read_text())
-        (site/'index.html').write_text((ROOT/'scripts/atlas_viewer.html').read_text()
-            .replace('__REASONER_JS__', reasoner, 1)
-            .replace('__MANIFEST_JSON__', json.dumps(manifest, ensure_ascii=False).replace('<', '\\u003c'), 1))
+        (site/'index.html').write_text(render_atlas(json.dumps(manifest, ensure_ascii=False)))
     report.update(state='complete' if args.write else 'dry_run', additions=reports)
     save(output/'status.json', report)
     print(json.dumps(report, ensure_ascii=False), flush=True)

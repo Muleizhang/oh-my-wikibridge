@@ -67,15 +67,15 @@ def extract_page_image(document, page_number, render_width, directory):
             'ocrViewBox': [bounds.x0*scale, bounds.y0*scale, bounds.width*scale, bounds.height*scale]}
 
 
-def preview_images():
-    manifest = OUT / 'page-images.json'
+def preview_images(data_root=OUT):
+    manifest = data_root / 'page-images.json'
     return load(manifest)['pages'] if manifest.exists() else {}
 
 
-def install_previews(graph, application_root):
+def install_previews(graph, application_root, data_root=OUT):
     """Desktop shares the same image inode when paths are on one filesystem."""
     import shutil
-    assets = preview_images()
+    assets = preview_images(data_root)
     if any(str(page) not in assets for page in graph['selection']):
         raise ValueError('Prepare original page images before importing the graph')
     run_id = graph.get('runId')
@@ -84,7 +84,7 @@ def install_previews(graph, application_root):
     target_dir = Path(application_root) / 'pipeline-pages' / run_id
     target_dir.mkdir(parents=True, exist_ok=True)
     for page in graph['selection']:
-        asset = assets[str(page)]; source = OUT / 'images' / asset['file']; target = target_dir / asset['file']
+        asset = assets[str(page)]; source = data_root / 'images' / asset['file']; target = target_dir / asset['file']
         if target.exists() and os.path.samefile(source, target): continue
         temporary = target.with_suffix(target.suffix + '.tmp')
         temporary.unlink(missing_ok=True)

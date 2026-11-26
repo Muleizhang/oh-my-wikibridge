@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
 
-from kg_v2.common import ROOT, load, save
+from kg_v2.atlas_site import render_atlas
+from kg_v2.common import DATA_ROOT, ROOT, VOLUME_ROOTS, load, save
 from kg_v2.interpretations import Extractor, VERSION
 from kg_v2_validate import validate
 
@@ -37,10 +37,9 @@ def main():
     parser.add_argument('--persist', action='store_true')
     parser.add_argument('--refresh', action='store_true', help='Rebuild candidates from cached neural predictions')
     args = parser.parse_args()
-    data = ROOT/'data/local-kg'
-    roots = [data, data/'vol2', data/'vol3']
+    data = DATA_ROOT
     output = data/'semantic-enrichment'
-    graphs = [load(root/'graph.json') for root in roots]
+    graphs = [load(root/'graph.json') for root in VOLUME_ROOTS]
     if args.refresh or not (output/'candidates.json').exists():
         records, report = Extractor(output).run(graphs)
         save(output/'candidates.json', records); save(output/'report.json', report)
@@ -55,7 +54,7 @@ def main():
         backup = data/'archive'/('before-interpretations-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
         backup.mkdir(parents=True)
         shutil.copyfile(data/'merged/site/manifest.json', backup/'manifest.json')
-        for index, (root, graph) in enumerate(zip(roots, graphs), 1):
+        for index, (root, graph) in enumerate(zip(VOLUME_ROOTS, graphs), 1):
             shutil.copyfile(root/'graph.json', backup/f'vol{index}.graph.json')
             save(root/'graph.json', graph)
             if args.persist:
@@ -66,10 +65,7 @@ def main():
         manifest = load(site/'manifest.json')
         update_atlas(manifest, graphs)
         save(site/'manifest.json', manifest)
-        reasoner = re.sub(r'(?m)^export\s+', '', (ROOT/'src/kg-reasoner.js').read_text())
-        (site/'index.html').write_text((ROOT/'scripts/atlas_viewer.html').read_text()
-            .replace('__REASONER_JS__', reasoner, 1)
-            .replace('__MANIFEST_JSON__', json.dumps(manifest,ensure_ascii=False).replace('<','\\u003c'), 1))
+        (site/'index.html').write_text(render_atlas(json.dumps(manifest, ensure_ascii=False)))
     report = {**report, 'state': 'complete' if args.write else 'dry_run'}
     save(output/'status.json', report)
     print(json.dumps(report, ensure_ascii=False))

@@ -1,0 +1,8 @@
+[
+  {"sourceRecordId": "v1:record-c542c0c81c327b8727ad", "name": "蜥蜴纹彩陶瓶", "reason": "ocr_numeric_review_pending", "group": "G005"},
+  {"sourceRecordId": "v1:record-57f422a516aa08837b97", "name": "蜥蜴纹彩陶瓶", "reason": "ocr_numeric_review_pending", "group": "G005"},
+  {"sourceRecordId": "v1:record-25d564b4123d69defac8", "name": "斜方格点纹彩陶盆", "reason": "image_caption_correspondence_pending", "group": "G036"},
+  {"sourceRecordId": "v1:record-23ee588819c869772f72", "name": "斜方格点纹彩陶盆", "reason": "image_caption_correspondence_pending", "group": "G036"},
+  {"sourceRecordId": "v1:record-c74492d8792531471329", "name": "商代玉梳兽面纹", "reason": "catalog_record_segmentation_pending", "group": "G071"},
+  {"sourceRecordId": "v1:record-36fc9c78196b20d06d1a", "name": "商代玉梳兽面纹", "reason": "catalog_record_segmentation_pending", "group": "G071"}
+]

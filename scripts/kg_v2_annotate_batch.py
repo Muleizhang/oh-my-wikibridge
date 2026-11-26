@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import time
 
-from kg_v2.common import ROOT, save
+from kg_v2.common import LAYOUT_MODEL_ROOT, ROOT, VOLUME_ROOTS, save
 from kg_v2_annotate_plates import generate, weight_digest
 
 
@@ -52,7 +52,7 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT/'data/local-kg/merged/site/annotations')
     parser.add_argument('--workers', type=int, default=2)
     parser.add_argument('--pages', type=int, nargs='+')
-    parser.add_argument('--model-dir', type=Path, default=Path.home()/'.paddlex/official_models/PP-OCRv5_server_rec')
+    parser.add_argument('--model-dir', type=Path, default=LAYOUT_MODEL_ROOT/'PP-OCRv5_server_rec')
     args = parser.parse_args()
     if args.workers < 1:
         parser.error('--workers must be positive')
@@ -68,8 +68,7 @@ def main():
                                + Path(__file__).with_name('plate_annotation_review.html').read_bytes()
                                + weight_digest(str(args.model_dir/'inference.pdiparams')).encode()).hexdigest()
     tasks = []
-    for volume, root in [(1, ROOT/'data/local-kg'), (2, ROOT/'data/local-kg/vol2'),
-                         (3, ROOT/'data/local-kg/vol3')]:
+    for volume, root in enumerate(VOLUME_ROOTS, 1):
         for extraction in sorted((root/'extractions').glob('v1-p*.json')):
             page = int(extraction.stem.split('-p')[1])
             if args.pages is not None and page not in args.pages:

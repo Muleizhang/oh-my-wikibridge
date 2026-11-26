@@ -13,6 +13,7 @@ import shutil
 
 from PIL import Image
 from kg_v2.common import ROOT, save
+from kg_v2.atlas_site import render_atlas
 from kg_v2.identity import normalize_name
 
 
@@ -183,10 +184,7 @@ def main():
     assert original_items == [item['artifactId'] for item in manifest['items']]
     assert original_rows == [(row['id'], row['artifactId'], row['predicate'], row['object']) for row in manifest['rows']]
     save(manifest_path, manifest)
-    template = (ROOT/'scripts/atlas_viewer.html').read_text()
-    reasoner = re.sub(r'(?m)^export\s+', '', (ROOT/'src/kg-reasoner.js').read_text())
-    embedded = json.dumps(manifest, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
-    (site/'index.html').write_text(template.replace('__REASONER_JS__', reasoner, 1).replace('__MANIFEST_JSON__', embedded, 1))
+    (site/'index.html').write_text(render_atlas(json.dumps(manifest, ensure_ascii=False, separators=(',', ':'))))
     print(json.dumps({'backup': str(backup), **report}, ensure_ascii=False))
 
 

@@ -1,7 +1,7 @@
 import { COMPARISON_DIMENSIONS } from '../src/kg-reasoner.js';
 
 export function hasToolMarkup(text) {
-  return /<\/?[|｜]DSML[|｜]|<\/?(?:tool_call|function_call|function_calls)\b|\[TOOL_CALLS\]/i.test(text || '');
+  return /<\/?[|｜]+DSML[|｜]+|<\/?(?:tool_calls?|function_calls?)\b|\[TOOL_CALLS\]/i.test(text || '');
 }
 
 export async function readAgentCompletion(response, onThinking, onToolName) {
